@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smart Rosary — Dashboard</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif; margin:0; background:#0b0f14; color:#eaf0f6; overflow-x:hidden; }
+  header { padding:18px 16px; text-align:center; border-bottom:1px solid #18212b; background:#0e141b; }
+  h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:.2px; }
+  .toolbar { display:flex; gap:8px; justify-content:center; padding:12px; flex-wrap:wrap; }
+  button { border:0; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer; transition:transform .05s ease; }
+  button:active { transform:scale(0.98); }
+  #connectBtn { background:#03a9f4; color:#001018; }
+  #refreshBtn { background:#1f2937; color:#eaf0f6; }
+  #disconnectBtn { background:#b91c1c; color:#fff; }
+  #resetBtn { background:#9c27b0; color:#fff; }
+  #status { text-align:center; color:#95a7ba; font-size:13px; padding-bottom:8px; }
+
+  .grid { display:grid; gap:16px; padding:16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .card { background:#101722; border:1px solid #1a2733; border-radius:14px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  .card h3 { margin:0 0 12px; font-size:16px; font-weight:700; color:#cfe4ff; }
+  .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .kpi { background:#0d131c; border:1px solid #172231; border-radius:12px; padding:10px 12px; }
+  .kpi .label { color:#9fb3c8; font-size:12px; }
+  .kpi .value { font-size:20px; font-weight:800; margin-top:2px; }
+  .pill { display:inline-block; background:#0d2030; border:1px solid #1d3551; color:#cde3ff; padding:6px 10px; border-radius:999px; font-size:13px; }
+  .flex { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .muted { color:#95a7ba; font-size:12px; }
+  .chart { position:relative; width:100%; height:260px; }
+  canvas { display:block; width:100%; height:100%; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Smart Rosary — Dashboard</h1>
+  </header>
+
+  <div class="toolbar">
+    <button id="connectBtn">Connect</button>
+    <button id="refreshBtn" disabled>Refresh</button>
+    <button id="resetBtn" disabled>Reset Statistics</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+  </div>
+  <div id="status">Not connected. Tip: use https or http://localhost for Web Bluetooth.</div>
+
+  <section class="grid">
+    <div class="card">
+      <h3>Overview</h3>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Beads</div><div class="value" id="kpiBeads">—</div></div>
+        <div class="kpi"><div class="label">Decades</div><div class="value" id="kpiDecades">—</div></div>
+        <div class="kpi"><div class="label">Rosaries</div><div class="value" id="kpiRosaries">—</div></div>
+        <div class="kpi"><div class="label">Streak (days)</div><div class="value" id="kpiStreak">—</div></div>
+      </div>
+      <div class="flex" style="margin-top:12px;">
+        <span class="pill" id="pillDevice">Device: —</span>
+        <span class="pill" id="pillLast">Last prayer: —</span>
+        <span class="pill" id="pillLastMystery">Last mystery: —</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Activity Averages</h3>
+      <div class="kpis">
+        <div class="kpi"><div class="label">Avg decades (7 days)</div><div class="value" id="kpiAvg7">—</div></div>
+        <div class="kpi"><div class="label">Avg decades (30 days)</div><div class="value" id="kpiAvg30">—</div></div>
+        <div class="kpi"><div class="label">7‑day total</div><div class="value" id="kpiSum7">—</div></div>
+        <div class="kpi"><div class="label">30‑day total</div><div class="value" id="kpiSum30">—</div></div>
+      </div>
+      <p class="muted" style="margin-top:10px;">Averages and totals come from the device’s rolling 30‑day window.</p>
+    </div>
+
+    <div class="card">
+      <h3>Decades (7 vs 30 days)</h3>
+      <div class="chart"><canvas id="barWindow"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3>Mystery Sets Breakdown</h3>
+      <div class="chart"><canvas id="donutSets"></canvas></div>
+    </div>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script>
+  // UUIDs — MUST match firmware (lowercase)
+  const OTA_SVC_UUID       = '12345678-1234-5678-1234-56789abcdef0';
+  const INFO_STATS_UUID    = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1001';
+  const INFO_SETTINGS_UUID = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1002';
+  const INFO_CTRL_UUID     = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10ff';  // NEW
+
+  let device, server, service, chStats, chSettings, chCtrl;
+
+  const $ = id => document.getElementById(id);
+  const statusLine = $('status');
+
+  const kpi = {
+    beads: $('kpiBeads'),
+    decades: $('kpiDecades'),
+    rosaries: $('kpiRosaries'),
+    streak: $('kpiStreak'),
+    avg7: $('kpiAvg7'),
+    avg30: $('kpiAvg30'),
+    sum7: $('kpiSum7'),
+    sum30: $('kpiSum30'),
+    pillDevice: $('pillDevice'),
+    pillLast: $('pillLast'),
+    pillLastMystery: $('pillLastMystery'),
+  };
+
+  const barWindow = new Chart($('barWindow').getContext('2d'), {
+    type: 'bar',
+    data: { labels: ['Last 7 days', 'Last 30 days'], datasets: [{ label: 'Decades', data: [0, 0] }] },
+    options: { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } }, plugins:{ legend:{ display:false } } }
+  });
+
+  const donutSets = new Chart($('donutSets').getContext('2d'), {
+    type: 'doughnut',
+    data: { labels: ['Joyful', 'Sorrowful', 'Glorious', 'Luminous'], datasets: [{ data: [0, 0, 0, 0] }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } }, cutout:'60%' }
+  });
+
+  function fmtEpoch(ts){ if(!ts) return '—'; try{ return new Date(ts*1000).toLocaleString(); }catch{ return '—'; } }
+  function u8ToStr(v){ return new TextDecoder().decode(v); }
+
+  async function connectBLE(){
+    try{
+      if (!navigator.bluetooth) throw new Error('Web Bluetooth not supported in this browser.');
+      statusLine.textContent = 'Requesting device…';
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [OTA_SVC_UUID] }],
+        optionalServices: [OTA_SVC_UUID]
+      });
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+
+      statusLine.textContent = 'Connecting…';
+      server  = await device.gatt.connect();
+      service = await server.getPrimaryService(OTA_SVC_UUID);
+
+      chStats    = await service.getCharacteristic(INFO_STATS_UUID);
+      chSettings = await service.getCharacteristic(INFO_SETTINGS_UUID);
+      chCtrl     = await service.getCharacteristic(INFO_CTRL_UUID);     // NEW
+
+      $('refreshBtn').disabled = false;
+      $('resetBtn').disabled   = false;
+      $('disconnectBtn').disabled = true;
+      statusLine.textContent = 'Connected. Reading…';
+      await refresh();
+      $('disconnectBtn').disabled = false;
+    } catch(err){
+      console.error(err);
+      statusLine.textContent = 'Error: ' + err.message;
+    }
+  }
+
+  async function refresh(){
+    try{
+      if (!chStats || !chSettings) return;
+      const vStats    = await chStats.readValue();
+      const vSettings = await chSettings.readValue();
+      const jsStats    = JSON.parse(u8ToStr(vStats));
+      const jsSettings = JSON.parse(u8ToStr(vSettings)); // reserved for future UI
+
+      kpi.beads.textContent    = (jsStats.totals?.beads ?? '—');
+      kpi.decades.textContent  = (jsStats.totals?.decades ?? '—');
+      kpi.rosaries.textContent = (jsStats.totals?.rosaries ?? '—');
+      kpi.streak.textContent   = (jsStats.streakDays ?? '—');
+
+      kpi.avg7.textContent  = (jsStats.windows?.avg7 ?? 0).toFixed(2);
+      kpi.avg30.textContent = (jsStats.windows?.avg30 ?? 0).toFixed(2);
+      kpi.sum7.textContent  = (jsStats.windows?.decades7 ?? '—');
+      kpi.sum30.textContent = (jsStats.windows?.decades30 ?? '—');
+
+      kpi.pillDevice.textContent = `Device: ${jsStats.device || '—'}`;
+      kpi.pillLast.textContent   = `Last prayer: ${fmtEpoch(jsStats.lastPrayer)}`;
+      kpi.pillLastMystery.textContent = `Last mystery: ${jsStats.lastMystery?.set || '—'} ${jsStats.lastMystery?.index ? `#${jsStats.lastMystery.index}` : ''}`;
+
+      barWindow.data.datasets[0].data = [
+        (jsStats.windows?.decades7 ?? 0),
+        (jsStats.windows?.decades30 ?? 0)
+      ];
+      barWindow.update();
+
+      donutSets.data.datasets[0].data = [
+        (jsStats.sets?.joyful ?? 0),
+        (jsStats.sets?.sorrowful ?? 0),
+        (jsStats.sets?.glorious ?? 0),
+        (jsStats.sets?.luminous ?? 0)
+      ];
+      donutSets.update();
+
+      statusLine.textContent = 'Up to date.';
+    } catch(err){
+      console.error(err);
+      statusLine.textContent = 'Read failed: ' + err.message;
+    }
+  }
+
+  async function resetStats(){
+    try{
+      if (!chCtrl) return;
+      if (!confirm('Reset all statistics on the device? This cannot be undone.')) return;
+      // Command 0x01 = RESET STATS
+      await chCtrl.writeValue(new Uint8Array([0x01]));
+      // Give firmware a moment to update and push new JSON, then refresh
+      setTimeout(refresh, 300);
+      statusLine.textContent = 'Statistics reset requested…';
+    } catch(err){
+      console.error(err);
+      statusLine.textContent = 'Reset failed: ' + err.message;
+    }
+  }
+
+  function onDisconnected(){
+    statusLine.textContent = 'Disconnected.';
+    $('refreshBtn').disabled = true;
+    $('resetBtn').disabled   = true;
+    $('disconnectBtn').disabled = true;
+  }
+
+  async function disconnectBLE(){
+    try { if (device && device.gatt.connected) await device.gatt.disconnect(); }
+    catch (e) { console.warn(e); }
+    finally { onDisconnected(); }
+  }
+
+  $('connectBtn').addEventListener('click', connectBLE);
+  $('refreshBtn').addEventListener('click', refresh);
+  $('resetBtn').addEventListener('click', resetStats);
+  $('disconnectBtn').addEventListener('click', disconnectBLE);
+  </script>
+</body>
+</html>
