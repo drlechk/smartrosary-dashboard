@@ -73,9 +73,8 @@
       <button id="connectBtn">Connect</button>
       <button id="refreshBtn" disabled>Refresh</button>
       
-      <div class="row">
+      <div class="row"></div>
 
-      </div>
       <button id="resetBtn" disabled>Reset Statistics</button>
       <button id="disconnectBtn" disabled>Disconnect</button>
       <span style="flex:1"></span>
@@ -140,14 +139,15 @@
         <h3 id="partsTitle">Mystery Parts (I–V per set)</h3>
         <div class="chart"><canvas id="partsChart"></canvas></div>
       </div>
-  <!-- Backup & Restore in its own card (logic unchanged) -->
+
+      <!-- Backup & Restore in its own card -->
       <div class="card">
         <h3>Backup & Restore</h3>
         <div class="row">
           <button id="backupBtn"  disabled>Download Backup</button>
-        <input type="file" id="restoreFile" accept="application/json" style="display:none">
-        <button id="restoreBtn" disabled>Restore from Backup…</button>
-        <progress id="restoreProg" max="100" value="0" hidden></progress>
+          <input type="file" id="restoreFile" accept="application/json" style="display:none">
+          <button id="restoreBtn" disabled>Restore from Backup…</button>
+          <progress id="restoreProg" max="100" value="0" hidden></progress>
         </div>
       </div>
     </div>
@@ -529,6 +529,7 @@
     catch (e) { console.warn(e); }
     finally { onDisconnected(); }
   }
+  
 
   // ---- Backup (download JSON built from the 3 info chars) ----
   async function doBackup(){
@@ -543,22 +544,58 @@
         chParts?.readValue?.() ?? null
       ]);
 
-      const js = {
-        device: null, fwVersion: null,
-        stats: null, settings: null, setsParts: null
-      };
       const jsStats    = JSON.parse(u8ToStr(vStats));
       const jsSettings = JSON.parse(u8ToStr(vSettings));
-      js.device    = jsStats.device || '';
-      js.fwVersion = jsSettings.fwVersion || '';
-      js.stats     = jsStats;                // keep as produced by firmware
-      js.settings  = jsSettings;             // ditto
+
+      // Ensure duration counters exist for reliable restore of averages
+      const d = jsStats?.durations || {};
+      const beadSum = Number(d.totalBeadMs ?? 0);     // firmware may send as string
+      const decSum  = Number(d.totalDecadeMs ?? 0);
+      const rosSum  = Number(d.totalRosaryMs ?? 0);
+
+      // Prefer firmware-provided counters; fall back to estimates if missing/zero
+      let beadCnt = Number(d.beadIntervals || 0);
+      let decCnt  = Number(d.decadeCount   || 0);
+      let rosCnt  = Number(d.rosaryCount   || 0);
+
+      if (!beadCnt) {
+        const avg = Number(d.avgBeadMs || 0);
+        beadCnt = avg > 0 ? Math.floor(beadSum / avg) : 0;
+      }
+      if (!decCnt) {
+        const avg = Number(d.avgDecadeMs || 0);
+        decCnt = avg > 0 ? Math.floor(decSum / avg) : 0;
+      }
+      if (!rosCnt) {
+        const avg = Number(d.avgRosaryMs || 0);
+        rosCnt = avg > 0 ? Math.floor(rosSum / avg) : 0;
+      }
+
+      // Write back into the stats object so the backup always carries counters
+      jsStats.durations = {
+        ...d,
+        beadIntervals: beadCnt,
+        decadeCount:   decCnt,
+        rosaryCount:   rosCnt,
+        totalBeadMs:   String(beadSum),   // keep as strings to match firmware
+        totalDecadeMs: String(decSum),
+        totalRosaryMs: String(rosSum)
+      };
+
+      const js = {
+        device: jsStats.device || '',
+        fwVersion: jsSettings.fwVersion || '',
+        stats: jsStats,           // as produced by firmware, with ensured counters
+        settings: jsSettings,
+        setsParts: null
+      };
+
       if (vParts) {
         const jp = JSON.parse(u8ToStr(vParts));
         js.setsParts = jp.setsParts || null; // move setsParts top-level for convenience
       }
 
-      const blob = new Blob([JSON.stringify(js,null,2)], {type:'application/json'});
+      const blob = new Blob([JSON.stringify(js, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -574,7 +611,7 @@
   }
 
   // ---- Restore (upload JSON -> many small SET_* writes) ----
-  function le32(n){ const a=new Uint8Array(4); a[0]=n&255; a[1]=(n>>8)&255; a[2]=(n>>16)&255; a[3]=(n>>24)&255; return a; }
+  function le32(n){ const a=new Uint8Array(4); n = Number(n)>>>0; a[0]=n&255; a[1]=(n>>8)&255; a[2]=(n>>16)&255; a[3]=(n>>24)&255; return a; }
   function le64Big(n){ // BigInt
     const a = new Uint8Array(8); let x = BigInt(n);
     for (let i=0;i<8;i++){ a[i] = Number(x & 0xffn); x >>= 8n; }
@@ -591,10 +628,10 @@
     let valBytes;
     switch (type){
       case 0x01: valBytes = new Uint8Array([value?1:0]); break;
-      case 0x11: valBytes = new Uint8Array([value & 0xff]); break;
-      case 0x12: valBytes = new Uint8Array([value & 0xff, (value>>8)&0xff]); break;
-      case 0x14: valBytes = le32(value>>>0); break;
-      case 0x21: valBytes = le32((value|0)>>>0); break;
+      case 0x11: valBytes = new Uint8Array([Number(value) & 0xff]); break;
+      case 0x12: { const v=Number(value)>>>0; valBytes = new Uint8Array([v & 0xff, (v>>8)&0xff]); } break;
+      case 0x14: valBytes = le32(value); break;
+      case 0x21: valBytes = le32(value); break;
       case 0x18: valBytes = le64Big(BigInt(value)); break;
       case 0x31: valBytes = new TextEncoder().encode(String(value)); break;
       default: throw new Error('bad type');
@@ -605,9 +642,9 @@
   async function writeStatKey(key, type, value){
     let valBytes;
     switch (type){
-      case 0x11: valBytes = new Uint8Array([value & 0xff]); break;
-      case 0x12: valBytes = new Uint8Array([value & 0xff, (value>>8)&0xff]); break;
-      case 0x14: valBytes = le32(value>>>0); break;
+      case 0x11: valBytes = new Uint8Array([Number(value) & 0xff]); break;
+      case 0x12: { const v=Number(value)>>>0; valBytes = new Uint8Array([v & 0xff, (v>>8)&0xff]); } break;
+      case 0x14: valBytes = le32(value); break;
       case 0x18: valBytes = le64Big(BigInt(value)); break;
       default: throw new Error('bad type');
     }
@@ -622,7 +659,7 @@
 
     const totalSteps =
       13 + // prefs
-      5 + 2 + 1 + 2 + 30 + 5 + (5*5) + 6; // stats keys we write below
+      5 + 3 + 2 + 30 + 5 + (5*5) + 6; // stats keys we write below
     let step=0;
     const tick = ()=>onProgress?.(++step, totalSteps);
 
@@ -688,11 +725,11 @@
     // durations: write sums+counts used by getters
     const dur = stAll.durations || {};
     await writeStatKey("bSum", 0x18, BigInt(dur.totalBeadMs   ?? 0)); tick();
-    await writeStatKey("bInt", 0x14, (stAll.beadIntervals ?? 0));     tick(); // if not present, stays 0
+    await writeStatKey("bInt", 0x14, (dur.beadIntervals ?? 0));       tick();
     await writeStatKey("dSum", 0x18, BigInt(dur.totalDecadeMs ?? 0)); tick();
-    await writeStatKey("dCnt", 0x14, (stAll.decadeCount  ?? 0));      tick();
+    await writeStatKey("dCnt", 0x14, (dur.decadeCount  ?? 0));        tick();
     await writeStatKey("rSum", 0x18, BigInt(dur.totalRosaryMs ?? 0)); tick();
-    await writeStatKey("rCnt", 0x14, (stAll.rosaryCount  ?? 0));      tick();
+    await writeStatKey("rCnt", 0x14, (dur.rosaryCount  ?? 0));        tick();
 
     // ask device to refresh JSON chars
     await chCtrl.writeValue(new Uint8Array([OP_REST_DONE]));
