@@ -28,20 +28,15 @@
   button:active { transform:scale(0.98); }
   #connectBtn     { background:#03a9f4; color:#001018; }
   #refreshBtn     { background:#1f2937; }
+  #backupBtn      { background:#0ea5e9; color:#001018; }
+  #restoreBtn     { background:#16a34a; color:#00150b; }
   #disconnectBtn  { background:#b91c1c; color:#fff; }
   #resetBtn       { background:#9c27b0; color:#fff; }
   #langSelect     { background:#0f1720; border:1px solid #1f2b3a; }
   #status { text-align:center; color:#95a7ba; font-size:13px; padding-bottom:8px; }
-
-  /* Content width: two columns, centered, not full screen */
   .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
-  .grid {
-    display:grid; gap:16px;
-    grid-template-columns: repeat(2, minmax(280px, 1fr));
-  }
-  @media (max-width: 800px) {
-    .grid { grid-template-columns: 1fr; }
-  }
+  .grid { display:grid; gap:16px; grid-template-columns: repeat(2, minmax(280px, 1fr)); }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
   .card {
     background:#101722; border:1px solid #1a2733; border-radius:14px; padding:16px;
     box-shadow:0 6px 24px rgba(0,0,0,.25);
@@ -50,7 +45,7 @@
   .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
   .kpi { background:#0d131c; border:1px solid #172231; border-radius:12px; padding:10px 12px; }
   .kpi .label { color:#9fb3c8; font-size:12px; }
-  .kpi .value { font-size:18px; font-weight:800; margin-top:2px; line-height:1.1; word-break:break-word; }
+  .kpi .value { font-size:18px; font-weight:800; margin-top:2px; line-height:1.1; }
   .pill {
     display:inline-block; background:#0d2030; border:1px solid #1d3551;
     color:#cde3ff; padding:6px 10px; border-radius:999px; font-size:13px;
@@ -60,6 +55,12 @@
   .smallnote { color:#7d8fa1; font-size:11px; margin-top:8px; }
   .chart { position:relative; width:100%; height:260px; }
   canvas { display:block; width:100%; height:100%; }
+
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  #restoreProg {
+    width:100%; height:10px; background:#0d131c; border:1px solid #172231; border-radius:999px; overflow:hidden;
+    margin-top:8px;
+  }
 </style>
 </head>
 <body>
@@ -71,6 +72,10 @@
     <div class="toolbar">
       <button id="connectBtn">Connect</button>
       <button id="refreshBtn" disabled>Refresh</button>
+      
+      <div class="row">
+
+      </div>
       <button id="resetBtn" disabled>Reset Statistics</button>
       <button id="disconnectBtn" disabled>Disconnect</button>
       <span style="flex:1"></span>
@@ -97,9 +102,9 @@
         <div class="flex" style="margin-top:12px;">
           <span class="pill" id="pillDevice">Device: —</span>
           <span class="pill" id="pillFW">FW: —</span>
-          <span class="pill" id="pillLast">Last prayer: —</span>
           <span class="pill" id="pillLastMystery">Last mystery: —</span>
         </div>
+        <p class="smallnote" id="bkNote">Tip: you can download a backup JSON and later restore it to this device.</p>
       </div>
 
       <div class="card">
@@ -113,11 +118,11 @@
       </div>
 
       <div class="card">
-        <h3 id="totalsCardTitle">Totals (time)</h3>
-        <div class="kpis">
-          <div class="kpi"><div class="label" id="lblTotRosary">Rosary total</div><div class="value" id="kpiTotRosary">—</div></div>
-          <div class="kpi"><div class="label" id="lblTotDecade">Decade total</div><div class="value" id="kpiTotDecade">—</div></div>
-          <div class="kpi"><div class="label" id="lblTotBead">Bead total</div><div class="value" id="kpiTotBead">—</div></div>
+        <h3>Totals (time)</h3>
+        <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
+          <div class="kpi"><div class="label">Rosary</div><div class="value" id="totRosary">—</div></div>
+          <div class="kpi"><div class="label">Decades</div><div class="value" id="totDecade">—</div></div>
+          <div class="kpi"><div class="label">Beads</div><div class="value" id="totBead">—</div></div>
         </div>
       </div>
 
@@ -130,36 +135,57 @@
         <h3 id="donutTitle">Mystery Sets Breakdown</h3>
         <div class="chart"><canvas id="donutSets"></canvas></div>
       </div>
+
+      <div class="card">
+        <h3 id="partsTitle">Mystery Parts (I–V per set)</h3>
+        <div class="chart"><canvas id="partsChart"></canvas></div>
+      </div>
+  <!-- Backup & Restore in its own card (logic unchanged) -->
+      <div class="card">
+        <h3>Backup & Restore</h3>
+        <div class="row">
+          <button id="backupBtn"  disabled>Download Backup</button>
+        <input type="file" id="restoreFile" accept="application/json" style="display:none">
+        <button id="restoreBtn" disabled>Restore from Backup…</button>
+        <progress id="restoreProg" max="100" value="0" hidden></progress>
+        </div>
+      </div>
     </div>
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-  /* UUIDs — MUST match firmware (lowercase) */
+  /* UUIDs — MUST match firmware (unchanged) */
   const OTA_SVC_UUID       = '12345678-1234-5678-1234-56789abcdef0';
   const INFO_STATS_UUID    = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1001';
   const INFO_SETTINGS_UUID = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1002';
   const INFO_CTRL_UUID     = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10ff';
+  const INFO_PARTS_UUID    = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1003';
 
-  let device, server, service, chStats, chSettings, chCtrl;
+  // Control opcodes
+  const OP_SET_PREF = 0x50;
+  const OP_SET_STAT = 0x53;
+  const OP_REST_DONE= 0x55;
 
-  /* i18n */
+  let device, server, service, chStats, chSettings, chCtrl, chParts;
+
+  /* i18n (complete) */
   const i18n = {
     en: {
       title: "Smart Rosary — Dashboard",
       connect: "Connect", refresh: "Refresh", reset: "Reset Statistics", disconnect: "Disconnect",
+      backup: "Download Backup", restore: "Restore from Backup…",
       statusNot: "Not connected. Tip: use https or http://localhost for Web Bluetooth.",
       overview: "Overview",
       beads: "Beads", decades: "Decades", rosaries: "Rosaries", streak: "Streak (days)",
       averages: "Durations & Averages",
       avgBead: "Avg bead", avgDecade: "Avg decade", avgRosary: "Avg rosary",
-      totalsCardTitle: "Totals (time)",
-      totRosary: "Rosary total", totDecade: "Decade total", totBead: "Bead total",
       avgNote: "Averages are computed from lifetime device totals (no RTC).",
       barTitle: "Average durations (s)",
       donutTitle: "Mystery Sets Breakdown",
-      device: "Device", firmware: "FW", lastPrayer: "Last prayer", lastMystery: "Last mystery",
+      partsTitle: "Mystery Parts (I–V per set)",
+      device: "Device", firmware: "FW", lastMystery: "Last mystery",
       chartBead: "Bead", chartDecade: "Decade", chartRosary: "Rosary",
       sets: ["None","Joyful","Sorrowful","Glorious","Luminous"],
       errPick: "Picked device is not a rosary.",
@@ -168,22 +194,27 @@
       statusConnected: "Connected. Reading…",
       statusUpdated: "Up to date.",
       statusResetReq: "Statistics reset requested…",
-      statusDisconnected: "Disconnected."
+      statusDisconnected: "Disconnected.",
+      bkTip: "Tip: you can download a backup JSON and later restore it to this device.",
+      backupStart: (n)=>`Creating backup…`,
+      backupDone:  "Backup ready.",
+      restoreStart:"Restoring…",
+      restoreDone: "Restore complete."
     },
     pl: {
       title: "Smart Rosary — Panel",
       connect: "Połącz", refresh: "Odśwież", reset: "Wyzeruj statystyki", disconnect: "Rozłącz",
+      backup: "Pobierz kopię", restore: "Przywróć z kopii…",
       statusNot: "Brak połączenia. Wskazówka: użyj HTTPS lub http://localhost dla Web Bluetooth.",
       overview: "Przegląd",
       beads: "Pacierze", decades: "Dziesiątki", rosaries: "Różańce", streak: "Seria (dni)",
       averages: "Czasy i średnie",
       avgBead: "Śr. paciorek", avgDecade: "Śr. dziesiątek", avgRosary: "Śr. różaniec",
-      totalsCardTitle: "Suma (czas)",
-      totRosary: "Różaniec — suma", totDecade: "Dziesiątek — suma", totBead: "Pacior. — suma",
       avgNote: "Średnie liczone z sum od początku (bez RTC).",
       barTitle: "Średnie czasy (s)",
       donutTitle: "Podział tajemnic",
-      device: "Urządzenie", firmware: "FW", lastPrayer: "Ostatnia modlitwa", lastMystery: "Ostatnia tajemnica",
+      partsTitle: "Tajemnice — części (I–V)",
+      device: "Urządzenie", firmware: "FW", lastMystery: "Ostatnia tajemnica",
       chartBead: "Pac.", chartDecade: "Dzies.", chartRosary: "Róż.",
       sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła"],
       errPick: "Wybrane urządzenie to nie różaniec.",
@@ -192,22 +223,27 @@
       statusConnected: "Połączono. Wczytywanie…",
       statusUpdated: "Aktualne.",
       statusResetReq: "Żądanie resetu statystyk…",
-      statusDisconnected: "Rozłączono."
+      statusDisconnected: "Rozłączono.",
+      bkTip: "Wskazówka: możesz pobrać kopię JSON i później przywrócić ją do urządzenia.",
+      backupStart: (n)=>`Tworzenie kopii…`,
+      backupDone:  "Kopia gotowa.",
+      restoreStart:"Przywracanie…",
+      restoreDone: "Przywrócono."
     },
     de: {
       title: "Smart Rosary — Dashboard",
       connect: "Verbinden", refresh: "Aktualisieren", reset: "Statistiken zurücksetzen", disconnect: "Trennen",
+      backup: "Backup herunterladen", restore: "Aus Backup wiederherstellen…",
       statusNot: "Nicht verbunden. Hinweis: Verwende https oder http://localhost für Web Bluetooth.",
       overview: "Übersicht",
       beads: "Perlen", decades: "Gesätzchen", rosaries: "Rosenkränze", streak: "Serie (Tage)",
       averages: "Dauern & Durchschnitte",
       avgBead: "Ø Perle", avgDecade: "Ø Gesätzchen", avgRosary: "Ø Rosenkranz",
-      totalsCardTitle: "Summe (Zeit)",
-      totRosary: "Rosenkranz — Summe", totDecade: "Gesätzchen — Summe", totBead: "Perle — Summe",
       avgNote: "Durchschnitte über die gesamte Laufzeit (kein RTC).",
       barTitle: "Durchschnittsdauern (s)",
       donutTitle: "Aufschlüsselung der Geheimnisse",
-      device: "Gerät", firmware: "FW", lastPrayer: "Letztes Gebet", lastMystery: "Letztes Geheimnis",
+      partsTitle: "Geheimnisse — Teile (I–V)",
+      device: "Gerät", firmware: "FW", lastMystery: "Letztes Geheimnis",
       chartBead: "Perle", chartDecade: "Gesätzchen", chartRosary: "Rosenkranz",
       sets: ["Keins","Freudenreich","Schmerzensreich","Glorreiche","Lichtreiche"],
       errPick: "Ausgewähltes Gerät ist kein Rosary.",
@@ -216,7 +252,12 @@
       statusConnected: "Verbunden. Lese…",
       statusUpdated: "Aktuell.",
       statusResetReq: "Zurücksetzen angefordert…",
-      statusDisconnected: "Getrennt."
+      statusDisconnected: "Getrennt.",
+      bkTip: "Tipp: Lade ein JSON‑Backup herunter und stelle es später wieder her.",
+      backupStart: (n)=>`Backup wird erstellt…`,
+      backupDone:  "Backup bereit.",
+      restoreStart:"Wiederherstellen…",
+      restoreDone: "Wiederherstellung abgeschlossen."
     }
   };
 
@@ -235,17 +276,6 @@
     let h = Math.floor(m/60); m = m % 60;
     return `${h}h ${m}m ${s}s`;
   }
-  // For totals: never show "ms" (display 0s if under a second)
-  function fmtMsNoMs(ms){
-    if (ms == null || isNaN(ms)) return '—';
-    ms = Math.max(0, Math.round(ms));
-    let s = Math.floor(ms/1000);
-    if (s < 60) return `${s}s`;
-    let m = Math.floor(s/60); s = s % 60;
-    if (m < 60) return `${m}m ${s}s`;
-    let h = Math.floor(m/60); m = m % 60;
-    return `${h}h ${m}m ${s}s`;
-  }
 
   function applyI18n() {
     const L = i18n[lang];
@@ -254,6 +284,8 @@
     $('refreshBtn').textContent = L.refresh;
     $('resetBtn').textContent   = L.reset;
     $('disconnectBtn').textContent = L.disconnect;
+    $('backupBtn').textContent  = L.backup;
+    $('restoreBtn').textContent = L.restore;
     statusLine.textContent = L.statusNot;
 
     $('overviewTitle').textContent = L.overview;
@@ -267,22 +299,20 @@
     $('lblAvgRosary').textContent = L.avgRosary;
     $('avgNote').textContent      = L.avgNote;
 
-    $('totalsCardTitle').textContent = L.totalsCardTitle;
-    $('lblTotRosary').textContent = L.totRosary;
-    $('lblTotDecade').textContent = L.totDecade;
-    $('lblTotBead').textContent   = L.totBead;
-
     $('barTitle').textContent   = L.barTitle;
     $('donutTitle').textContent = L.donutTitle;
+    $('partsTitle').textContent = L.partsTitle;
+    $('bkNote').textContent     = L.bkTip;
 
     // Update chart labels
     barWindow.data.labels = [L.chartBead, L.chartDecade, L.chartRosary];
     donutSets.data.labels = L.sets.slice();
-    barWindow.update(); donutSets.update();
+    partsChart.data.labels = [L.sets[0], L.sets[1], L.sets[4], L.sets[2], L.sets[3]]; // None, Joyful, Luminous, Sorrowful, Glorious (UI order)
+    barWindow.update(); donutSets.update(); partsChart.update();
   }
 
-  function fmtEpoch(ts){ if(!ts) return '—'; try{ return new Date(ts*1000).toLocaleString(); }catch{ return '—'; } }
   function u8ToStr(v){ return new TextDecoder().decode(v); }
+  function safeNum(x, d=0){ const v = Number(x); return isFinite(v) ? v : d; }
 
   /* Charts */
   const barWindow = new Chart($('barWindow').getContext('2d'), {
@@ -301,21 +331,40 @@
       labels: ['None','Joyful','Sorrowful','Glorious','Luminous'],
       datasets: [{
         data: [0, 0, 0, 0, 0],
-        backgroundColor: [
-          '#808080', // None - grey
-          '#ffcc00', // Joyful - yellow
-          '#cc0000', // Sorrowful - red
-          '#00cc00', // Glorious - green
-          '#3399ff'  // Luminous - blue
-        ],
-        borderColor: '#0b0f14',
-        borderWidth: 2
+        backgroundColor: ['#808080','#ffcc00','#cc0000','#00cc00','#3399ff'],
+        borderColor: '#0b0f14', borderWidth: 2
       }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ color:'#eaf0f6' } } }, cutout:'60%' }
+  });
+
+  const partsCtx = $('partsChart').getContext('2d');
+  const partShades = {
+    none:      ['#9e9e9e','#8f8f8f','#808080','#717171','#626262'],
+    joyful:    ['#ffe680','#ffdb4d','#ffcc00','#e6b800','#cc9a00'],
+    sorrowful: ['#ff6666','#ff3333','#cc0000','#990000','#730000'],
+    glorious:  ['#66ff66','#33e633','#00cc00','#00a300','#007a00'],
+    luminous:  ['#99ccff','#66b2ff','#3399ff','#1a7fd6','#0066cc'],
+  };
+  const partsChart = new Chart(partsCtx, {
+    type: 'bar',
+    data: {
+      labels: ['None','Joyful','Luminous','Sorrowful','Glorious'],
+      datasets: [
+        { label: 'I',  data: [0,0,0,0,0], backgroundColor: [partShades.none[0],partShades.joyful[0],partShades.luminous[0],partShades.sorrowful[0],partShades.glorious[0]] },
+        { label: 'II', data: [0,0,0,0,0], backgroundColor: [partShades.none[1],partShades.joyful[1],partShades.luminous[1],partShades.sorrowful[1],partShades.glorious[1]] },
+        { label: 'III',data: [0,0,0,0,0], backgroundColor: [partShades.none[2],partShades.joyful[2],partShades.luminous[2],partShades.sorrowful[2],partShades.glorious[2]] },
+        { label: 'IV', data: [0,0,0,0,0], backgroundColor: [partShades.none[3],partShades.joyful[3],partShades.luminous[3],partShades.sorrowful[3],partShades.glorious[3]] },
+        { label: 'V',  data: [0,0,0,0,0], backgroundColor: [partShades.none[4],partShades.joyful[4],partShades.luminous[4],partShades.sorrowful[4],partShades.glorious[4]] },
+      ]
     },
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ position:'bottom', labels:{ color:'#eaf0f6' } } },
-      cutout:'60%'
+      scales:{
+        x:{ stacked:true, grid:{ color:'#1a2733' }, ticks:{ color:'#cfe4ff' } },
+        y:{ stacked:true, beginAtZero:true, grid:{ color:'#1a2733' }, ticks:{ color:'#cfe4ff', precision:0 } }
+      }
     }
   });
 
@@ -350,9 +399,12 @@
       chStats    = await service.getCharacteristic(INFO_STATS_UUID);
       chSettings = await service.getCharacteristic(INFO_SETTINGS_UUID);
       chCtrl     = await service.getCharacteristic(INFO_CTRL_UUID);
+      chParts    = await service.getCharacteristic(INFO_PARTS_UUID);
 
       $('refreshBtn').disabled = false;
       $('resetBtn').disabled   = false;
+      $('backupBtn').disabled  = false;
+      $('restoreBtn').disabled = false;
       $('disconnectBtn').disabled = true;
 
       statusLine.textContent = L.statusConnected;
@@ -364,14 +416,16 @@
     }
   }
 
-  function safeNum(x, d=0){ const v = Number(x); return isFinite(v) ? v : d; }
-
   async function refresh(){
     const L = i18n[lang];
     try{
       if (!chStats || !chSettings) return;
-      const vStats    = await chStats.readValue();
-      const vSettings = await chSettings.readValue();
+
+      const [vStats, vSettings] = await Promise.all([
+        chStats.readValue(),
+        chSettings.readValue()
+      ]);
+
       const jsStats    = JSON.parse(u8ToStr(vStats));
       const jsSettings = JSON.parse(u8ToStr(vSettings));
 
@@ -379,11 +433,11 @@
       $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
       $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
 
-      $('pillDevice').textContent = `${L.device}: ${jsStats.device || '—'}`;
-      $('pillFW').textContent     = `${L.firmware}: ${jsSettings.fwVersion || '—'}`;
-      $('pillLast').textContent   = `${L.lastPrayer}: ${fmtEpoch(jsStats.lastPrayer)}`;
+      const Ldev = i18n[lang];
+      $('pillDevice').textContent = `${Ldev.device}: ${jsStats.device || '—'}`;
+      $('pillFW').textContent     = `${Ldev.firmware}: ${jsSettings.fwVersion || '—'}`;
       $('pillLastMystery').textContent =
-        `${L.lastMystery}: ${jsStats.lastMystery?.set || '—'}${jsStats.lastMystery?.index ? ` #${jsStats.lastMystery.index}` : ''}`;
+        `${Ldev.lastMystery}: ${jsStats.lastMystery?.set || '—'}${jsStats.lastMystery?.index ? ` #${jsStats.lastMystery.index}` : ''}`;
 
       // Durations
       const d = jsStats.durations || {};
@@ -398,16 +452,14 @@
       $('kpiAvgDecade').textContent = fmtMs(avgDecadeMs);
       $('kpiAvgRosary').textContent = fmtMs(avgRosaryMs);
 
-      // Totals card (never show "ms")
-      $('kpiTotRosary').textContent = fmtMsNoMs(totRosaryMs);
-      $('kpiTotDecade').textContent = fmtMsNoMs(totDecadeMs);
-      $('kpiTotBead').textContent   = fmtMsNoMs(totBeadMs);
+      $('totRosary').textContent = fmtMs(totRosaryMs);
+      $('totDecade').textContent = fmtMs(totDecadeMs);
+      $('totBead').textContent   = fmtMs(totBeadMs);
 
-      // Average durations chart (seconds)
       barWindow.data.datasets[0].data = [avgBeadMs/1000, avgDecadeMs/1000, avgRosaryMs/1000];
       barWindow.update();
 
-      // Sets (with robust fallback for "none")
+      // Sets
       const totalDec = (jsStats.totals?.decades ?? 0);
       const joyful   = (jsStats.sets?.joyful ?? 0);
       const sorrow   = (jsStats.sets?.sorrowful ?? 0);
@@ -420,6 +472,26 @@
       }
       donutSets.data.datasets[0].data = [none, joyful, sorrow, glor, lumi];
       donutSets.update();
+
+      // Parts
+      if (chParts) {
+        try {
+          const vParts = await chParts.readValue();
+          const jsParts = JSON.parse(u8ToStr(vParts));
+          const sp = jsParts.setsParts || {};
+          const setsOrder = ['none','joyful','luminous','sorrowful','glorious']; // UI order
+          const dataByPart = [0,1,2,3,4].map(()=>[0,0,0,0,0]);
+
+          setsOrder.forEach((name, si) => {
+            const arr = sp[name] || [0,0,0,0,0];
+            for (let p=0;p<5;p++) dataByPart[p][si] = Number(arr[p]||0);
+          });
+          for (let p=0;p<5;p++) partsChart.data.datasets[p].data = dataByPart[p];
+          partsChart.update();
+        } catch(e) {
+          console.warn('Parts read failed:', e);
+        }
+      }
 
       statusLine.textContent = L.statusUpdated;
     } catch(err){
@@ -448,6 +520,8 @@
     $('refreshBtn').disabled = true;
     $('resetBtn').disabled   = true;
     $('disconnectBtn').disabled = true;
+    $('backupBtn').disabled  = true;
+    $('restoreBtn').disabled = true;
   }
 
   async function disconnectBLE(){
@@ -456,17 +530,207 @@
     finally { onDisconnected(); }
   }
 
-  // Language selector
-  $('langSelect').addEventListener('change', (e) => {
-    lang = e.target.value;
-    applyI18n();
-  });
+  // ---- Backup (download JSON built from the 3 info chars) ----
+  async function doBackup(){
+    const L = i18n[lang];
+    try{
+      if (!chStats || !chSettings) return;
+      statusLine.textContent = L.backupStart();
 
-  // Wire up buttons
+      const [vStats, vSettings, vParts] = await Promise.all([
+        chStats.readValue(),
+        chSettings.readValue(),
+        chParts?.readValue?.() ?? null
+      ]);
+
+      const js = {
+        device: null, fwVersion: null,
+        stats: null, settings: null, setsParts: null
+      };
+      const jsStats    = JSON.parse(u8ToStr(vStats));
+      const jsSettings = JSON.parse(u8ToStr(vSettings));
+      js.device    = jsStats.device || '';
+      js.fwVersion = jsSettings.fwVersion || '';
+      js.stats     = jsStats;                // keep as produced by firmware
+      js.settings  = jsSettings;             // ditto
+      if (vParts) {
+        const jp = JSON.parse(u8ToStr(vParts));
+        js.setsParts = jp.setsParts || null; // move setsParts top-level for convenience
+      }
+
+      const blob = new Blob([JSON.stringify(js,null,2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (js.device || 'rosary') + '_backup.json';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      statusLine.textContent = L.backupDone;
+    } catch(err){
+      console.error(err);
+      statusLine.textContent = 'Backup failed: ' + err.message;
+    }
+  }
+
+  // ---- Restore (upload JSON -> many small SET_* writes) ----
+  function le32(n){ const a=new Uint8Array(4); a[0]=n&255; a[1]=(n>>8)&255; a[2]=(n>>16)&255; a[3]=(n>>24)&255; return a; }
+  function le64Big(n){ // BigInt
+    const a = new Uint8Array(8); let x = BigInt(n);
+    for (let i=0;i<8;i++){ a[i] = Number(x & 0xffn); x >>= 8n; }
+    return a;
+  }
+  function packKV(op, type, key, valBytes){
+    const k = new TextEncoder().encode(key);
+    const out = new Uint8Array(1 + 1 + 1 + k.length + valBytes.length);
+    out[0]=op; out[1]=type; out[2]=k.length; out.set(k,3); out.set(valBytes, 3+k.length);
+    return out;
+  }
+
+  async function writePrefKey(key, type, value){
+    let valBytes;
+    switch (type){
+      case 0x01: valBytes = new Uint8Array([value?1:0]); break;
+      case 0x11: valBytes = new Uint8Array([value & 0xff]); break;
+      case 0x12: valBytes = new Uint8Array([value & 0xff, (value>>8)&0xff]); break;
+      case 0x14: valBytes = le32(value>>>0); break;
+      case 0x21: valBytes = le32((value|0)>>>0); break;
+      case 0x18: valBytes = le64Big(BigInt(value)); break;
+      case 0x31: valBytes = new TextEncoder().encode(String(value)); break;
+      default: throw new Error('bad type');
+    }
+    const payload = packKV(OP_SET_PREF, type, key, valBytes);
+    await chCtrl.writeValue(payload);
+  }
+  async function writeStatKey(key, type, value){
+    let valBytes;
+    switch (type){
+      case 0x11: valBytes = new Uint8Array([value & 0xff]); break;
+      case 0x12: valBytes = new Uint8Array([value & 0xff, (value>>8)&0xff]); break;
+      case 0x14: valBytes = le32(value>>>0); break;
+      case 0x18: valBytes = le64Big(BigInt(value)); break;
+      default: throw new Error('bad type');
+    }
+    const payload = packKV(OP_SET_STAT, type, key, valBytes);
+    await chCtrl.writeValue(payload);
+  }
+
+  async function restoreFromJson(js, onProgress){
+    // prefs mapping per Settings::load()
+    const prefs = js.settings || js.prefs || {};
+    const stAll = js.stats || {};
+
+    const totalSteps =
+      13 + // prefs
+      5 + 2 + 1 + 2 + 30 + 5 + (5*5) + 6; // stats keys we write below
+    let step=0;
+    const tick = ()=>onProgress?.(++step, totalSteps);
+
+    // prefs booleans
+    await writePrefKey("haptic-en",     0x01, !!prefs.haptic);                     tick();
+    await writePrefKey("m-preset-en",   0x01, !!(prefs.mystery?.preset));          tick();
+    await writePrefKey("m-autosave-en", 0x01, !!(prefs.mystery?.autosave));        tick();
+    await writePrefKey("m-intro-en",    0x01, !!(prefs.mystery?.intro));           tick();
+    await writePrefKey("i-en",          0x01, !!(prefs.intentions?.enabled));      tick();
+
+    // prefs ints
+    await writePrefKey("disp-bright",   0x21, prefs.display?.brightness ?? 0);     tick();
+    await writePrefKey("disp-rot",      0x21, prefs.display?.rotation ?? 0);       tick();
+    await writePrefKey("wall-bright",   0x21, prefs.wallpaper?.brightness ?? 0);   tick();
+    await writePrefKey("ImageIndex",    0x21, prefs.wallpaper?.imageIndex ?? 0);   tick();
+    await writePrefKey("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);     tick();
+    await writePrefKey("m-pos",         0x21, prefs.mystery?.pos ?? 0);            tick();
+    await writePrefKey("m-part",        0x21, prefs.mystery?.part ?? 0);           tick();
+    await writePrefKey("i-pos",         0x21, prefs.intentions?.pos ?? 0);         tick();
+
+    // stats scalars (from js.stats schema produced by firmware)
+    const totals = stAll.totals || {};
+    await writeStatKey("beads",    0x14, totals.beads    ?? 0); tick();
+    await writeStatKey("paters",   0x14, totals.paters   ?? 0); tick();
+    await writeStatKey("glorias",  0x14, totals.glorias  ?? 0); tick();
+    await writeStatKey("decades",  0x14, totals.decades  ?? 0); tick();
+    await writeStatKey("rosaries", 0x14, totals.rosaries ?? 0); tick();
+
+    // last mystery + ts (legacy)
+    const last = stAll.lastMystery || {};
+    const setMap = { None:0, Joyful:1, Luminous:2, Sorrowful:3, Glorious:4 };
+    await writeStatKey("lastSet", 0x11, setMap[last.set] ?? 0);     tick();
+    await writeStatKey("lastIdx", 0x11, last.index ?? 0);           tick();
+    await writeStatKey("lastTs",  0x14, stAll.lastPrayer ?? 0);     tick();
+
+    // streak + baseDay (we keep baseDay 0)
+    await writeStatKey("streak",  0x12, stAll.streakDays ?? 0);     tick();
+    await writeStatKey("baseDay", 0x14, 0);                         tick();
+
+    // ring[30] -> r00..r29 (if present; else zeros)
+    const ring = stAll.ring || [];
+    for (let i=0;i<30;i++){
+      const key = `r${String(i).padStart(2,'0')}`;
+      await writeStatKey(key, 0x12, ring[i] ?? 0);                  tick();
+    }
+
+    // sets totals set0..set4
+    const sets = stAll.sets || {};
+    const order = ['none','joyful','luminous','sorrowful','glorious'];
+    for (let si=0; si<5; si++){
+      await writeStatKey(`set${si}`, 0x14, sets[order[si]] ?? 0);   tick();
+    }
+
+    // parts pXY
+    const sp = js.setsParts || stAll.setsParts || {};
+    for (let si=0; si<5; si++){
+      const arr = sp[order[si]] || [0,0,0,0,0];
+      for (let pi=0; pi<5; pi++){
+        await writeStatKey(`p${si}${pi}`, 0x14, arr[pi] ?? 0);      tick();
+      }
+    }
+
+    // durations: write sums+counts used by getters
+    const dur = stAll.durations || {};
+    await writeStatKey("bSum", 0x18, BigInt(dur.totalBeadMs   ?? 0)); tick();
+    await writeStatKey("bInt", 0x14, (stAll.beadIntervals ?? 0));     tick(); // if not present, stays 0
+    await writeStatKey("dSum", 0x18, BigInt(dur.totalDecadeMs ?? 0)); tick();
+    await writeStatKey("dCnt", 0x14, (stAll.decadeCount  ?? 0));      tick();
+    await writeStatKey("rSum", 0x18, BigInt(dur.totalRosaryMs ?? 0)); tick();
+    await writeStatKey("rCnt", 0x14, (stAll.rosaryCount  ?? 0));      tick();
+
+    // ask device to refresh JSON chars
+    await chCtrl.writeValue(new Uint8Array([OP_REST_DONE]));
+  }
+
+  // UI wiring
   $('connectBtn').addEventListener('click', connectBLE);
   $('refreshBtn').addEventListener('click', refresh);
   $('resetBtn').addEventListener('click', resetStats);
   $('disconnectBtn').addEventListener('click', disconnectBLE);
+  $('backupBtn').addEventListener('click', doBackup);
+
+  $('restoreBtn').addEventListener('click', () => $('restoreFile').click());
+  $('restoreFile').addEventListener('change', async (e)=>{
+    const f = e.target.files[0];
+    if (!f) return;
+    const L = i18n[lang];
+    const prog = $('restoreProg'); prog.hidden = false; prog.value = 0;
+    const text = await f.text();
+    let js;
+    try { js = JSON.parse(text); } catch { alert('Bad JSON'); prog.hidden=true; return; }
+    statusLine.textContent = L.restoreStart;
+    const onProg = (step,total)=>{ prog.value = Math.floor(step*100/total); };
+    try{
+      await restoreFromJson(js, onProg);
+      await refresh();
+      statusLine.textContent = L.restoreDone;
+    } catch(err){
+      console.error(err);
+      statusLine.textContent = 'Restore failed: ' + err.message;
+    } finally {
+      setTimeout(()=>{ prog.hidden = true; }, 600);
+      e.target.value = '';
+    }
+  });
+
+  // Language selector
+  $('langSelect').addEventListener('change', (ev)=>{ lang = ev.target.value; applyI18n(); });
 
   // Initial i18n
   applyI18n();
