@@ -7,134 +7,340 @@
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif; margin:0; background:#0b0f14; color:#eaf0f6; overflow-x:hidden; }
-  header { padding:18px 16px; text-align:center; border-bottom:1px solid #18212b; background:#0e141b; }
+  body {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+                 Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
+    margin:0; background:#0b0f14; color:#eaf0f6; overflow-x:hidden;
+  }
+  header {
+    padding:18px 16px; text-align:center; border-bottom:1px solid #18212b; background:#0e141b;
+  }
   h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:.2px; }
-  .toolbar { display:flex; gap:8px; justify-content:center; padding:12px; flex-wrap:wrap; }
-  button { border:0; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer; transition:transform .05s ease; }
+  .toolbar-wrap { display:flex; justify-content:center; }
+  .toolbar {
+    display:flex; gap:8px; padding:12px; flex-wrap:wrap; align-items:center;
+    width:100%; max-width: 980px;
+  }
+  button, select {
+    border:0; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer;
+    transition:transform .05s ease; background:#1f2937; color:#eaf0f6;
+  }
   button:active { transform:scale(0.98); }
-  #connectBtn { background:#03a9f4; color:#001018; }
-  #refreshBtn { background:#1f2937; color:#eaf0f6; }
-  #disconnectBtn { background:#b91c1c; color:#fff; }
-  #resetBtn { background:#9c27b0; color:#fff; }
+  #connectBtn     { background:#03a9f4; color:#001018; }
+  #refreshBtn     { background:#1f2937; }
+  #disconnectBtn  { background:#b91c1c; color:#fff; }
+  #resetBtn       { background:#9c27b0; color:#fff; }
+  #langSelect     { background:#0f1720; border:1px solid #1f2b3a; }
   #status { text-align:center; color:#95a7ba; font-size:13px; padding-bottom:8px; }
 
-  .grid { display:grid; gap:16px; padding:16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-  .card { background:#101722; border:1px solid #1a2733; border-radius:14px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+  /* Content width: two columns, centered, not full screen */
+  .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+  .grid {
+    display:grid; gap:16px;
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+  }
+  @media (max-width: 800px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .card {
+    background:#101722; border:1px solid #1a2733; border-radius:14px; padding:16px;
+    box-shadow:0 6px 24px rgba(0,0,0,.25);
+  }
   .card h3 { margin:0 0 12px; font-size:16px; font-weight:700; color:#cfe4ff; }
   .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
   .kpi { background:#0d131c; border:1px solid #172231; border-radius:12px; padding:10px 12px; }
   .kpi .label { color:#9fb3c8; font-size:12px; }
-  .kpi .value { font-size:20px; font-weight:800; margin-top:2px; }
-  .pill { display:inline-block; background:#0d2030; border:1px solid #1d3551; color:#cde3ff; padding:6px 10px; border-radius:999px; font-size:13px; }
+  .kpi .value { font-size:18px; font-weight:800; margin-top:2px; line-height:1.1; word-break:break-word; }
+  .pill {
+    display:inline-block; background:#0d2030; border:1px solid #1d3551;
+    color:#cde3ff; padding:6px 10px; border-radius:999px; font-size:13px;
+  }
   .flex { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
   .muted { color:#95a7ba; font-size:12px; }
+  .smallnote { color:#7d8fa1; font-size:11px; margin-top:8px; }
   .chart { position:relative; width:100%; height:260px; }
   canvas { display:block; width:100%; height:100%; }
 </style>
 </head>
 <body>
   <header>
-    <h1>Smart Rosary — Dashboard</h1>
+    <h1 id="titleTxt">Smart Rosary — Dashboard</h1>
   </header>
 
-  <div class="toolbar">
-    <button id="connectBtn">Connect</button>
-    <button id="refreshBtn" disabled>Refresh</button>
-    <button id="resetBtn" disabled>Reset Statistics</button>
-    <button id="disconnectBtn" disabled>Disconnect</button>
+  <div class="toolbar-wrap">
+    <div class="toolbar">
+      <button id="connectBtn">Connect</button>
+      <button id="refreshBtn" disabled>Refresh</button>
+      <button id="resetBtn" disabled>Reset Statistics</button>
+      <button id="disconnectBtn" disabled>Disconnect</button>
+      <span style="flex:1"></span>
+      <label for="langSelect" class="muted" style="font-weight:600;margin-right:6px;">Language</label>
+      <select id="langSelect">
+        <option value="en">English</option>
+        <option value="pl">Polski</option>
+        <option value="de">Deutsch</option>
+      </select>
+    </div>
   </div>
+
   <div id="status">Not connected. Tip: use https or http://localhost for Web Bluetooth.</div>
 
-  <section class="grid">
-    <div class="card">
-      <h3>Overview</h3>
-      <div class="kpis">
-        <div class="kpi"><div class="label">Beads</div><div class="value" id="kpiBeads">—</div></div>
-        <div class="kpi"><div class="label">Decades</div><div class="value" id="kpiDecades">—</div></div>
-        <div class="kpi"><div class="label">Rosaries</div><div class="value" id="kpiRosaries">—</div></div>
-        <div class="kpi"><div class="label">Streak (days)</div><div class="value" id="kpiStreak">—</div></div>
+  <section class="wrap">
+    <div class="grid">
+      <div class="card">
+        <h3 id="overviewTitle">Overview</h3>
+        <div class="kpis">
+          <div class="kpi"><div class="label" id="lblBeads">Beads</div><div class="value" id="kpiBeads">—</div></div>
+          <div class="kpi"><div class="label" id="lblDecades">Decades</div><div class="value" id="kpiDecades">—</div></div>
+          <div class="kpi"><div class="label" id="lblRosaries">Rosaries</div><div class="value" id="kpiRosaries">—</div></div>
+        </div>
+        <div class="flex" style="margin-top:12px;">
+          <span class="pill" id="pillDevice">Device: —</span>
+          <span class="pill" id="pillFW">FW: —</span>
+          <span class="pill" id="pillLast">Last prayer: —</span>
+          <span class="pill" id="pillLastMystery">Last mystery: —</span>
+        </div>
       </div>
-      <div class="flex" style="margin-top:12px;">
-        <span class="pill" id="pillDevice">Device: —</span>
-        <span class="pill" id="pillLast">Last prayer: —</span>
-        <span class="pill" id="pillLastMystery">Last mystery: —</span>
+
+      <div class="card">
+        <h3 id="avgTitle">Durations & Averages</h3>
+        <div class="kpis">
+          <div class="kpi"><div class="label" id="lblAvgBead">Avg bead</div><div class="value" id="kpiAvgBead">—</div></div>
+          <div class="kpi"><div class="label" id="lblAvgDecade">Avg decade</div><div class="value" id="kpiAvgDecade">—</div></div>
+          <div class="kpi"><div class="label" id="lblAvgRosary">Avg rosary</div><div class="value" id="kpiAvgRosary">—</div></div>
+        </div>
+        <p class="smallnote" id="avgNote">Averages are computed from lifetime device totals (no RTC).</p>
       </div>
-    </div>
 
-    <div class="card">
-      <h3>Activity Averages</h3>
-      <div class="kpis">
-        <div class="kpi"><div class="label">Avg decades (7 days)</div><div class="value" id="kpiAvg7">—</div></div>
-        <div class="kpi"><div class="label">Avg decades (30 days)</div><div class="value" id="kpiAvg30">—</div></div>
-        <div class="kpi"><div class="label">7‑day total</div><div class="value" id="kpiSum7">—</div></div>
-        <div class="kpi"><div class="label">30‑day total</div><div class="value" id="kpiSum30">—</div></div>
+      <div class="card">
+        <h3 id="totalsCardTitle">Totals (time)</h3>
+        <div class="kpis">
+          <div class="kpi"><div class="label" id="lblTotRosary">Rosary total</div><div class="value" id="kpiTotRosary">—</div></div>
+          <div class="kpi"><div class="label" id="lblTotDecade">Decade total</div><div class="value" id="kpiTotDecade">—</div></div>
+          <div class="kpi"><div class="label" id="lblTotBead">Bead total</div><div class="value" id="kpiTotBead">—</div></div>
+        </div>
       </div>
-      <p class="muted" style="margin-top:10px;">Averages and totals come from the device’s rolling 30‑day window.</p>
-    </div>
 
-    <div class="card">
-      <h3>Decades (7 vs 30 days)</h3>
-      <div class="chart"><canvas id="barWindow"></canvas></div>
-    </div>
+      <div class="card">
+        <h3 id="barTitle">Average durations (s)</h3>
+        <div class="chart"><canvas id="barWindow"></canvas></div>
+      </div>
 
-    <div class="card">
-      <h3>Mystery Sets Breakdown</h3>
-      <div class="chart"><canvas id="donutSets"></canvas></div>
+      <div class="card">
+        <h3 id="donutTitle">Mystery Sets Breakdown</h3>
+        <div class="chart"><canvas id="donutSets"></canvas></div>
+      </div>
     </div>
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script>
-  // UUIDs — MUST match firmware (lowercase)
+  /* UUIDs — MUST match firmware (lowercase) */
   const OTA_SVC_UUID       = '12345678-1234-5678-1234-56789abcdef0';
   const INFO_STATS_UUID    = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1001';
   const INFO_SETTINGS_UUID = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1002';
-  const INFO_CTRL_UUID     = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10ff';  // NEW
+  const INFO_CTRL_UUID     = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10ff';
 
   let device, server, service, chStats, chSettings, chCtrl;
 
-  const $ = id => document.getElementById(id);
-  const statusLine = $('status');
-
-  const kpi = {
-    beads: $('kpiBeads'),
-    decades: $('kpiDecades'),
-    rosaries: $('kpiRosaries'),
-    streak: $('kpiStreak'),
-    avg7: $('kpiAvg7'),
-    avg30: $('kpiAvg30'),
-    sum7: $('kpiSum7'),
-    sum30: $('kpiSum30'),
-    pillDevice: $('pillDevice'),
-    pillLast: $('pillLast'),
-    pillLastMystery: $('pillLastMystery'),
+  /* i18n */
+  const i18n = {
+    en: {
+      title: "Smart Rosary — Dashboard",
+      connect: "Connect", refresh: "Refresh", reset: "Reset Statistics", disconnect: "Disconnect",
+      statusNot: "Not connected. Tip: use https or http://localhost for Web Bluetooth.",
+      overview: "Overview",
+      beads: "Beads", decades: "Decades", rosaries: "Rosaries", streak: "Streak (days)",
+      averages: "Durations & Averages",
+      avgBead: "Avg bead", avgDecade: "Avg decade", avgRosary: "Avg rosary",
+      totalsCardTitle: "Totals (time)",
+      totRosary: "Rosary total", totDecade: "Decade total", totBead: "Bead total",
+      avgNote: "Averages are computed from lifetime device totals (no RTC).",
+      barTitle: "Average durations (s)",
+      donutTitle: "Mystery Sets Breakdown",
+      device: "Device", firmware: "FW", lastPrayer: "Last prayer", lastMystery: "Last mystery",
+      chartBead: "Bead", chartDecade: "Decade", chartRosary: "Rosary",
+      sets: ["None","Joyful","Sorrowful","Glorious","Luminous"],
+      errPick: "Picked device is not a rosary.",
+      errWB: "Web Bluetooth not supported in this browser.",
+      confirmReset: "Reset all statistics on the device? This cannot be undone.",
+      statusConnected: "Connected. Reading…",
+      statusUpdated: "Up to date.",
+      statusResetReq: "Statistics reset requested…",
+      statusDisconnected: "Disconnected."
+    },
+    pl: {
+      title: "Smart Rosary — Panel",
+      connect: "Połącz", refresh: "Odśwież", reset: "Wyzeruj statystyki", disconnect: "Rozłącz",
+      statusNot: "Brak połączenia. Wskazówka: użyj HTTPS lub http://localhost dla Web Bluetooth.",
+      overview: "Przegląd",
+      beads: "Pacierze", decades: "Dziesiątki", rosaries: "Różańce", streak: "Seria (dni)",
+      averages: "Czasy i średnie",
+      avgBead: "Śr. paciorek", avgDecade: "Śr. dziesiątek", avgRosary: "Śr. różaniec",
+      totalsCardTitle: "Suma (czas)",
+      totRosary: "Różaniec — suma", totDecade: "Dziesiątek — suma", totBead: "Pacior. — suma",
+      avgNote: "Średnie liczone z sum od początku (bez RTC).",
+      barTitle: "Średnie czasy (s)",
+      donutTitle: "Podział tajemnic",
+      device: "Urządzenie", firmware: "FW", lastPrayer: "Ostatnia modlitwa", lastMystery: "Ostatnia tajemnica",
+      chartBead: "Pac.", chartDecade: "Dzies.", chartRosary: "Róż.",
+      sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła"],
+      errPick: "Wybrane urządzenie to nie różaniec.",
+      errWB: "Przeglądarka nie obsługuje Web Bluetooth.",
+      confirmReset: "Zresetować wszystkie statystyki na urządzeniu? Tej operacji nie można cofnąć.",
+      statusConnected: "Połączono. Wczytywanie…",
+      statusUpdated: "Aktualne.",
+      statusResetReq: "Żądanie resetu statystyk…",
+      statusDisconnected: "Rozłączono."
+    },
+    de: {
+      title: "Smart Rosary — Dashboard",
+      connect: "Verbinden", refresh: "Aktualisieren", reset: "Statistiken zurücksetzen", disconnect: "Trennen",
+      statusNot: "Nicht verbunden. Hinweis: Verwende https oder http://localhost für Web Bluetooth.",
+      overview: "Übersicht",
+      beads: "Perlen", decades: "Gesätzchen", rosaries: "Rosenkränze", streak: "Serie (Tage)",
+      averages: "Dauern & Durchschnitte",
+      avgBead: "Ø Perle", avgDecade: "Ø Gesätzchen", avgRosary: "Ø Rosenkranz",
+      totalsCardTitle: "Summe (Zeit)",
+      totRosary: "Rosenkranz — Summe", totDecade: "Gesätzchen — Summe", totBead: "Perle — Summe",
+      avgNote: "Durchschnitte über die gesamte Laufzeit (kein RTC).",
+      barTitle: "Durchschnittsdauern (s)",
+      donutTitle: "Aufschlüsselung der Geheimnisse",
+      device: "Gerät", firmware: "FW", lastPrayer: "Letztes Gebet", lastMystery: "Letztes Geheimnis",
+      chartBead: "Perle", chartDecade: "Gesätzchen", chartRosary: "Rosenkranz",
+      sets: ["Keins","Freudenreich","Schmerzensreich","Glorreiche","Lichtreiche"],
+      errPick: "Ausgewähltes Gerät ist kein Rosary.",
+      errWB: "Web Bluetooth wird von diesem Browser nicht unterstützt.",
+      confirmReset: "Alle Statistiken auf dem Gerät zurücksetzen? Dies kann nicht rückgängig gemacht werden.",
+      statusConnected: "Verbunden. Lese…",
+      statusUpdated: "Aktuell.",
+      statusResetReq: "Zurücksetzen angefordert…",
+      statusDisconnected: "Getrennt."
+    }
   };
 
-  const barWindow = new Chart($('barWindow').getContext('2d'), {
-    type: 'bar',
-    data: { labels: ['Last 7 days', 'Last 30 days'], datasets: [{ label: 'Decades', data: [0, 0] }] },
-    options: { responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, ticks:{ precision:0 } } }, plugins:{ legend:{ display:false } } }
-  });
+  const $ = id => document.getElementById(id);
+  let lang = 'en';
+  const statusLine = $('status');
 
-  const donutSets = new Chart($('donutSets').getContext('2d'), {
-    type: 'doughnut',
-    data: { labels: ['Joyful', 'Sorrowful', 'Glorious', 'Luminous'], datasets: [{ data: [0, 0, 0, 0] }] },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } }, cutout:'60%' }
-  });
+  function fmtMs(ms){
+    if (ms == null || isNaN(ms)) return '—';
+    ms = Math.max(0, Math.round(ms));
+    if (ms < 1000) return `${ms} ms`;
+    let s = Math.floor(ms/1000);
+    if (s < 60) return `${s}s`;
+    let m = Math.floor(s/60); s = s % 60;
+    if (m < 60) return `${m}m ${s}s`;
+    let h = Math.floor(m/60); m = m % 60;
+    return `${h}h ${m}m ${s}s`;
+  }
+  // For totals: never show "ms" (display 0s if under a second)
+  function fmtMsNoMs(ms){
+    if (ms == null || isNaN(ms)) return '—';
+    ms = Math.max(0, Math.round(ms));
+    let s = Math.floor(ms/1000);
+    if (s < 60) return `${s}s`;
+    let m = Math.floor(s/60); s = s % 60;
+    if (m < 60) return `${m}m ${s}s`;
+    let h = Math.floor(m/60); m = m % 60;
+    return `${h}h ${m}m ${s}s`;
+  }
+
+  function applyI18n() {
+    const L = i18n[lang];
+    $('titleTxt').textContent   = L.title;
+    $('connectBtn').textContent = L.connect;
+    $('refreshBtn').textContent = L.refresh;
+    $('resetBtn').textContent   = L.reset;
+    $('disconnectBtn').textContent = L.disconnect;
+    statusLine.textContent = L.statusNot;
+
+    $('overviewTitle').textContent = L.overview;
+    $('lblBeads').textContent   = L.beads;
+    $('lblDecades').textContent = L.decades;
+    $('lblRosaries').textContent= L.rosaries;
+
+    $('avgTitle').textContent = L.averages;
+    $('lblAvgBead').textContent   = L.avgBead;
+    $('lblAvgDecade').textContent = L.avgDecade;
+    $('lblAvgRosary').textContent = L.avgRosary;
+    $('avgNote').textContent      = L.avgNote;
+
+    $('totalsCardTitle').textContent = L.totalsCardTitle;
+    $('lblTotRosary').textContent = L.totRosary;
+    $('lblTotDecade').textContent = L.totDecade;
+    $('lblTotBead').textContent   = L.totBead;
+
+    $('barTitle').textContent   = L.barTitle;
+    $('donutTitle').textContent = L.donutTitle;
+
+    // Update chart labels
+    barWindow.data.labels = [L.chartBead, L.chartDecade, L.chartRosary];
+    donutSets.data.labels = L.sets.slice();
+    barWindow.update(); donutSets.update();
+  }
 
   function fmtEpoch(ts){ if(!ts) return '—'; try{ return new Date(ts*1000).toLocaleString(); }catch{ return '—'; } }
   function u8ToStr(v){ return new TextDecoder().decode(v); }
 
+  /* Charts */
+  const barWindow = new Chart($('barWindow').getContext('2d'), {
+    type: 'bar',
+    data: { labels: ['Bead','Decade','Rosary'], datasets: [{ label: 'Avg (s)', data: [0, 0, 0] }] },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      scales:{ y:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#1a2733' } }, x:{ grid:{ color:'#1a2733' } } },
+      plugins:{ legend:{ display:false } }
+    }
+  });
+
+  const donutSets = new Chart($('donutSets').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: ['None','Joyful','Sorrowful','Glorious','Luminous'],
+      datasets: [{
+        data: [0, 0, 0, 0, 0],
+        backgroundColor: [
+          '#808080', // None - grey
+          '#ffcc00', // Joyful - yellow
+          '#cc0000', // Sorrowful - red
+          '#00cc00', // Glorious - green
+          '#3399ff'  // Luminous - blue
+        ],
+        borderColor: '#0b0f14',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ color:'#eaf0f6' } } },
+      cutout:'60%'
+    }
+  });
+
   async function connectBLE(){
+    const L = i18n[lang];
     try{
-      if (!navigator.bluetooth) throw new Error('Web Bluetooth not supported in this browser.');
+      if (!navigator.bluetooth) throw new Error(L.errWB);
       statusLine.textContent = 'Requesting device…';
-      device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: [OTA_SVC_UUID] }],
-        optionalServices: [OTA_SVC_UUID]
-      });
+      let dev;
+      try {
+        dev = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [OTA_SVC_UUID] }],
+          optionalServices: [OTA_SVC_UUID]
+        });
+      } catch {
+        dev = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [OTA_SVC_UUID]
+        });
+        if (!dev.name || !dev.name.toLowerCase().startsWith('rosary')) {
+          throw new Error(L.errPick);
+        }
+      }
+
+      device = dev;
       device.addEventListener('gattserverdisconnected', onDisconnected);
 
       statusLine.textContent = 'Connecting…';
@@ -143,12 +349,13 @@
 
       chStats    = await service.getCharacteristic(INFO_STATS_UUID);
       chSettings = await service.getCharacteristic(INFO_SETTINGS_UUID);
-      chCtrl     = await service.getCharacteristic(INFO_CTRL_UUID);     // NEW
+      chCtrl     = await service.getCharacteristic(INFO_CTRL_UUID);
 
       $('refreshBtn').disabled = false;
       $('resetBtn').disabled   = false;
       $('disconnectBtn').disabled = true;
-      statusLine.textContent = 'Connected. Reading…';
+
+      statusLine.textContent = L.statusConnected;
       await refresh();
       $('disconnectBtn').disabled = false;
     } catch(err){
@@ -157,43 +364,64 @@
     }
   }
 
+  function safeNum(x, d=0){ const v = Number(x); return isFinite(v) ? v : d; }
+
   async function refresh(){
+    const L = i18n[lang];
     try{
       if (!chStats || !chSettings) return;
       const vStats    = await chStats.readValue();
       const vSettings = await chSettings.readValue();
       const jsStats    = JSON.parse(u8ToStr(vStats));
-      const jsSettings = JSON.parse(u8ToStr(vSettings)); // reserved for future UI
+      const jsSettings = JSON.parse(u8ToStr(vSettings));
 
-      kpi.beads.textContent    = (jsStats.totals?.beads ?? '—');
-      kpi.decades.textContent  = (jsStats.totals?.decades ?? '—');
-      kpi.rosaries.textContent = (jsStats.totals?.rosaries ?? '—');
-      kpi.streak.textContent   = (jsStats.streakDays ?? '—');
+      $('kpiBeads').textContent    = (jsStats.totals?.beads ?? '—');
+      $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
+      $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
 
-      kpi.avg7.textContent  = (jsStats.windows?.avg7 ?? 0).toFixed(2);
-      kpi.avg30.textContent = (jsStats.windows?.avg30 ?? 0).toFixed(2);
-      kpi.sum7.textContent  = (jsStats.windows?.decades7 ?? '—');
-      kpi.sum30.textContent = (jsStats.windows?.decades30 ?? '—');
+      $('pillDevice').textContent = `${L.device}: ${jsStats.device || '—'}`;
+      $('pillFW').textContent     = `${L.firmware}: ${jsSettings.fwVersion || '—'}`;
+      $('pillLast').textContent   = `${L.lastPrayer}: ${fmtEpoch(jsStats.lastPrayer)}`;
+      $('pillLastMystery').textContent =
+        `${L.lastMystery}: ${jsStats.lastMystery?.set || '—'}${jsStats.lastMystery?.index ? ` #${jsStats.lastMystery.index}` : ''}`;
 
-      kpi.pillDevice.textContent = `Device: ${jsStats.device || '—'}`;
-      kpi.pillLast.textContent   = `Last prayer: ${fmtEpoch(jsStats.lastPrayer)}`;
-      kpi.pillLastMystery.textContent = `Last mystery: ${jsStats.lastMystery?.set || '—'} ${jsStats.lastMystery?.index ? `#${jsStats.lastMystery.index}` : ''}`;
+      // Durations
+      const d = jsStats.durations || {};
+      const avgBeadMs   = safeNum(d.avgBeadMs,   0);
+      const avgDecadeMs = safeNum(d.avgDecadeMs, 0);
+      const avgRosaryMs = safeNum(d.avgRosaryMs, 0);
+      const totBeadMs   = safeNum(d.totalBeadMs,   0);
+      const totDecadeMs = safeNum(d.totalDecadeMs, 0);
+      const totRosaryMs = safeNum(d.totalRosaryMs, 0);
 
-      barWindow.data.datasets[0].data = [
-        (jsStats.windows?.decades7 ?? 0),
-        (jsStats.windows?.decades30 ?? 0)
-      ];
+      $('kpiAvgBead').textContent   = fmtMs(avgBeadMs);
+      $('kpiAvgDecade').textContent = fmtMs(avgDecadeMs);
+      $('kpiAvgRosary').textContent = fmtMs(avgRosaryMs);
+
+      // Totals card (never show "ms")
+      $('kpiTotRosary').textContent = fmtMsNoMs(totRosaryMs);
+      $('kpiTotDecade').textContent = fmtMsNoMs(totDecadeMs);
+      $('kpiTotBead').textContent   = fmtMsNoMs(totBeadMs);
+
+      // Average durations chart (seconds)
+      barWindow.data.datasets[0].data = [avgBeadMs/1000, avgDecadeMs/1000, avgRosaryMs/1000];
       barWindow.update();
 
-      donutSets.data.datasets[0].data = [
-        (jsStats.sets?.joyful ?? 0),
-        (jsStats.sets?.sorrowful ?? 0),
-        (jsStats.sets?.glorious ?? 0),
-        (jsStats.sets?.luminous ?? 0)
-      ];
+      // Sets (with robust fallback for "none")
+      const totalDec = (jsStats.totals?.decades ?? 0);
+      const joyful   = (jsStats.sets?.joyful ?? 0);
+      const sorrow   = (jsStats.sets?.sorrowful ?? 0);
+      const glor     = (jsStats.sets?.glorious ?? 0);
+      const lumi     = (jsStats.sets?.luminous ?? 0);
+      let none       = jsStats.sets?.none;
+      if (none == null) {
+        const sumKnown = joyful + sorrow + glor + lumi;
+        none = Math.max(0, totalDec - sumKnown);
+      }
+      donutSets.data.datasets[0].data = [none, joyful, sorrow, glor, lumi];
       donutSets.update();
 
-      statusLine.textContent = 'Up to date.';
+      statusLine.textContent = L.statusUpdated;
     } catch(err){
       console.error(err);
       statusLine.textContent = 'Read failed: ' + err.message;
@@ -201,14 +429,13 @@
   }
 
   async function resetStats(){
+    const L = i18n[lang];
     try{
       if (!chCtrl) return;
-      if (!confirm('Reset all statistics on the device? This cannot be undone.')) return;
-      // Command 0x01 = RESET STATS
+      if (!confirm(L.confirmReset)) return;
       await chCtrl.writeValue(new Uint8Array([0x01]));
-      // Give firmware a moment to update and push new JSON, then refresh
       setTimeout(refresh, 300);
-      statusLine.textContent = 'Statistics reset requested…';
+      statusLine.textContent = L.statusResetReq;
     } catch(err){
       console.error(err);
       statusLine.textContent = 'Reset failed: ' + err.message;
@@ -216,7 +443,8 @@
   }
 
   function onDisconnected(){
-    statusLine.textContent = 'Disconnected.';
+    const L = i18n[lang];
+    statusLine.textContent = L.statusDisconnected;
     $('refreshBtn').disabled = true;
     $('resetBtn').disabled   = true;
     $('disconnectBtn').disabled = true;
@@ -228,10 +456,20 @@
     finally { onDisconnected(); }
   }
 
+  // Language selector
+  $('langSelect').addEventListener('change', (e) => {
+    lang = e.target.value;
+    applyI18n();
+  });
+
+  // Wire up buttons
   $('connectBtn').addEventListener('click', connectBLE);
   $('refreshBtn').addEventListener('click', refresh);
   $('resetBtn').addEventListener('click', resetStats);
   $('disconnectBtn').addEventListener('click', disconnectBLE);
+
+  // Initial i18n
+  applyI18n();
   </script>
 </body>
 </html>
