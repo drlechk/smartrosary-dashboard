@@ -170,6 +170,21 @@
 
   let device, server, service, chStats, chSettings, chCtrl, chParts;
 
+  function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+  async function withRetry(fn, {tries=5, base=120} = {}) {
+    let err;
+    for (let i=0;i<tries;i++){
+      try { return await fn(); }
+      catch(e){ err = e; await sleep(base * Math.pow(1.6, i)); }
+    }
+    throw err;
+  }
+
+  async function readWithRetry(ch, tries=5){
+    return withRetry(() => ch.readValue(), { tries, base: 150 });
+  }
+
   /* i18n (complete) */
   const i18n = {
     en: {
@@ -368,137 +383,152 @@
     }
   });
 
-  async function connectBLE(){
-    const L = i18n[lang];
-    try{
-      if (!navigator.bluetooth) throw new Error(L.errWB);
-      statusLine.textContent = 'Requesting device…';
-      let dev;
+async function connectBLE(){
+  const L = i18n[lang];
+  try{
+    if (!navigator.bluetooth) throw new Error(L.errWB);
+    statusLine.textContent = 'Requesting device…';
+
+    let dev;
+    try {
+      dev = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [OTA_SVC_UUID] }],
+        optionalServices: [OTA_SVC_UUID]
+      });
+    } catch {
+      dev = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: [OTA_SVC_UUID]
+      });
+      if (!dev.name || !dev.name.toLowerCase().startsWith('rosary')) {
+        throw new Error(L.errPick);
+      }
+    }
+
+    device = dev;
+    device.addEventListener('gattserverdisconnected', onDisconnected);
+
+    statusLine.textContent = 'Connecting…';
+    server  = await device.gatt.connect();
+
+    // 🔧 Android quirk: give the GATT a moment to finish service discovery.
+    await sleep(300);
+
+    // Get service/characteristics with retries (Android sometimes races here)
+    service   = await withRetry(() => server.getPrimaryService(OTA_SVC_UUID));
+    chSettings= await withRetry(() => service.getCharacteristic(INFO_SETTINGS_UUID));
+    chParts   = await withRetry(() => service.getCharacteristic(INFO_PARTS_UUID));
+    chStats   = await withRetry(() => service.getCharacteristic(INFO_STATS_UUID));
+    chCtrl    = await withRetry(() => service.getCharacteristic(INFO_CTRL_UUID));
+
+    $('refreshBtn').disabled = false;
+    $('resetBtn').disabled   = false;
+    $('backupBtn').disabled  = false;
+    $('restoreBtn').disabled = false;
+    $('disconnectBtn').disabled = true;
+
+    statusLine.textContent = L.statusConnected;
+
+    // First reads with retry (smaller ones first)
+    await withRetry(refresh);
+
+    $('disconnectBtn').disabled = false;
+  } catch(err){
+    console.error(err);
+    statusLine.textContent = 'Error: ' + err.message;
+  }
+}
+
+async function refresh(){
+  const L = i18n[lang];
+  try{
+    if (!chStats || !chSettings) return;
+
+    // Android quirk: give discovery/MTU a moment before first reads
+    await sleep(200);
+
+    // Read small blobs first (settings, parts), then the big stats blob last.
+    const [vSettings, vPartsMaybe] = await Promise.all([
+      readWithRetry(chSettings),
+      chParts ? readWithRetry(chParts).catch(()=>null) : Promise.resolve(null)
+    ]);
+
+    // Stats is usually the largest – do it after a tiny pause and with retry.
+    await sleep(80);
+    const vStats = await readWithRetry(chStats);
+
+    const jsStats    = JSON.parse(u8ToStr(vStats));
+    const jsSettings = JSON.parse(u8ToStr(vSettings));
+
+    $('kpiBeads').textContent    = (jsStats.totals?.beads ?? '—');
+    $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
+    $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
+
+    const Ldev = i18n[lang];
+    $('pillDevice').textContent = `${Ldev.device}: ${jsStats.device || '—'}`;
+    $('pillFW').textContent     = `${Ldev.firmware}: ${jsSettings.fwVersion || '—'}`;
+    $('pillLastMystery').textContent =
+      `${Ldev.lastMystery}: ${jsStats.lastMystery?.set || '—'}${jsStats.lastMystery?.index ? ` #${jsStats.lastMystery.index}` : ''}`;
+
+    // Durations
+    const d = jsStats.durations || {};
+    const avgBeadMs   = safeNum(d.avgBeadMs,   0);
+    const avgDecadeMs = safeNum(d.avgDecadeMs, 0);
+    const avgRosaryMs = safeNum(d.avgRosaryMs, 0);
+    const totBeadMs   = safeNum(d.totalBeadMs,   0);
+    const totDecadeMs = safeNum(d.totalDecadeMs, 0);
+    const totRosaryMs = safeNum(d.totalRosaryMs, 0);
+
+    $('kpiAvgBead').textContent   = fmtMs(avgBeadMs);
+    $('kpiAvgDecade').textContent = fmtMs(avgDecadeMs);
+    $('kpiAvgRosary').textContent = fmtMs(avgRosaryMs);
+
+    $('totRosary').textContent = fmtMs(totRosaryMs);
+    $('totDecade').textContent = fmtMs(totDecadeMs);
+    $('totBead').textContent   = fmtMs(totBeadMs);
+
+    barWindow.data.datasets[0].data = [avgBeadMs/1000, avgDecadeMs/1000, avgRosaryMs/1000];
+    barWindow.update();
+
+    // Sets
+    const totalDec = (jsStats.totals?.decades ?? 0);
+    const joyful   = (jsStats.sets?.joyful ?? 0);
+    const sorrow   = (jsStats.sets?.sorrowful ?? 0);
+    const glor     = (jsStats.sets?.glorious ?? 0);
+    const lumi     = (jsStats.sets?.luminous ?? 0);
+    let none       = jsStats.sets?.none;
+    if (none == null) {
+      const sumKnown = joyful + sorrow + glor + lumi;
+      none = Math.max(0, totalDec - sumKnown);
+    }
+    donutSets.data.datasets[0].data = [none, joyful, sorrow, glor, lumi];
+    donutSets.update();
+
+    // Parts (optional char; tolerate failures)
+    if (vPartsMaybe) {
       try {
-        dev = await navigator.bluetooth.requestDevice({
-          filters: [{ services: [OTA_SVC_UUID] }],
-          optionalServices: [OTA_SVC_UUID]
+        const jsParts = JSON.parse(u8ToStr(vPartsMaybe));
+        const sp = jsParts.setsParts || {};
+        const setsOrder = ['none','joyful','luminous','sorrowful','glorious']; // UI order
+        const dataByPart = [0,1,2,3,4].map(()=>[0,0,0,0,0]);
+
+        setsOrder.forEach((name, si) => {
+          const arr = sp[name] || [0,0,0,0,0];
+          for (let p=0;p<5;p++) dataByPart[p][si] = Number(arr[p]||0);
         });
-      } catch {
-        dev = await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: [OTA_SVC_UUID]
-        });
-        if (!dev.name || !dev.name.toLowerCase().startsWith('rosary')) {
-          throw new Error(L.errPick);
-        }
+        for (let p=0;p<5;p++) partsChart.data.datasets[p].data = dataByPart[p];
+        partsChart.update();
+      } catch(e) {
+        console.warn('Parts parse/read failed:', e);
       }
-
-      device = dev;
-      device.addEventListener('gattserverdisconnected', onDisconnected);
-
-      statusLine.textContent = 'Connecting…';
-      server  = await device.gatt.connect();
-      service = await server.getPrimaryService(OTA_SVC_UUID);
-
-      chStats    = await service.getCharacteristic(INFO_STATS_UUID);
-      chSettings = await service.getCharacteristic(INFO_SETTINGS_UUID);
-      chCtrl     = await service.getCharacteristic(INFO_CTRL_UUID);
-      chParts    = await service.getCharacteristic(INFO_PARTS_UUID);
-
-      $('refreshBtn').disabled = false;
-      $('resetBtn').disabled   = false;
-      $('backupBtn').disabled  = false;
-      $('restoreBtn').disabled = false;
-      $('disconnectBtn').disabled = true;
-
-      statusLine.textContent = L.statusConnected;
-      await refresh();
-      $('disconnectBtn').disabled = false;
-    } catch(err){
-      console.error(err);
-      statusLine.textContent = 'Error: ' + err.message;
     }
+
+    statusLine.textContent = L.statusUpdated;
+  } catch(err){
+    console.error(err);
+    statusLine.textContent = 'Read failed: ' + err.message;
   }
-
-  async function refresh(){
-    const L = i18n[lang];
-    try{
-      if (!chStats || !chSettings) return;
-
-      const [vStats, vSettings] = await Promise.all([
-        chStats.readValue(),
-        chSettings.readValue()
-      ]);
-
-      const jsStats    = JSON.parse(u8ToStr(vStats));
-      const jsSettings = JSON.parse(u8ToStr(vSettings));
-
-      $('kpiBeads').textContent    = (jsStats.totals?.beads ?? '—');
-      $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
-      $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
-
-      const Ldev = i18n[lang];
-      $('pillDevice').textContent = `${Ldev.device}: ${jsStats.device || '—'}`;
-      $('pillFW').textContent     = `${Ldev.firmware}: ${jsSettings.fwVersion || '—'}`;
-      $('pillLastMystery').textContent =
-        `${Ldev.lastMystery}: ${jsStats.lastMystery?.set || '—'}${jsStats.lastMystery?.index ? ` #${jsStats.lastMystery.index}` : ''}`;
-
-      // Durations
-      const d = jsStats.durations || {};
-      const avgBeadMs   = safeNum(d.avgBeadMs,   0);
-      const avgDecadeMs = safeNum(d.avgDecadeMs, 0);
-      const avgRosaryMs = safeNum(d.avgRosaryMs, 0);
-      const totBeadMs   = safeNum(d.totalBeadMs,   0);
-      const totDecadeMs = safeNum(d.totalDecadeMs, 0);
-      const totRosaryMs = safeNum(d.totalRosaryMs, 0);
-
-      $('kpiAvgBead').textContent   = fmtMs(avgBeadMs);
-      $('kpiAvgDecade').textContent = fmtMs(avgDecadeMs);
-      $('kpiAvgRosary').textContent = fmtMs(avgRosaryMs);
-
-      $('totRosary').textContent = fmtMs(totRosaryMs);
-      $('totDecade').textContent = fmtMs(totDecadeMs);
-      $('totBead').textContent   = fmtMs(totBeadMs);
-
-      barWindow.data.datasets[0].data = [avgBeadMs/1000, avgDecadeMs/1000, avgRosaryMs/1000];
-      barWindow.update();
-
-      // Sets
-      const totalDec = (jsStats.totals?.decades ?? 0);
-      const joyful   = (jsStats.sets?.joyful ?? 0);
-      const sorrow   = (jsStats.sets?.sorrowful ?? 0);
-      const glor     = (jsStats.sets?.glorious ?? 0);
-      const lumi     = (jsStats.sets?.luminous ?? 0);
-      let none       = jsStats.sets?.none;
-      if (none == null) {
-        const sumKnown = joyful + sorrow + glor + lumi;
-        none = Math.max(0, totalDec - sumKnown);
-      }
-      donutSets.data.datasets[0].data = [none, joyful, sorrow, glor, lumi];
-      donutSets.update();
-
-      // Parts
-      if (chParts) {
-        try {
-          const vParts = await chParts.readValue();
-          const jsParts = JSON.parse(u8ToStr(vParts));
-          const sp = jsParts.setsParts || {};
-          const setsOrder = ['none','joyful','luminous','sorrowful','glorious']; // UI order
-          const dataByPart = [0,1,2,3,4].map(()=>[0,0,0,0,0]);
-
-          setsOrder.forEach((name, si) => {
-            const arr = sp[name] || [0,0,0,0,0];
-            for (let p=0;p<5;p++) dataByPart[p][si] = Number(arr[p]||0);
-          });
-          for (let p=0;p<5;p++) partsChart.data.datasets[p].data = dataByPart[p];
-          partsChart.update();
-        } catch(e) {
-          console.warn('Parts read failed:', e);
-        }
-      }
-
-      statusLine.textContent = L.statusUpdated;
-    } catch(err){
-      console.error(err);
-      statusLine.textContent = 'Read failed: ' + err.message;
-    }
-  }
+}
 
   async function resetStats(){
     const L = i18n[lang];
