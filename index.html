@@ -164,9 +164,10 @@
   const INFO_PARTS_UUID    = 'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1003';
 
   // Control opcodes
-  const OP_SET_PREF = 0x50;
-  const OP_SET_STAT = 0x53;
-  const OP_REST_DONE= 0x55;
+  const OP_SET_PREF  = 0x50;
+  const OP_SET_STAT  = 0x53;
+  const OP_REST_DONE = 0x55;
+  const OP_REST_BEGIN= 0x54; // <-- added
 
   let device, server, service, chStats, chSettings, chCtrl, chParts;
 
@@ -641,6 +642,7 @@ async function refresh(){
   }
 
   // ---- Restore (upload JSON -> many small SET_* writes) ----
+  function le16(n){ const a=new Uint8Array(2); n=Number(n)>>>0; a[0]=n&255; a[1]=(n>>8)&255; return a; }  // <-- added
   function le32(n){ const a=new Uint8Array(4); n = Number(n)>>>0; a[0]=n&255; a[1]=(n>>8)&255; a[2]=(n>>16)&255; a[3]=(n>>24)&255; return a; }
   function le64Big(n){ // BigInt
     const a = new Uint8Array(8); let x = BigInt(n);
@@ -652,6 +654,19 @@ async function refresh(){
     const out = new Uint8Array(1 + 1 + 1 + k.length + valBytes.length);
     out[0]=op; out[1]=type; out[2]=k.length; out.set(k,3); out.set(valBytes, 3+k.length);
     return out;
+  }
+  // size of encoded value for progress accounting (no payload allocation)
+  function encSize(type, value){
+    switch (type){
+      case 0x01: return 1; // bool
+      case 0x11: return 1; // u8
+      case 0x12: return 2; // u16
+      case 0x14: return 4; // u32
+      case 0x21: return 4; // i32
+      case 0x18: return 8; // u64
+      case 0x31: return new TextEncoder().encode(String(value)).length; // str
+      default: throw new Error('bad type');
+    }
   }
 
   async function writePrefKey(key, type, value){
@@ -693,6 +708,87 @@ async function refresh(){
     let step=0;
     const tick = ()=>onProgress?.(++step, totalSteps);
 
+    // ---- PREPASS: compute totalBytes for RESTORE_BEGIN ----
+    let totalBytes = 0;
+    const sumKV = (key, type, value) => { totalBytes += key.length + encSize(type, value); };
+
+    // prefs booleans
+    sumKV("haptic-en",     0x01, !!prefs.haptic);
+    sumKV("m-preset-en",   0x01, !!(prefs.mystery?.preset));
+    sumKV("m-autosave-en", 0x01, !!(prefs.mystery?.autosave));
+    sumKV("m-intro-en",    0x01, !!(prefs.mystery?.intro));
+    sumKV("i-en",          0x01, !!(prefs.intentions?.enabled));
+
+    // prefs ints
+    sumKV("disp-bright",   0x21, prefs.display?.brightness ?? 0);
+    sumKV("disp-rot",      0x21, prefs.display?.rotation ?? 0);
+    sumKV("wall-bright",   0x21, prefs.wallpaper?.brightness ?? 0);
+    sumKV("ImageIndex",    0x21, prefs.wallpaper?.imageIndex ?? 0);
+    sumKV("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);
+    sumKV("m-pos",         0x21, prefs.mystery?.pos ?? 0);
+    sumKV("m-part",        0x21, prefs.mystery?.part ?? 0);
+    sumKV("i-pos",         0x21, prefs.intentions?.pos ?? 0);
+
+    // stats scalars
+    const totals = stAll.totals || {};
+    sumKV("beads",    0x14, totals.beads    ?? 0);
+    sumKV("paters",   0x14, totals.paters   ?? 0);
+    sumKV("glorias",  0x14, totals.glorias  ?? 0);
+    sumKV("decades",  0x14, totals.decades  ?? 0);
+    sumKV("rosaries", 0x14, totals.rosaries ?? 0);
+
+    // last mystery + ts
+    const last = stAll.lastMystery || {};
+    const setMap = { None:0, Joyful:1, Luminous:2, Sorrowful:3, Glorious:4 };
+    sumKV("lastSet", 0x11, setMap[last.set] ?? 0);
+    sumKV("lastIdx", 0x11, last.index ?? 0);
+    sumKV("lastTs",  0x14, stAll.lastPrayer ?? 0);
+
+    // streak + baseDay
+    sumKV("streak",  0x12, stAll.streakDays ?? 0);
+    sumKV("baseDay", 0x14, 0);
+
+    // ring[30]
+    const ring = stAll.ring || [];
+    for (let i=0;i<30;i++){
+      const key = `r${String(i).padStart(2,'0')}`;
+      sumKV(key, 0x12, ring[i] ?? 0);
+    }
+
+    // sets totals set0..set4
+    const sets = stAll.sets || {};
+    const order = ['none','joyful','luminous','sorrowful','glorious'];
+    for (let si=0; si<5; si++){
+      sumKV(`set${si}`, 0x14, sets[order[si]] ?? 0);
+    }
+
+    // parts pXY
+    const sp = js.setsParts || stAll.setsParts || {};
+    for (let si=0; si<5; si++){
+      const arr = sp[order[si]] || [0,0,0,0,0];
+      for (let pi=0; pi<5; pi++){
+        sumKV(`p${si}${pi}`, 0x14, arr[pi] ?? 0);
+      }
+    }
+
+    // durations: sums+counts
+    const dur = stAll.durations || {};
+    sumKV("bSum", 0x18, BigInt(dur.totalBeadMs   ?? 0));
+    sumKV("bInt", 0x14, (dur.beadIntervals ?? 0));
+    sumKV("dSum", 0x18, BigInt(dur.totalDecadeMs ?? 0));
+    sumKV("dCnt", 0x14, (dur.decadeCount  ?? 0));
+    sumKV("rSum", 0x18, BigInt(dur.totalRosaryMs ?? 0));
+    sumKV("rCnt", 0x14, (dur.rosaryCount  ?? 0));
+
+    // Send RESTORE_BEGIN so ESP32 can display progress based on bytes
+    const begin = new Uint8Array(1+2+4);
+    begin[0] = OP_REST_BEGIN;
+    begin.set(le16(totalSteps), 1);
+    begin.set(le32(totalBytes), 3);
+    await chCtrl.writeValue(begin);
+
+    // ---- ACTUAL WRITES (unchanged), with onProgress ticks ----
+
     // prefs booleans
     await writePrefKey("haptic-en",     0x01, !!prefs.haptic);                     tick();
     await writePrefKey("m-preset-en",   0x01, !!(prefs.mystery?.preset));          tick();
@@ -711,7 +807,6 @@ async function refresh(){
     await writePrefKey("i-pos",         0x21, prefs.intentions?.pos ?? 0);         tick();
 
     // stats scalars (from js.stats schema produced by firmware)
-    const totals = stAll.totals || {};
     await writeStatKey("beads",    0x14, totals.beads    ?? 0); tick();
     await writeStatKey("paters",   0x14, totals.paters   ?? 0); tick();
     await writeStatKey("glorias",  0x14, totals.glorias  ?? 0); tick();
@@ -719,8 +814,6 @@ async function refresh(){
     await writeStatKey("rosaries", 0x14, totals.rosaries ?? 0); tick();
 
     // last mystery + ts (legacy)
-    const last = stAll.lastMystery || {};
-    const setMap = { None:0, Joyful:1, Luminous:2, Sorrowful:3, Glorious:4 };
     await writeStatKey("lastSet", 0x11, setMap[last.set] ?? 0);     tick();
     await writeStatKey("lastIdx", 0x11, last.index ?? 0);           tick();
     await writeStatKey("lastTs",  0x14, stAll.lastPrayer ?? 0);     tick();
@@ -730,21 +823,17 @@ async function refresh(){
     await writeStatKey("baseDay", 0x14, 0);                         tick();
 
     // ring[30] -> r00..r29 (if present; else zeros)
-    const ring = stAll.ring || [];
     for (let i=0;i<30;i++){
       const key = `r${String(i).padStart(2,'0')}`;
       await writeStatKey(key, 0x12, ring[i] ?? 0);                  tick();
     }
 
     // sets totals set0..set4
-    const sets = stAll.sets || {};
-    const order = ['none','joyful','luminous','sorrowful','glorious'];
     for (let si=0; si<5; si++){
       await writeStatKey(`set${si}`, 0x14, sets[order[si]] ?? 0);   tick();
     }
 
     // parts pXY
-    const sp = js.setsParts || stAll.setsParts || {};
     for (let si=0; si<5; si++){
       const arr = sp[order[si]] || [0,0,0,0,0];
       for (let pi=0; pi<5; pi++){
@@ -753,7 +842,6 @@ async function refresh(){
     }
 
     // durations: write sums+counts used by getters
-    const dur = stAll.durations || {};
     await writeStatKey("bSum", 0x18, BigInt(dur.totalBeadMs   ?? 0)); tick();
     await writeStatKey("bInt", 0x14, (dur.beadIntervals ?? 0));       tick();
     await writeStatKey("dSum", 0x18, BigInt(dur.totalDecadeMs ?? 0)); tick();
