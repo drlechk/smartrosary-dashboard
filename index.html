@@ -93,7 +93,7 @@
     <div class="grid">
       <div class="card">
         <h3 id="overviewTitle">Overview</h3>
-        <div class="kpis">
+        <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
           <div class="kpi"><div class="label" id="lblBeads">Beads</div><div class="value" id="kpiBeads">—</div></div>
           <div class="kpi"><div class="label" id="lblDecades">Decades</div><div class="value" id="kpiDecades">—</div></div>
           <div class="kpi"><div class="label" id="lblRosaries">Rosaries</div><div class="value" id="kpiRosaries">—</div></div>
@@ -108,15 +108,12 @@
 
       <div class="card">
         <h3 id="avgTitle">Durations & Averages</h3>
-        <div class="kpis">
+         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
           <div class="kpi"><div class="label" id="lblAvgBead">Avg bead</div><div class="value" id="kpiAvgBead">—</div></div>
           <div class="kpi"><div class="label" id="lblAvgDecade">Avg decade</div><div class="value" id="kpiAvgDecade">—</div></div>
           <div class="kpi"><div class="label" id="lblAvgRosary">Avg rosary</div><div class="value" id="kpiAvgRosary">—</div></div>
         </div>
         <p class="smallnote" id="avgNote">Averages are computed from lifetime device totals (no RTC).</p>
-      </div>
-
-      <div class="card">
         <h3>Totals (time)</h3>
         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
           <div class="kpi"><div class="label">Rosary</div><div class="value" id="totRosary">—</div></div>
@@ -124,6 +121,7 @@
           <div class="kpi"><div class="label">Beads</div><div class="value" id="totBead">—</div></div>
         </div>
       </div>
+
 
       <div class="card">
         <h3 id="barTitle">Average durations (s)</h3>
@@ -226,7 +224,7 @@
       beads: "Pacierze", decades: "Dziesiątki", rosaries: "Różańce", streak: "Seria (dni)",
       averages: "Czasy i średnie",
       avgBead: "Śr. paciorek", avgDecade: "Śr. dziesiątek", avgRosary: "Śr. różaniec",
-      avgNote: "Średnie liczone z sum od początku (bez RTC).",
+      avgNote: "Średnie liczone z sum od początku.",
       barTitle: "Średnie czasy (s)",
       donutTitle: "Podział tajemnic",
       partsTitle: "Tajemnice — części (I–V)",
@@ -255,7 +253,7 @@
       beads: "Perlen", decades: "Gesätzchen", rosaries: "Rosenkränze", streak: "Serie (Tage)",
       averages: "Dauern & Durchschnitte",
       avgBead: "Ø Perle", avgDecade: "Ø Gesätzchen", avgRosary: "Ø Rosenkranz",
-      avgNote: "Durchschnitte über die gesamte Laufzeit (kein RTC).",
+      avgNote: "Durchschnitte über die gesamte Laufzeit.",
       barTitle: "Durchschnittsdauern (s)",
       donutTitle: "Aufschlüsselung der Geheimnisse",
       partsTitle: "Geheimnisse — Teile (I–V)",
