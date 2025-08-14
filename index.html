@@ -561,98 +561,129 @@ async function refresh(){
   }
   
 
-  // ---- Backup (robust on Android: paced & retried reads) ----
-  async function doBackup(){
-    const L = i18n[lang];
-    try{
-      if (!chStats || !chSettings) return;
-      statusLine.textContent = L.backupStart();
+  // --- helpers for flaky Android GATT reads ---
+async function reacquireChars() {
+  // Re-fetch service & characteristics from the current server
+  service    = await withRetry(() => server.getPrimaryService(OTA_SVC_UUID));
+  chSettings = await withRetry(() => service.getCharacteristic(INFO_SETTINGS_UUID));
+  // parts is optional
+  try { chParts = await withRetry(() => service.getCharacteristic(INFO_PARTS_UUID)); }
+  catch { chParts = null; }
+  chStats    = await withRetry(() => service.getCharacteristic(INFO_STATS_UUID));
+  chCtrl     = await withRetry(() => service.getCharacteristic(INFO_CTRL_UUID));
+}
 
-      // Small pause after user click (Android sometimes still "settling")
-      await sleep(150);
-
-      // Read smaller blobs first, with retries
-      const vSettings = await readWithRetry(chSettings);
-      // parts is optional; tolerate missing/failed
-      let vParts = null;
-      if (chParts) {
-        try { vParts = await readWithRetry(chParts); }
-        catch(e){ console.warn('Parts read skipped:', e); }
-      }
-
-      // Then read the big one (stats) with a tiny stagger
-      await sleep(80);
-      const vStats = await readWithRetry(chStats);
-
-      const jsStats    = JSON.parse(u8ToStr(vStats));
-      const jsSettings = JSON.parse(u8ToStr(vSettings));
-
-      // Ensure duration counters exist for reliable restore of averages
-      const d = jsStats?.durations || {};
-      const beadSum = Number(d.totalBeadMs ?? 0);     // firmware may send as string
-      const decSum  = Number(d.totalDecadeMs ?? 0);
-      const rosSum  = Number(d.totalRosaryMs ?? 0);
-
-      // Prefer firmware counters; fall back to estimation if missing/zero
-      let beadCnt = Number(d.beadIntervals || 0);
-      let decCnt  = Number(d.decadeCount   || 0);
-      let rosCnt  = Number(d.rosaryCount   || 0);
-
-      if (!beadCnt) {
-        const avg = Number(d.avgBeadMs || 0);
-        beadCnt = avg > 0 ? Math.floor(beadSum / avg) : 0;
-      }
-      if (!decCnt) {
-        const avg = Number(d.avgDecadeMs || 0);
-        decCnt = avg > 0 ? Math.floor(decSum / avg) : 0;
-      }
-      if (!rosCnt) {
-        const avg = Number(d.avgRosaryMs || 0);
-        rosCnt = avg > 0 ? Math.floor(rosSum / avg) : 0;
-      }
-
-      // Normalize durations object so the backup always carries sums+counts
-      jsStats.durations = {
-        ...d,
-        beadIntervals: beadCnt,
-        decadeCount:   decCnt,
-        rosaryCount:   rosCnt,
-        totalBeadMs:   String(beadSum),
-        totalDecadeMs: String(decSum),
-        totalRosaryMs: String(rosSum)
-      };
-
-      const js = {
-        device:    jsStats.device || '',
-        fwVersion: jsSettings.fwVersion || '',
-        stats:     jsStats,
-        settings:  jsSettings,
-        setsParts: null
-      };
-
-      if (vParts) {
-        try {
-          const jp = JSON.parse(u8ToStr(vParts));
-          js.setsParts = jp.setsParts || null;
-        } catch(e) {
-          console.warn('Parts JSON parse skipped:', e);
-        }
-      }
-
-      const blob = new Blob([JSON.stringify(js, null, 2)], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href = url;
-      a.download = (js.device || 'rosary') + '_backup.json';
-      a.click();
-      URL.revokeObjectURL(url);
-
-      statusLine.textContent = L.backupDone;
-    } catch(err){
-      console.error(err);
-      statusLine.textContent = 'Backup failed: ' + err.message;
+async function robustRead(ch) {
+  // Try a normal read
+  try { return await readWithRetry(ch); }
+  catch (e1) {
+    console.warn('read failed once, reacquiring chars…', e1);
+    // Reacquire handles (Android sometimes invalidates them)
+    await sleep(200);
+    await reacquireChars();
+    try { return await readWithRetry(ch); }
+    catch (e2) {
+      console.warn('read failed after reacquire, reconnecting…', e2);
+      // Full reconnect, then reacquire and retry once more
+      try { if (device?.gatt?.connected) device.gatt.disconnect(); } catch {}
+      await sleep(250);
+      server = await device.gatt.connect();
+      await sleep(300);
+      await reacquireChars();
+      return await readWithRetry(ch);
     }
   }
+}
+
+// ---- Backup (Android friendly: paced reads + reacquire/reconnect fallback) ----
+async function doBackup(){
+  const L = i18n[lang];
+  try{
+    if (!chStats || !chSettings) return;
+    statusLine.textContent = L.backupStart();
+
+    // small settle
+    await sleep(150);
+
+    // Read smaller blobs first, then the larger stats (each via robustRead)
+    const vSettings = await robustRead(chSettings);
+
+    let vParts = null;
+    if (chParts) {
+      try { vParts = await robustRead(chParts); }
+      catch (e) { console.warn('parts read skipped:', e); }
+    }
+
+    await sleep(80);
+    const vStats = await robustRead(chStats);
+
+    const jsStats    = JSON.parse(u8ToStr(vStats));
+    const jsSettings = JSON.parse(u8ToStr(vSettings));
+
+    // Ensure duration counters exist for reliable restore of averages
+    const d = jsStats?.durations || {};
+    const beadSum = Number(d.totalBeadMs ?? 0);
+    const decSum  = Number(d.totalDecadeMs ?? 0);
+    const rosSum  = Number(d.totalRosaryMs ?? 0);
+
+    let beadCnt = Number(d.beadIntervals || 0);
+    let decCnt  = Number(d.decadeCount   || 0);
+    let rosCnt  = Number(d.rosaryCount   || 0);
+
+    if (!beadCnt) {
+      const avg = Number(d.avgBeadMs || 0);
+      beadCnt = avg > 0 ? Math.floor(beadSum / avg) : 0;
+    }
+    if (!decCnt) {
+      const avg = Number(d.avgDecadeMs || 0);
+      decCnt = avg > 0 ? Math.floor(decSum / avg) : 0;
+    }
+    if (!rosCnt) {
+      const avg = Number(d.avgRosaryMs || 0);
+      rosCnt = avg > 0 ? Math.floor(rosSum / avg) : 0;
+    }
+
+    jsStats.durations = {
+      ...d,
+      beadIntervals: beadCnt,
+      decadeCount:   decCnt,
+      rosaryCount:   rosCnt,
+      totalBeadMs:   String(beadSum),
+      totalDecadeMs: String(decSum),
+      totalRosaryMs: String(rosSum)
+    };
+
+    const js = {
+      device:    jsStats.device || '',
+      fwVersion: jsSettings.fwVersion || '',
+      stats:     jsStats,
+      settings:  jsSettings,
+      setsParts: null
+    };
+
+    if (vParts) {
+      try {
+        const jp = JSON.parse(u8ToStr(vParts));
+        js.setsParts = jp.setsParts || null;
+      } catch(e) {
+        console.warn('Parts JSON parse skipped:', e);
+      }
+    }
+
+    const blob = new Blob([JSON.stringify(js, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = (js.device || 'rosary') + '_backup.json';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    statusLine.textContent = L.backupDone;
+  } catch(err){
+    console.error(err);
+    statusLine.textContent = 'Backup failed: ' + err.message;
+  }
+}
 
   // ---- Restore (upload JSON -> many small SET_* writes) ----
   function le32(n){ const a=new Uint8Array(4); n = Number(n)>>>0; a[0]=n&255; a[1]=(n>>8)&255; a[2]=(n>>16)&255; a[3]=(n>>24)&255; return a; }
