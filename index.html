@@ -85,6 +85,35 @@
   padding: 4px 6px;
 }
 
+/* Settings card + nice switch */
+.settings-list { display:grid; gap:14px; }
+.setting {
+  display:flex; align-items:center; justify-content:space-between;
+  background:#0d131c; border:1px solid #172231; border-radius:12px; padding:10px 12px;
+}
+.setting .meta { display:flex; flex-direction:column; gap:2px; }
+.setting .title { font-weight:700; color:#cfe4ff; font-size:14px; }
+.setting .desc  { color:#95a7ba; font-size:12px; }
+
+/* iOS-like toggle */
+.switch {
+  position:relative; width:46px; height:26px;
+}
+.switch input { display:none; }
+.slider {
+  position:absolute; cursor:pointer; inset:0; background:#1f2937; border:1px solid #263244;
+  border-radius:999px; transition:background .2s, border-color .2s;
+}
+.slider:before {
+  content:""; position:absolute; height:20px; width:20px; left:2px; top:2px;
+  background:#eaf0f6; border-radius:50%; transition:transform .2s;
+}
+.switch input:checked + .slider { background:#16a34a; border-color:#157a35; }
+.switch input:checked + .slider:before { transform:translateX(20px); }
+
+.range-wrap { display:flex; align-items:center; gap:10px; min-width:160px; }
+.range-wrap input[type="range"] { width:140px; }
+
 /* Mobile override: left-align title */
 @media (max-width: 600px) {
   .header-with-lang {
@@ -178,6 +207,73 @@
         <div class="chart"><canvas id="partsChart"></canvas></div>
       </div>
 
+      <div class="card">
+        <h3 id="settingsTitle">Settings</h3>
+        <div class="settings-list">
+           <div class="setting">
+            <div class="meta">
+              <span class="title" id="lblPreset">Start with preset mystery</span>
+              <span class="desc"  id="descPreset">Begin rosary on a chosen set (disables autosave).</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="swPreset" disabled>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting">
+            <div class="meta">
+              <span class="title" id="lblAutosave">Autosave last state</span>
+              <span class="desc"  id="descAutosave">Continue where you left off.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="swAutosave" disabled>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="setting">
+            <div class="meta">
+              <span class="title" id="lblHaptic">Haptic feedback</span>
+              <span class="desc"  id="descHaptic">Vibration on key/bead events.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="swHaptic" disabled>
+              <span class="slider"></span>
+            </label>
+          </div>
+         <div class="setting" style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="meta">
+              <span class="title" id="lblDispBright">Display brightness</span>
+              <span class="desc"  id="descDispBright">
+                Adjust screen backlight (0–100).
+              </span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <input id="slDispBright" type="range" min="0" max="100" step="1" value="0" disabled
+                    style="width:140px;">
+              <span id="slDispBrightVal" class="pill" style="min-width:48px; text-align:center;">0%</span>
+            </div>
+          </div>
+          <div class="setting" style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="meta">
+              <span class="title" id="lblWallBright">Wallpaper brightness</span>
+              <span class="desc"  id="descWallBright">Adjust background image opacity.</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <input
+                type="range"
+                id="slWallBright"
+                min="0"
+                max="100"
+                value="0"
+                disabled
+                style="width:140px"
+              />
+              <span id="wallBrightVal" class="pill" style="min-width:48px; text-align:center;">0%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -255,6 +351,18 @@
       lastsets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
       avgLegend: "Avg (s)",
       backuprestore: "Backup & Restore",
+      settingsTitle: "Settings",
+      lblHaptic: "Haptic feedback",
+      descHaptic: "Vibration on key/bead events.",
+      settingsSaved: "Settings updated.",
+      lblAutosave: "Autosave last state",
+      descAutosave: "Continue where you left off.",
+      lblPreset: "Start with preset mystery",
+      descPreset: "Begin rosary on a chosen set (disables autosave).",
+      lblDispBright: "Display brightness",
+      descDispBright: "Adjust screen backlight.",
+      lblWallBright: "Wallpaper brightness",
+      descWallBright: "Adjust background image opacity.",
     },
     pl: {
       title: "SmartRosary — Panel",
@@ -295,6 +403,18 @@
       lastsets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronka"], 
       avgLegend: "Śr. (s)",
       backuprestore: "Kopia zapasowa i przywracanie",
+      settingsTitle: "Ustawienia",
+      lblHaptic: "Wibracje (haptyka)",
+      descHaptic: "Wibracja przy naciśnięciach/paciorkach.",
+      settingsSaved: "Ustawienia zapisane.",
+      lblAutosave: "Autosave (ostatni stan)",
+      descAutosave: "Kontynuuj od miejsca przerwania.",
+      lblPreset: "Start z wybraną tajemnicą",
+      descPreset: "Rozpoczynaj różaniec od wybranego zestawu (wyłącza autosave).",
+      lblDispBright: "Jasność ekranu",
+      descDispBright: "Ustaw podświetlenie.",
+      lblWallBright: "Jasność tapety",
+      descWallBright: "Ustaw przeźroczystość tła.",
     },
     de: {
       title: "SmartRosary — Dashboard",
@@ -335,6 +455,18 @@
       lastsets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
       avgLegend: "Ø (s)",
       backuprestore: "Sichern & Wiederherstellen",
+      settingsTitle: "Einstellungen",
+      lblHaptic: "Haptisches Feedback",
+      descHaptic: "Vibration bei Tasten/Perlen-Ereignissen.",
+      settingsSaved: "Einstellungen aktualisiert.",
+      lblAutosave: "Automatisches Fortsetzen",
+      descAutosave: "Dort weitermachen, wo du aufgehört hast.",
+      lblPreset: "Mit voreingestelltem Geheimnis starten",
+      descPreset: "Rosenkranz mit gewähltem Satz beginnen (deaktiviert Autosave).",
+      lblDispBright: "Display-Helligkeit",
+      descDispBright: "Bildschirmbeleuchtung einstellen.",
+      lblWallBright: "Hintergrund-Helligkeit",
+      descWallBright: "Opazität des Hintergrundbilds anpassen.",
     }
   };
 
@@ -449,6 +581,18 @@ function localizeLastSetName(enName, langCode = lang) {
     $('lblLastMystery').textContent = L.pillLastMystery;
 
     $('lblBackupRestore').textContent = L.backuprestore;
+
+    $('settingsTitle').textContent = L.settingsTitle;
+    $('lblHaptic').textContent = L.lblHaptic;
+    $('descHaptic').textContent = L.descHaptic;
+    $('lblPreset').textContent   = L.lblPreset;
+    $('descPreset').textContent  = L.descPreset;
+    $('lblAutosave').textContent = L.lblAutosave;
+    $('descAutosave').textContent= L.descAutosave
+    $('lblDispBright').textContent = L.lblDispBright;
+    $('descDispBright').textContent = L.descDispBright;
+    $('lblWallBright').textContent = L.lblWallBright;
+    $('descWallBright').textContent = L.descWallBright;
 
     relabelCharts();
     renderPillsFromCache();
@@ -578,13 +722,22 @@ async function connectBLE(){
     $('backupBtn').disabled  = false;
     $('restoreBtn').disabled = false;
     $('disconnectBtn').disabled = true;
+    $('slDispBright').disabled = false;
+    $('slWallBright').disabled = false; 
 
     statusLine.textContent = L.statusConnected;
 
     // First reads with retry (smaller ones first)
     await withRetry(refresh);
+    
+    // 🔔 start live updates from ESP32
+    await subscribeSettingsNotifs();
 
     $('disconnectBtn').disabled = false;
+    $('swHaptic').disabled = false;
+    $('swPreset').disabled = false;   // NEW
+    $('swAutosave').disabled = false;
+    
   } catch(err){
     console.error(err);
     statusLine.textContent = 'Error: ' + err.message;
@@ -696,6 +849,20 @@ async function refresh(){
 
     statusLine.textContent = L.statusUpdated;
     renderPillsFromCache();
+
+    $('swHaptic').checked = !!jsSettings.haptic;
+    $('swPreset').checked = !!(jsSettings.mystery?.preset);  // NEW
+    $('swAutosave').checked = !!(jsSettings.mystery && jsSettings.mystery.autosave);
+
+    // NEW: slider value + badge
+    const db = Math.max(0, Math.min(100, Number(jsSettings.display?.brightness ?? 0)));
+    $('slDispBright').value = db;
+    $('slDispBrightVal').textContent = db + '%';
+
+    const wb = Math.max(0, Math.min(100, Number(jsSettings.wallpaper?.brightness ?? 0)));
+    $('slWallBright').value = wb;
+    $('wallBrightVal').textContent = wb + '%';
+
   } catch(err){
     console.error(err);
     statusLine.textContent = 'Read failed: ' + err.message;
@@ -724,6 +891,11 @@ async function refresh(){
     $('disconnectBtn').disabled = true;
     $('backupBtn').disabled  = true;
     $('restoreBtn').disabled = true;
+    $('swHaptic').disabled   = true;
+    $('swAutosave').disabled = true;
+    $('swPreset').disabled   = true;
+    $('slDispBright').disabled = true;
+    $('slWallBright').disabled = true; 
   }
 
   async function disconnectBLE(){
@@ -865,6 +1037,133 @@ async function doBackup(){
     console.error(err);
     statusLine.textContent = 'Backup failed: ' + err.message;
   }
+}
+
+async function subscribeSettingsNotifs(){
+  if (!chSettings) return;
+  await chSettings.startNotifications();
+  chSettings.addEventListener('characteristicvaluechanged', onSettingsNotif);
+}
+
+let updatingFromDevice = false;
+
+$('swPreset').addEventListener('change', async (e) => {
+  if (updatingFromDevice) return;
+  try {
+    // optimistic UI
+    $('swAutosave').disabled = e.target.checked;
+    await writePrefKey("m-preset-en", 0x01, e.target.checked ? 1 : 0);
+    statusLine.textContent = (i18n[lang].settingsSaved || i18n[lang].statusUpdated);
+  } catch (err) {
+    console.error(err);
+    statusLine.textContent = 'Write failed: ' + err.message;
+  }
+});
+
+$('swAutosave').addEventListener('change', async (e) => {
+  if (updatingFromDevice) return;
+  try {
+    // optimistic UI
+    $('swPreset').disabled = e.target.checked;
+    await writePrefKey("m-autosave-en", 0x01, e.target.checked ? 1 : 0);
+    statusLine.textContent = (i18n[lang].settingsSaved || i18n[lang].statusUpdated);
+  } catch (err) {
+    console.error(err);
+    statusLine.textContent = 'Write failed: ' + err.message;
+  }
+});
+
+let brDebounce = null;
+$('slDispBright').addEventListener('input', (e) => {
+  // always update the label immediately
+  $('slDispBrightVal').textContent = e.target.value + '%';
+  if (updatingFromDevice) return; // ignore programmatic updates
+
+  const val = Math.max(0, Math.min(100, Number(e.target.value|0)));
+
+  // debounce BLE write
+  if (brDebounce) clearTimeout(brDebounce);
+  brDebounce = setTimeout(async () => {
+    try {
+      await writePrefKey("disp-bright", 0x21, val);   // int32
+      statusLine.textContent = (i18n[lang].settingsSaved || i18n[lang].statusUpdated);
+    } catch (err) {
+      console.error(err);
+      statusLine.textContent = 'Write failed: ' + err.message;
+    }
+  }, 140); // feel free to tweak
+});
+
+let wbDebounce = null;
+$('slWallBright').addEventListener('input', (e) => {
+  $('wallBrightVal').textContent = e.target.value + '%';
+  if (updatingFromDevice) return;
+
+  const val = Math.max(0, Math.min(100, Number(e.target.value|0)));
+  if (wbDebounce) clearTimeout(wbDebounce);
+  wbDebounce = setTimeout(async () => {
+    try {
+      await writePrefKey("wall-bright", 0x21, val); // int32
+      statusLine.textContent = (i18n[lang].settingsSaved || i18n[lang].statusUpdated);
+    } catch (err) {
+      console.error(err);
+      statusLine.textContent = 'Write failed: ' + err.message;
+    }
+  }, 140);
+});
+
+function onSettingsNotif(ev){
+  try{
+    const dv = ev.target.value; // DataView
+    const u8 = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+    const js = JSON.parse(new TextDecoder().decode(u8));
+
+    // cache + UI
+    lastSettings = js;
+
+    // prevent feedback loop when we programmatically flip the web switch
+    updatingFromDevice = true;
+
+    const sw = document.getElementById('swHaptic');
+    if (sw) sw.checked = !!js.haptic;
+
+    const swP = $('swPreset');
+    const swA = $('swAutosave');
+
+    if (swP) swP.checked = !!(js.mystery?.preset);
+    if (swA) swA.checked = !!(js.mystery && js.mystery.autosave);
+
+    // mirror dependency in UI
+    if (swP && swA) {
+      swA.disabled = swP.checked;
+      swP.disabled = swA.checked ? true : false; // optional symmetry
+    }
+
+    const db = Math.max(0, Math.min(100, Number(js.display?.brightness ?? 0)));
+    const sl = $('slDispBright');
+    const sv = $('slDispBrightVal');
+    if (sl && sv) {
+      updatingFromDevice = true;
+      sl.value = db;
+      sv.textContent = db + '%';
+      updatingFromDevice = false;
+    }
+
+    const wbN = Math.max(0, Math.min(100, Number(js.wallpaper?.brightness ?? 0)));
+    const slw = $('slWallBright');
+    const wv  = $('wallBrightVal');
+    if (slw && wv) {
+      updatingFromDevice = true;
+      slw.value = wbN;
+      wv.textContent = wbN + '%';
+      updatingFromDevice = false;
+    }
+
+    updatingFromDevice = false;
+
+    // update pills/labels that depend on settings (FW version etc.)
+    document.getElementById('valFW').textContent = js.fwVersion || '—';
+  } catch(e){ console.warn('settings notif parse failed', e); }
 }
 
   // ---- Restore (upload JSON -> many small SET_* writes) ----
@@ -1074,6 +1373,7 @@ async function doBackup(){
   // NEW — Chaplet:
   await writeStatKey("cSum", 0x18, BigInt(durObj.totalChapletMs ?? 0));                    tick();
   await writeStatKey("cCnt", 0x14, (stAll.totals?.chaplets ?? durObj.chapletCount ?? 0));  tick();
+  
 
   // ask device to refresh JSON chars
   await chCtrl.writeValue(new Uint8Array([OP_REST_DONE]));
@@ -1112,6 +1412,19 @@ async function doBackup(){
 
   // Language selector
   $('langSelect').addEventListener('change', (ev)=>{ lang = ev.target.value; applyI18n(); });
+
+  $('swHaptic').addEventListener('change', async (e) => {
+    if (updatingFromDevice) return; // ignore programmatic flips from ESP32
+    try {
+      // bool → type 0x01 (as you already handle in INFO_CTRL)
+      await writePrefKey("haptic-en", 0x01, e.target.checked ? 1 : 0);
+      const L = i18n[lang];
+      statusLine.textContent = L.settingsSaved || L.statusUpdated;
+    } catch (err) {
+      console.error(err);
+      statusLine.textContent = 'Write failed: ' + err.message;
+    }
+  });
 
   // Initial i18n
   lang = 'pl';
