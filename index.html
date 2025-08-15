@@ -471,10 +471,10 @@
         data: [0, 0, 0, 0, 0, 0],
         backgroundColor: [
           '#808080', // None
-          '#ffcc00', // Joyful
+          '#3399ff', // Joyful
           '#cc0000', // Sorrowful
           '#00cc00', // Glorious
-          '#3399ff', // Luminous
+          '#ffcc00', // Luminous
           '#8B4513'  // Chaplet (brown)
         ],
         borderColor: '#0b0f14',
@@ -492,10 +492,10 @@
   const partsCtx = $('partsChart').getContext('2d');
   const partShades = {
     none:      ['#9e9e9e','#8f8f8f','#808080','#717171','#626262'],
-    joyful:    ['#ffe680','#ffdb4d','#ffcc00','#e6b800','#cc9a00'],
+    joyful:    ['#99ccff','#66b2ff','#3399ff','#1a7fd6','#0066cc'],
     sorrowful: ['#ff6666','#ff3333','#cc0000','#990000','#730000'],
     glorious:  ['#66ff66','#33e633','#00cc00','#00a300','#007a00'],
-    luminous:  ['#99ccff','#66b2ff','#3399ff','#1a7fd6','#0066cc'],
+    luminous:  ['#ffe680','#ffdb4d','#ffcc00','#e6b800','#cc9a00'],
   };
   const partsChart = new Chart(partsCtx, {
     type: 'bar',
