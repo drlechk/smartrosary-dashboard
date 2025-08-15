@@ -223,6 +223,7 @@
       pillFW: "FW",
       pillLastMystery: "Last mystery",
       sets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
+      avgLegend: "Avg (s)",
     },
     pl: {
       title: "Smart Rosary — Panel",
@@ -260,7 +261,8 @@
       pillDevice: "Urządzenie",
       pillFW: "FW",
       pillLastMystery: "Ostatnia tajemnica",
-      sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronka"],
+      sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronki"],
+      avgLegend: "Śr. (s)",
     },
     de: {
       title: "Smart Rosary — Dashboard",
@@ -298,7 +300,8 @@
       pillDevice: "Gerät",
       pillFW: "FW",
       pillLastMystery: "Letztes Geheimnis",
-      sets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Barmherzigkeitsrosenkranz"],
+      sets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Koronen"],
+      avgLegend: "Ø (s)",
     }
   };
 
@@ -333,16 +336,38 @@
       if (!lastStats || !lastSettings) return;
       const L = i18n[lang];
 
-      $('pillDevice').textContent = `${L.device}: ${lastStats.device || '—'}`;
-      $('pillFW').textContent     = `${L.firmware}: ${lastSettings.fwVersion || '—'}`;
+      // labels are handled by applyI18n(); values here only
+      $('valDevice').textContent = lastStats.device || '—';
+      $('valFW').textContent     = lastSettings.fwVersion || '—';
 
       const lastSetEN  = lastStats.lastMystery?.set;
       const lastIndex  = lastStats.lastMystery?.index;
       const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
-      $('pillLastMystery').textContent =
-        `${L.lastMystery}: ${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
+      $('valLastMystery').textContent = `${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
     }
 
+    function relabelCharts(){
+      const L = i18n[lang];
+
+      if (barWindow?.data) {
+        barWindow.data.labels = [L.chartBead, L.chartDecade, L.chartRosary, L.chartChaplet];
+        // if you ever show the legend:
+        // barWindow.data.datasets[0].label = L.avgLegend || 'Avg (s)';
+        barWindow.update();
+      }
+
+      if (donutSets?.data) {
+        donutSets.data.labels = L.sets.slice();
+        donutSets.update();
+      }
+
+      if (partsChart?.data) {
+        // UI order: None, Joyful, Luminous, Sorrowful, Glorious
+        partsChart.data.labels = [L.sets[0], L.sets[1], L.sets[4], L.sets[2], L.sets[3]];
+        partsChart.update();
+      }
+    }
+  
   function applyI18n() {
     const L = i18n[lang];
     $('titleTxt').textContent   = L.title;
@@ -382,16 +407,7 @@
     $('lblFW').textContent          = L.pillFW;
     $('lblLastMystery').textContent = L.pillLastMystery;
 
-    // Update chart labels (now 4 including Chaplet)
-    barWindow.data.labels = [L.chartBead, L.chartDecade, L.chartRosary, L.chartChaplet];
-    barWindow.update();
-
-    donutSets.data.labels = L.sets.slice();
-    donutSets.update();
-
-    partsChart.data.labels = [L.sets[0], L.sets[1], L.sets[4], L.sets[2], L.sets[3]];
-    partsChart.update();
-
+    relabelCharts();
     renderPillsFromCache();
   }
 
@@ -559,14 +575,15 @@ async function refresh(){
     $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
     $('kpiChaplets').textContent = (jsStats.totals?.chaplets ?? '—');
 
-    const Ldev = i18n[lang];
-    $('pillDevice').textContent = `${Ldev.device}: ${jsStats.device || '—'}`;
-    $('pillFW').textContent     = `${Ldev.firmware}: ${jsSettings.fwVersion || '—'}`;
-    const lastSetEN  = jsStats.lastMystery?.set;   // e.g., "Luminous"
-    const lastIndex  = jsStats.lastMystery?.index; // 1..5 (or 0)
-    const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
-    $('pillLastMystery').textContent =
-      `${Ldev.lastMystery}: ${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
+// update only values; labels will come from applyI18n()/language switch
+$('valDevice').textContent = jsStats.device || '—';
+$('valFW').textContent     = jsSettings.fwVersion || '—';
+
+const lastSetEN  = jsStats.lastMystery?.set;
+const lastIndex  = jsStats.lastMystery?.index;
+const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
+$('valLastMystery').textContent =
+  `${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
 
     // Durations
     const d = jsStats.durations || {};
