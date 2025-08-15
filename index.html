@@ -134,8 +134,8 @@
           <span class="pill" id="pillFW"><span id="lblFW">FW</span>: <span id="valFW">—</span></span>
           <span class="pill" id="pillLastMystery"><span id="lblLastMystery">Last mystery</span>: <span id="valLastMystery">—</span></span>
         </div>
-        <p class="smallnote" id="bkNote"></p>
-        <h3>Backup & Restore</h3>
+        <p class="smallnote" id="bkNote"></p></br>
+        <h3 id="lblBackupRestore">Backup & Restore</h3>
         <div class="row">
           <button id="backupBtn"  disabled>Download</button>
           <input type="file" id="restoreFile" accept="application/json" style="display:none">
@@ -254,6 +254,7 @@
       pillLastMystery: "Last mystery",
       lastsets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
       avgLegend: "Avg (s)",
+      backuprestore: "Backup & Restore",
     },
     pl: {
       title: "Smart Rosary — Panel",
@@ -293,6 +294,7 @@
       pillLastMystery: "Ostatnia tajemnica",
       lastsets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronka"], 
       avgLegend: "Śr. (s)",
+      backuprestore: "Kopia zapasowa i przywracanie",
     },
     de: {
       title: "Smart Rosary — Dashboard",
@@ -332,6 +334,7 @@
       pillLastMystery: "Letztes Geheimnis",
       lastsets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
       avgLegend: "Ø (s)",
+      backuprestore: "Sichern & Wiederherstellen",
     }
   };
 
@@ -444,6 +447,8 @@ function localizeLastSetName(enName, langCode = lang) {
     $('lblDevice').textContent      = L.pillDevice;
     $('lblFW').textContent          = L.pillFW;
     $('lblLastMystery').textContent = L.pillLastMystery;
+
+    $('lblBackupRestore').textContent = L.backuprestore;
 
     relabelCharts();
     renderPillsFromCache();
