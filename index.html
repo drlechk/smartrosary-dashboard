@@ -76,7 +76,6 @@
       
       <div class="row"></div>
 
-      <button id="resetBtn" disabled>Reset Statistics</button>
       <button id="disconnectBtn" disabled>Disconnect</button>
       <span style="flex:1"></span>
       <label for="langSelect" class="muted" style="font-weight:600;margin-right:6px;">Language</label>
@@ -98,13 +97,22 @@
           <div class="kpi"><div class="label" id="lblBeads">Beads</div><div class="value" id="kpiBeads">—</div></div>
           <div class="kpi"><div class="label" id="lblDecades">Decades</div><div class="value" id="kpiDecades">—</div></div>
           <div class="kpi"><div class="label" id="lblRosaries">Rosaries</div><div class="value" id="kpiRosaries">—</div></div>
+          <div class="kpi"><div class="label" id="lblChaplets">Chaplets</div><div class="value" id="kpiChaplets">—</div></div>
         </div>
         <div class="flex" style="margin-top:12px;">
-          <span class="pill" id="pillDevice">Device: —</span>
-          <span class="pill" id="pillFW">FW: —</span>
-          <span class="pill" id="pillLastMystery">Last mystery: —</span>
+          <span class="pill" id="pillDevice"><span id="lblDevice">Device</span>: <span id="valDevice">—</span></span>
+          <span class="pill" id="pillFW"><span id="lblFW">FW</span>: <span id="valFW">—</span></span>
+          <span class="pill" id="pillLastMystery"><span id="lblLastMystery">Last mystery</span>: <span id="valLastMystery">—</span></span>
         </div>
         <p class="smallnote" id="bkNote"></p>
+        <h3>Backup & Restore</h3>
+        <div class="row">
+          <button id="backupBtn"  disabled>Download</button>
+          <input type="file" id="restoreFile" accept="application/json" style="display:none">
+          <button id="restoreBtn" disabled>Restore</button>
+          <button id="resetBtn" disabled>Reset Statistics</button>
+          <progress id="restoreProg" max="100" value="0" hidden></progress>
+        </div>
       </div>
 
       <div class="card">
@@ -113,16 +121,17 @@
           <div class="kpi"><div class="label" id="lblAvgBead">Avg bead</div><div class="value" id="kpiAvgBead">—</div></div>
           <div class="kpi"><div class="label" id="lblAvgDecade">Avg decade</div><div class="value" id="kpiAvgDecade">—</div></div>
           <div class="kpi"><div class="label" id="lblAvgRosary">Avg rosary</div><div class="value" id="kpiAvgRosary">—</div></div>
+          <div class="kpi"><div class="label" id="lblAvgChaplet">Avg chaplet</div><div class="value" id="kpiAvgChaplet">—</div></div>
         </div>
         <p class="smallnote" id="avgNote">Averages are computed from lifetime device totals.</p>
-        <h3>Totals (time)</h3>
+        <h3 id="totalsTitle">Totals (time)</h3>
         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
-          <div class="kpi"><div class="label">Rosary</div><div class="value" id="totRosary">—</div></div>
-          <div class="kpi"><div class="label">Decades</div><div class="value" id="totDecade">—</div></div>
-          <div class="kpi"><div class="label">Beads</div><div class="value" id="totBead">—</div></div>
+          <div class="kpi"><div class="label" id="lblTrosary">Rosary</div><div class="value" id="totRosary">—</div></div>
+          <div class="kpi"><div class="label" id="lblTdecades">Decades</div><div class="value" id="totDecade">—</div></div>
+          <div class="kpi"><div class="label" id="lblTbeads">Beads</div><div class="value" id="totBead">—</div></div>
+          <div class="kpi"><div class="label" id="lblTchaplet">Chaplet</div><div class="value" id="totChaplet">—</div></div>
         </div>
       </div>
-
 
       <div class="card">
         <h3 id="barTitle">Average durations (s)</h3>
@@ -139,16 +148,6 @@
         <div class="chart"><canvas id="partsChart"></canvas></div>
       </div>
 
-      <!-- Backup & Restore in its own card -->
-      <div class="card">
-        <h3>Backup & Restore</h3>
-        <div class="row">
-          <button id="backupBtn"  disabled>Download Backup</button>
-          <input type="file" id="restoreFile" accept="application/json" style="display:none">
-          <button id="restoreBtn" disabled>Restore from Backup…</button>
-          <progress id="restoreProg" max="100" value="0" hidden></progress>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -166,7 +165,7 @@
   const OP_SET_PREF  = 0x50;
   const OP_SET_STAT  = 0x53;
   const OP_REST_DONE = 0x55;
-  const OP_REST_BEGIN= 0x54; // <-- added
+  const OP_REST_BEGIN= 0x54;
 
   let device, server, service, chStats, chSettings, chCtrl, chParts;
 
@@ -190,19 +189,19 @@
     en: {
       title: "Smart Rosary — Dashboard",
       connect: "Connect", refresh: "Refresh", reset: "Reset Statistics", disconnect: "Disconnect",
-      backup: "Download Backup", restore: "Restore from Backup…",
+      backup: "Download", restore: "Restore",
       statusNot: "Not connected.",
       overview: "Overview",
-      beads: "Beads", decades: "Decades", rosaries: "Rosaries", streak: "Streak (days)",
+      beads: "Beads", decades: "Decades", rosaries: "Rosaries", chaplets: "Chaplets",
       averages: "Durations & Averages",
-      avgBead: "Avg bead", avgDecade: "Avg decade", avgRosary: "Avg rosary",
-      avgNote: "Averages are computed from lifetime device totals (no RTC).",
+      avgBead: "Avg bead", avgDecade: "Avg decade", avgRosary: "Avg rosary", avgChaplet: "Avg chaplet",
+      avgNote: "Averages are computed from lifetime device totals.",
       barTitle: "Average durations (s)",
       donutTitle: "Mystery Sets Breakdown",
       partsTitle: "Mystery Parts (I–V per set)",
       device: "Device", firmware: "FW", lastMystery: "Last mystery",
-      chartBead: "Bead", chartDecade: "Decade", chartRosary: "Rosary",
-      sets: ["None","Joyful","Sorrowful","Glorious","Luminous"],
+      chartBead: "Bead", chartDecade: "Decade", chartRosary: "Rosary", chartChaplet: "Chaplet",
+      sets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
       errPick: "Picked device is not a rosary.",
       errWB: "Web Bluetooth not supported in this browser.",
       confirmReset: "Reset all statistics on the device? This cannot be undone.",
@@ -214,24 +213,33 @@
       backupStart: (n)=>`Creating backup…`,
       backupDone:  "Backup ready.",
       restoreStart:"Restoring…",
-      restoreDone: "Restore complete."
+      restoreDone: "Restore complete.",
+      totalsTitle: "Totals (time)",
+      totBeads: "Beads",
+      totDecades: "Decades",
+      totRosary: "Rosary",
+      totChaplet: "Chaplet",
+      pillDevice: "Device",
+      pillFW: "FW",
+      pillLastMystery: "Last mystery",
+      sets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
     },
     pl: {
       title: "Smart Rosary — Panel",
       connect: "Połącz", refresh: "Odśwież", reset: "Wyzeruj statystyki", disconnect: "Rozłącz",
-      backup: "Pobierz kopię", restore: "Przywróć z kopii…",
+      backup: "Pobierz", restore: "Przywróć",
       statusNot: "Brak połączenia.",
       overview: "Przegląd",
-      beads: "Pacierze", decades: "Dziesiątki", rosaries: "Różańce", streak: "Seria (dni)",
+      beads: "Pacierze", decades: "Dziesiątki", rosaries: "Różańce", chaplets: "Koronki",
       averages: "Czasy i średnie",
-      avgBead: "Śr. paciorek", avgDecade: "Śr. dziesiątek", avgRosary: "Śr. różaniec",
+      avgBead: "Śr. paciorek", avgDecade: "Śr. dziesiątek", avgRosary: "Śr. różaniec", avgChaplet: "Śr. koronka",
       avgNote: "Średnie liczone z sum od początku.",
       barTitle: "Średnie czasy (s)",
       donutTitle: "Podział tajemnic",
       partsTitle: "Tajemnice — części (I–V)",
       device: "Urządzenie", firmware: "FW", lastMystery: "Ostatnia tajemnica",
-      chartBead: "Pac.", chartDecade: "Dzies.", chartRosary: "Róż.",
-      sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła"],
+      chartBead: "Pac.", chartDecade: "Dzies.", chartRosary: "Róż.", chartChaplet: "Kor.",
+      sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Chaplet"],
       errPick: "Wybrane urządzenie to nie różaniec.",
       errWB: "Przeglądarka nie obsługuje Web Bluetooth.",
       confirmReset: "Zresetować wszystkie statystyki na urządzeniu? Tej operacji nie można cofnąć.",
@@ -243,24 +251,33 @@
       backupStart: (n)=>`Tworzenie kopii…`,
       backupDone:  "Kopia gotowa.",
       restoreStart:"Przywracanie…",
-      restoreDone: "Przywrócono."
+      restoreDone: "Przywrócono.",
+      totalsTitle: "Suma (czas)",
+      totBeads: "Pacierze",
+      totDecades: "Dziesiątki",
+      totRosary: "Różaniec",
+      totChaplet: "Koronka",
+      pillDevice: "Urządzenie",
+      pillFW: "FW",
+      pillLastMystery: "Ostatnia tajemnica",
+      sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronka"],
     },
     de: {
       title: "Smart Rosary — Dashboard",
       connect: "Verbinden", refresh: "Aktualisieren", reset: "Statistiken zurücksetzen", disconnect: "Trennen",
-      backup: "Backup herunterladen", restore: "Aus Backup wiederherstellen…",
+      backup: "Herunterladen", restore: "Wiederherstellen",
       statusNot: "Nicht verbunden.",
       overview: "Übersicht",
-      beads: "Perlen", decades: "Gesätzchen", rosaries: "Rosenkränze", streak: "Serie (Tage)",
+      beads: "Perlen", decades: "Gesätzchen", rosaries: "Rosenkränze", chaplets: "Koronen",
       averages: "Dauern & Durchschnitte",
-      avgBead: "Ø Perle", avgDecade: "Ø Gesätzchen", avgRosary: "Ø Rosenkranz",
+      avgBead: "Ø Perle", avgDecade: "Ø Gesätzchen", avgRosary: "Ø Rosenkranz", avgChaplet: "Ø Korone",
       avgNote: "Durchschnitte über die gesamte Laufzeit.",
       barTitle: "Durchschnittsdauern (s)",
       donutTitle: "Aufschlüsselung der Geheimnisse",
       partsTitle: "Geheimnisse — Teile (I–V)",
       device: "Gerät", firmware: "FW", lastMystery: "Letztes Geheimnis",
-      chartBead: "Perle", chartDecade: "Gesätzchen", chartRosary: "Rosenkranz",
-      sets: ["Keins","Freudenreich","Schmerzensreich","Glorreiche","Lichtreiche"],
+      chartBead: "Perle", chartDecade: "Gesätzchen", chartRosary: "Rosenkranz", chartChaplet: "Korone",
+      sets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Koronen"],
       errPick: "Ausgewähltes Gerät ist kein Rosary.",
       errWB: "Web Bluetooth wird von diesem Browser nicht unterstützt.",
       confirmReset: "Alle Statistiken auf dem Gerät zurücksetzen? Dies kann nicht rückgängig gemacht werden.",
@@ -272,7 +289,16 @@
       backupStart: (n)=>`Backup wird erstellt…`,
       backupDone:  "Backup bereit.",
       restoreStart:"Wiederherstellen…",
-      restoreDone: "Wiederherstellung abgeschlossen."
+      restoreDone: "Wiederherstellung abgeschlossen.",
+      totalsTitle: "Summen (Zeit)",
+      totBeads: "Perlen",
+      totDecades: "Gesätzchen",
+      totRosary: "Rosenkranz",
+      totChaplet: "Korone",
+      pillDevice: "Gerät",
+      pillFW: "FW",
+      pillLastMystery: "Letztes Geheimnis",
+      sets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Barmherzigkeitsrosenkranz"],
     }
   };
 
@@ -292,6 +318,31 @@
     return `${h}h ${m}m ${s}s`;
   }
 
+    let lastStats = null;
+    let lastSettings = null;
+
+    function localizeSetName(enName, langCode = lang){
+      const idxMap = { None:0, Joyful:1, Sorrowful:2, Glorious:3, Luminous:4, Chaplet:5 };
+      const idx = idxMap[enName];
+      if (idx == null) return enName;
+      const L = i18n[langCode] || i18n.en;
+      return L.sets[idx] || enName;
+    }
+
+    function renderPillsFromCache(){
+      if (!lastStats || !lastSettings) return;
+      const L = i18n[lang];
+
+      $('pillDevice').textContent = `${L.device}: ${lastStats.device || '—'}`;
+      $('pillFW').textContent     = `${L.firmware}: ${lastSettings.fwVersion || '—'}`;
+
+      const lastSetEN  = lastStats.lastMystery?.set;
+      const lastIndex  = lastStats.lastMystery?.index;
+      const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
+      $('pillLastMystery').textContent =
+        `${L.lastMystery}: ${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
+    }
+
   function applyI18n() {
     const L = i18n[lang];
     $('titleTxt').textContent   = L.title;
@@ -307,23 +358,41 @@
     $('lblBeads').textContent   = L.beads;
     $('lblDecades').textContent = L.decades;
     $('lblRosaries').textContent= L.rosaries;
+    $('lblChaplets').textContent= L.chaplets;
 
     $('avgTitle').textContent = L.averages;
-    $('lblAvgBead').textContent   = L.avgBead;
-    $('lblAvgDecade').textContent = L.avgDecade;
-    $('lblAvgRosary').textContent = L.avgRosary;
-    $('avgNote').textContent      = L.avgNote;
+    $('lblAvgBead').textContent    = L.avgBead;
+    $('lblAvgDecade').textContent  = L.avgDecade;
+    $('lblAvgRosary').textContent  = L.avgRosary;
+    $('lblAvgChaplet').textContent = L.avgChaplet;
+    $('avgNote').textContent       = L.avgNote;
 
     $('barTitle').textContent   = L.barTitle;
     $('donutTitle').textContent = L.donutTitle;
     $('partsTitle').textContent = L.partsTitle;
     $('bkNote').textContent     = L.bkTip;
 
-    // Update chart labels
-    barWindow.data.labels = [L.chartBead, L.chartDecade, L.chartRosary];
+    $('totalsTitle').textContent = L.totalsTitle;
+    $('lblTbeads').textContent   = L.totBeads;
+    $('lblTdecades').textContent = L.totDecades;
+    $('lblTrosary').textContent  = L.totRosary;
+    $('lblTchaplet').textContent = L.totChaplet;
+
+    $('lblDevice').textContent      = L.pillDevice;
+    $('lblFW').textContent          = L.pillFW;
+    $('lblLastMystery').textContent = L.pillLastMystery;
+
+    // Update chart labels (now 4 including Chaplet)
+    barWindow.data.labels = [L.chartBead, L.chartDecade, L.chartRosary, L.chartChaplet];
+    barWindow.update();
+
     donutSets.data.labels = L.sets.slice();
-    partsChart.data.labels = [L.sets[0], L.sets[1], L.sets[4], L.sets[2], L.sets[3]]; // None, Joyful, Luminous, Sorrowful, Glorious (UI order)
-    barWindow.update(); donutSets.update(); partsChart.update();
+    donutSets.update();
+
+    partsChart.data.labels = [L.sets[0], L.sets[1], L.sets[4], L.sets[2], L.sets[3]];
+    partsChart.update();
+
+    renderPillsFromCache();
   }
 
   function u8ToStr(v){ return new TextDecoder().decode(v); }
@@ -332,7 +401,15 @@
   /* Charts */
   const barWindow = new Chart($('barWindow').getContext('2d'), {
     type: 'bar',
-    data: { labels: ['Bead','Decade','Rosary'], datasets: [{ label: 'Avg (s)', data: [0, 0, 0] }] },
+    data: {
+      labels: ['Bead','Decade','Rosary','Chaplet'],
+      datasets: [{
+        label: 'Avg (s)',
+        data: [0, 0, 0, 0],
+        // Make chaplet visibly brown
+        backgroundColor: ['#9fb3c8','#9fb3c8','#9fb3c8','#8b5a2b']
+      }]
+    },
     options: {
       responsive:true, maintainAspectRatio:false,
       scales:{ y:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#1a2733' } }, x:{ grid:{ color:'#1a2733' } } },
@@ -343,14 +420,27 @@
   const donutSets = new Chart($('donutSets').getContext('2d'), {
     type: 'doughnut',
     data: {
-      labels: ['None','Joyful','Sorrowful','Glorious','Luminous'],
+      labels: ['None','Joyful','Sorrowful','Glorious','Luminous','Chaplet'],
       datasets: [{
-        data: [0, 0, 0, 0, 0],
-        backgroundColor: ['#808080','#ffcc00','#cc0000','#00cc00','#3399ff'],
-        borderColor: '#0b0f14', borderWidth: 2
+        data: [0, 0, 0, 0, 0, 0],
+        backgroundColor: [
+          '#808080', // None
+          '#ffcc00', // Joyful
+          '#cc0000', // Sorrowful
+          '#00cc00', // Glorious
+          '#3399ff', // Luminous
+          '#8B4513'  // Chaplet (brown)
+        ],
+        borderColor: '#0b0f14',
+        borderWidth: 2
       }]
     },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ color:'#eaf0f6' } } }, cutout:'60%' }
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ color:'#eaf0f6' } } },
+      cutout:'60%'
+    }
   });
 
   const partsCtx = $('partsChart').getContext('2d');
@@ -460,48 +550,66 @@ async function refresh(){
     const jsStats    = JSON.parse(u8ToStr(vStats));
     const jsSettings = JSON.parse(u8ToStr(vSettings));
 
+    // cache for later re-localization without BLE reads
+    lastStats = jsStats;
+    lastSettings = jsSettings;
+
     $('kpiBeads').textContent    = (jsStats.totals?.beads ?? '—');
     $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
     $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
+    $('kpiChaplets').textContent = (jsStats.totals?.chaplets ?? '—');
 
     const Ldev = i18n[lang];
     $('pillDevice').textContent = `${Ldev.device}: ${jsStats.device || '—'}`;
     $('pillFW').textContent     = `${Ldev.firmware}: ${jsSettings.fwVersion || '—'}`;
+    const lastSetEN  = jsStats.lastMystery?.set;   // e.g., "Luminous"
+    const lastIndex  = jsStats.lastMystery?.index; // 1..5 (or 0)
+    const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
     $('pillLastMystery').textContent =
-      `${Ldev.lastMystery}: ${jsStats.lastMystery?.set || '—'}${jsStats.lastMystery?.index ? ` #${jsStats.lastMystery.index}` : ''}`;
+      `${Ldev.lastMystery}: ${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
 
     // Durations
     const d = jsStats.durations || {};
-    const avgBeadMs   = safeNum(d.avgBeadMs,   0);
-    const avgDecadeMs = safeNum(d.avgDecadeMs, 0);
-    const avgRosaryMs = safeNum(d.avgRosaryMs, 0);
-    const totBeadMs   = safeNum(d.totalBeadMs,   0);
-    const totDecadeMs = safeNum(d.totalDecadeMs, 0);
-    const totRosaryMs = safeNum(d.totalRosaryMs, 0);
+    const avgBeadMs     = safeNum(d.avgBeadMs,     0);
+    const avgDecadeMs   = safeNum(d.avgDecadeMs,   0);
+    const avgRosaryMs   = safeNum(d.avgRosaryMs,   0);
+    const avgChapletMs  = safeNum(d.avgChapletMs,  0);
+    const totBeadMs     = safeNum(d.totalBeadMs,     0);
+    const totDecadeMs   = safeNum(d.totalDecadeMs,   0);
+    const totRosaryMs   = safeNum(d.totalRosaryMs,   0);
+    const totChapletMs  = safeNum(d.totalChapletMs,  0);
 
-    $('kpiAvgBead').textContent   = fmtMs(avgBeadMs);
-    $('kpiAvgDecade').textContent = fmtMs(avgDecadeMs);
-    $('kpiAvgRosary').textContent = fmtMs(avgRosaryMs);
+    $('kpiAvgBead').textContent     = fmtMs(avgBeadMs);
+    $('kpiAvgDecade').textContent   = fmtMs(avgDecadeMs);
+    $('kpiAvgRosary').textContent   = fmtMs(avgRosaryMs);
+    $('kpiAvgChaplet').textContent  = fmtMs(avgChapletMs);
 
-    $('totRosary').textContent = fmtMs(totRosaryMs);
-    $('totDecade').textContent = fmtMs(totDecadeMs);
-    $('totBead').textContent   = fmtMs(totBeadMs);
+    $('totRosary').textContent  = fmtMs(totRosaryMs);
+    $('totDecade').textContent  = fmtMs(totDecadeMs);
+    $('totBead').textContent    = fmtMs(totBeadMs);
+    $('totChaplet').textContent = fmtMs(totChapletMs);
 
-    barWindow.data.datasets[0].data = [avgBeadMs/1000, avgDecadeMs/1000, avgRosaryMs/1000];
+    barWindow.data.datasets[0].data = [
+      avgBeadMs/1000,
+      avgDecadeMs/1000,
+      avgRosaryMs/1000,
+      avgChapletMs/1000
+    ];
     barWindow.update();
 
-    // Sets
+    // Sets (unchanged — chaplet is not a mystery set)
     const totalDec = (jsStats.totals?.decades ?? 0);
     const joyful   = (jsStats.sets?.joyful ?? 0);
     const sorrow   = (jsStats.sets?.sorrowful ?? 0);
     const glor     = (jsStats.sets?.glorious ?? 0);
     const lumi     = (jsStats.sets?.luminous ?? 0);
+    const chap = (jsStats.totals?.chaplets ?? 0);
     let none       = jsStats.sets?.none;
     if (none == null) {
       const sumKnown = joyful + sorrow + glor + lumi;
       none = Math.max(0, totalDec - sumKnown);
     }
-    donutSets.data.datasets[0].data = [none, joyful, sorrow, glor, lumi];
+    donutSets.data.datasets[0].data = [none, joyful, sorrow, glor, lumi, chap];
     donutSets.update();
 
     // Parts (optional char; tolerate failures)
@@ -524,6 +632,7 @@ async function refresh(){
     }
 
     statusLine.textContent = L.statusUpdated;
+    renderPillsFromCache();
   } catch(err){
     console.error(err);
     statusLine.textContent = 'Read failed: ' + err.message;
@@ -625,10 +734,12 @@ async function doBackup(){
     const beadSum = Number(d.totalBeadMs ?? 0);
     const decSum  = Number(d.totalDecadeMs ?? 0);
     const rosSum  = Number(d.totalRosaryMs ?? 0);
+    const chapSum = Number(d.totalChapletMs ?? 0);
 
     let beadCnt = Number(d.beadIntervals || 0);
     let decCnt  = Number(d.decadeCount   || 0);
     let rosCnt  = Number(d.rosaryCount   || 0);
+    let chapCnt = Number(jsStats.totals?.chaplets ?? d.chapletCount ?? 0);
 
     if (!beadCnt) {
       const avg = Number(d.avgBeadMs || 0);
@@ -642,15 +753,23 @@ async function doBackup(){
       const avg = Number(d.avgRosaryMs || 0);
       rosCnt = avg > 0 ? Math.floor(rosSum / avg) : 0;
     }
+    if (!chapCnt) {
+      const avg = Number(d.avgChapletMs || 0);
+      chapCnt = avg > 0 ? Math.floor(chapSum / avg) : 0;
+    }
+
 
     jsStats.durations = {
       ...d,
       beadIntervals: beadCnt,
       decadeCount:   decCnt,
       rosaryCount:   rosCnt,
+      chapletCount:  chapCnt,
       totalBeadMs:   String(beadSum),
       totalDecadeMs: String(decSum),
-      totalRosaryMs: String(rosSum)
+      totalRosaryMs: String(rosSum),
+      totalChapletMs:  String(chapSum)
+      // chaplet fields (if your firmware emits them) will be kept as-is
     };
 
     const js = {
@@ -686,30 +805,19 @@ async function doBackup(){
 }
 
   // ---- Restore (upload JSON -> many small SET_* writes) ----
-  function le16(n){ const a=new Uint8Array(2); n=Number(n)>>>0; a[0]=n&255; a[1]=(n>>8)&255; return a; }  // <-- added
+  function le16(n){ const a=new Uint8Array(2); n=Number(n)>>>0; a[0]=n&255; a[1]=(n>>8)&255; return a; }
   function le32(n){ const a=new Uint8Array(4); n = Number(n)>>>0; a[0]=n&255; a[1]=(n>>8)&255; a[2]=(n>>16)&255; a[3]=(n>>24)&255; return a; }
-  function le64Big(n){ // BigInt
-    const a = new Uint8Array(8); let x = BigInt(n);
-    for (let i=0;i<8;i++){ a[i] = Number(x & 0xffn); x >>= 8n; }
-    return a;
-  }
+  function le64Big(n){ const a = new Uint8Array(8); let x = BigInt(n); for (let i=0;i<8;i++){ a[i] = Number(x & 0xffn); x >>= 8n; } return a; }
   function packKV(op, type, key, valBytes){
     const k = new TextEncoder().encode(key);
     const out = new Uint8Array(1 + 1 + 1 + k.length + valBytes.length);
     out[0]=op; out[1]=type; out[2]=k.length; out.set(k,3); out.set(valBytes, 3+k.length);
     return out;
   }
-  // size of encoded value for progress accounting (no payload allocation)
   function encSize(type, value){
     switch (type){
-      case 0x01: return 1; // bool
-      case 0x11: return 1; // u8
-      case 0x12: return 2; // u16
-      case 0x14: return 4; // u32
-      case 0x21: return 4; // i32
-      case 0x18: return 8; // u64
-      case 0x31: return new TextEncoder().encode(String(value)).length; // str
-      default: throw new Error('bad type');
+      case 0x01: return 1; case 0x11: return 1; case 0x12: return 2; case 0x14: return 4; case 0x21: return 4; case 0x18: return 8;
+      case 0x31: return new TextEncoder().encode(String(value)).length; default: throw new Error('bad type');
     }
   }
 
@@ -742,160 +850,171 @@ async function doBackup(){
   }
 
   async function restoreFromJson(js, onProgress){
-    // prefs mapping per Settings::load()
-    const prefs = js.settings || js.prefs || {};
-    const stAll = js.stats || {};
+  // prefs mapping per Settings::load()
+  const prefs = js.settings || js.prefs || {};
+  const stAll = js.stats || {};
 
-    const totalSteps =
-      13 + // prefs
-      5 + 3 + 2 + 30 + 5 + (5*5) + 6; // stats keys we write below
-    let step=0;
-    const tick = ()=>onProgress?.(++step, totalSteps);
+  // ----- cache once, no redeclarations later -----
+  const totalsObj = stAll.totals || {};
+  const lastObj   = stAll.lastMystery || {};
+  const setsObj   = stAll.sets || {};
+  const ringArr   = stAll.ring || [];
+  const partsObj  = js.setsParts || stAll.setsParts || {};
+  const durObj    = stAll.durations || {};
 
-    // ---- PREPASS: compute totalBytes for RESTORE_BEGIN ----
-    let totalBytes = 0;
-    const sumKV = (key, type, value) => { totalBytes += key.length + encSize(type, value); };
+  // include Chaplet for completeness (even if device ignores it for “lastSet” legacy)
+  const setMap = { None:0, Joyful:1, Luminous:2, Sorrowful:3, Glorious:4, Chaplet:5 };
 
-    // prefs booleans
-    sumKV("haptic-en",     0x01, !!prefs.haptic);
-    sumKV("m-preset-en",   0x01, !!(prefs.mystery?.preset));
-    sumKV("m-autosave-en", 0x01, !!(prefs.mystery?.autosave));
-    sumKV("m-intro-en",    0x01, !!(prefs.mystery?.intro));
-    sumKV("i-en",          0x01, !!(prefs.intentions?.enabled));
+  const order = ['none','joyful','luminous','sorrowful','glorious'];
 
-    // prefs ints
-    sumKV("disp-bright",   0x21, prefs.display?.brightness ?? 0);
-    sumKV("disp-rot",      0x21, prefs.display?.rotation ?? 0);
-    sumKV("wall-bright",   0x21, prefs.wallpaper?.brightness ?? 0);
-    sumKV("ImageIndex",    0x21, prefs.wallpaper?.imageIndex ?? 0);
-    sumKV("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);
-    sumKV("m-pos",         0x21, prefs.mystery?.pos ?? 0);
-    sumKV("m-part",        0x21, prefs.mystery?.part ?? 0);
-    sumKV("i-pos",         0x21, prefs.intentions?.pos ?? 0);
+  const totalSteps =
+    13 + // prefs
+    5 + 3 + 2 + 30 + 5 + (5*5) + 8; // <-- was 6
+  let step=0;
+  const tick = ()=>onProgress?.(++step, totalSteps);
 
-    // stats scalars
-    const totals = stAll.totals || {};
-    sumKV("beads",    0x14, totals.beads    ?? 0);
-    sumKV("paters",   0x14, totals.paters   ?? 0);
-    sumKV("glorias",  0x14, totals.glorias  ?? 0);
-    sumKV("decades",  0x14, totals.decades  ?? 0);
-    sumKV("rosaries", 0x14, totals.rosaries ?? 0);
+  // ---- PREPASS: compute totalBytes for RESTORE_BEGIN ----
+  let totalBytes = 0;
+  const sumKV = (key, type, value) => { totalBytes += key.length + encSize(type, value); };
 
-    // last mystery + ts
-    const last = stAll.lastMystery || {};
-    const setMap = { None:0, Joyful:1, Luminous:2, Sorrowful:3, Glorious:4 };
-    sumKV("lastSet", 0x11, setMap[last.set] ?? 0);
-    sumKV("lastIdx", 0x11, last.index ?? 0);
-    sumKV("lastTs",  0x14, stAll.lastPrayer ?? 0);
+  // prefs booleans
+  sumKV("haptic-en",     0x01, !!prefs.haptic);
+  sumKV("m-preset-en",   0x01, !!(prefs.mystery?.preset));
+  sumKV("m-autosave-en", 0x01, !!(prefs.mystery?.autosave));
+  sumKV("m-intro-en",    0x01, !!(prefs.mystery?.intro));
+  sumKV("i-en",          0x01, !!(prefs.intentions?.enabled));
 
-    // streak + baseDay
-    sumKV("streak",  0x12, stAll.streakDays ?? 0);
-    sumKV("baseDay", 0x14, 0);
+  // prefs ints
+  sumKV("disp-bright",   0x21, prefs.display?.brightness ?? 0);
+  sumKV("disp-rot",      0x21, prefs.display?.rotation ?? 0);
+  sumKV("wall-bright",   0x21, prefs.wallpaper?.brightness ?? 0);
+  sumKV("ImageIndex",    0x21, prefs.wallpaper?.imageIndex ?? 0);
+  sumKV("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);
+  sumKV("m-pos",         0x21, prefs.mystery?.pos ?? 0);
+  sumKV("m-part",        0x21, prefs.mystery?.part ?? 0);
+  sumKV("i-pos",         0x21, prefs.intentions?.pos ?? 0);
 
-    // ring[30]
-    const ring = stAll.ring || [];
-    for (let i=0;i<30;i++){
-      const key = `r${String(i).padStart(2,'0')}`;
-      sumKV(key, 0x12, ring[i] ?? 0);
-    }
+  // stats scalars
+  sumKV("beads",    0x14, totalsObj.beads    ?? 0);
+  sumKV("paters",   0x14, totalsObj.paters   ?? 0);
+  sumKV("glorias",  0x14, totalsObj.glorias  ?? 0);
+  sumKV("decades",  0x14, totalsObj.decades  ?? 0);
+  sumKV("rosaries", 0x14, totalsObj.rosaries ?? 0);
 
-    // sets totals set0..set4
-    const sets = stAll.sets || {};
-    const order = ['none','joyful','luminous','sorrowful','glorious'];
-    for (let si=0; si<5; si++){
-      sumKV(`set${si}`, 0x14, sets[order[si]] ?? 0);
-    }
+  // last mystery + ts
+  sumKV("lastSet", 0x11, setMap[lastObj.set] ?? 0);
+  sumKV("lastIdx", 0x11, lastObj.index ?? 0);
+  sumKV("lastTs",  0x14, stAll.lastPrayer ?? 0);
 
-    // parts pXY
-    const sp = js.setsParts || stAll.setsParts || {};
-    for (let si=0; si<5; si++){
-      const arr = sp[order[si]] || [0,0,0,0,0];
-      for (let pi=0; pi<5; pi++){
-        sumKV(`p${si}${pi}`, 0x14, arr[pi] ?? 0);
-      }
-    }
+  // streak + baseDay
+  sumKV("streak",  0x12, stAll.streakDays ?? 0);
+  sumKV("baseDay", 0x14, 0);
 
-    // durations: sums+counts
-    const dur = stAll.durations || {};
-    sumKV("bSum", 0x18, BigInt(dur.totalBeadMs   ?? 0));
-    sumKV("bInt", 0x14, (dur.beadIntervals ?? 0));
-    sumKV("dSum", 0x18, BigInt(dur.totalDecadeMs ?? 0));
-    sumKV("dCnt", 0x14, (dur.decadeCount  ?? 0));
-    sumKV("rSum", 0x18, BigInt(dur.totalRosaryMs ?? 0));
-    sumKV("rCnt", 0x14, (dur.rosaryCount  ?? 0));
-
-    // Send RESTORE_BEGIN so ESP32 can display progress based on bytes
-    const begin = new Uint8Array(1+2+4);
-    begin[0] = OP_REST_BEGIN;
-    begin.set(le16(totalSteps), 1);
-    begin.set(le32(totalBytes), 3);
-    await chCtrl.writeValue(begin);
-
-    // ---- ACTUAL WRITES (unchanged), with onProgress ticks ----
-
-    // prefs booleans
-    await writePrefKey("haptic-en",     0x01, !!prefs.haptic);                     tick();
-    await writePrefKey("m-preset-en",   0x01, !!(prefs.mystery?.preset));          tick();
-    await writePrefKey("m-autosave-en", 0x01, !!(prefs.mystery?.autosave));        tick();
-    await writePrefKey("m-intro-en",    0x01, !!(prefs.mystery?.intro));           tick();
-    await writePrefKey("i-en",          0x01, !!(prefs.intentions?.enabled));      tick();
-
-    // prefs ints
-    await writePrefKey("disp-bright",   0x21, prefs.display?.brightness ?? 0);     tick();
-    await writePrefKey("disp-rot",      0x21, prefs.display?.rotation ?? 0);       tick();
-    await writePrefKey("wall-bright",   0x21, prefs.wallpaper?.brightness ?? 0);   tick();
-    await writePrefKey("ImageIndex",    0x21, prefs.wallpaper?.imageIndex ?? 0);   tick();
-    await writePrefKey("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);     tick();
-    await writePrefKey("m-pos",         0x21, prefs.mystery?.pos ?? 0);            tick();
-    await writePrefKey("m-part",        0x21, prefs.mystery?.part ?? 0);           tick();
-    await writePrefKey("i-pos",         0x21, prefs.intentions?.pos ?? 0);         tick();
-
-    // stats scalars (from js.stats schema produced by firmware)
-    await writeStatKey("beads",    0x14, totals.beads    ?? 0); tick();
-    await writeStatKey("paters",   0x14, totals.paters   ?? 0); tick();
-    await writeStatKey("glorias",  0x14, totals.glorias  ?? 0); tick();
-    await writeStatKey("decades",  0x14, totals.decades  ?? 0); tick();
-    await writeStatKey("rosaries", 0x14, totals.rosaries ?? 0); tick();
-
-    // last mystery + ts (legacy)
-    await writeStatKey("lastSet", 0x11, setMap[last.set] ?? 0);     tick();
-    await writeStatKey("lastIdx", 0x11, last.index ?? 0);           tick();
-    await writeStatKey("lastTs",  0x14, stAll.lastPrayer ?? 0);     tick();
-
-    // streak + baseDay (we keep baseDay 0)
-    await writeStatKey("streak",  0x12, stAll.streakDays ?? 0);     tick();
-    await writeStatKey("baseDay", 0x14, 0);                         tick();
-
-    // ring[30] -> r00..r29 (if present; else zeros)
-    for (let i=0;i<30;i++){
-      const key = `r${String(i).padStart(2,'0')}`;
-      await writeStatKey(key, 0x12, ring[i] ?? 0);                  tick();
-    }
-
-    // sets totals set0..set4
-    for (let si=0; si<5; si++){
-      await writeStatKey(`set${si}`, 0x14, sets[order[si]] ?? 0);   tick();
-    }
-
-    // parts pXY
-    for (let si=0; si<5; si++){
-      const arr = sp[order[si]] || [0,0,0,0,0];
-      for (let pi=0; pi<5; pi++){
-        await writeStatKey(`p${si}${pi}`, 0x14, arr[pi] ?? 0);      tick();
-      }
-    }
-
-    // durations: write sums+counts used by getters
-    await writeStatKey("bSum", 0x18, BigInt(dur.totalBeadMs   ?? 0)); tick();
-    await writeStatKey("bInt", 0x14, (dur.beadIntervals ?? 0));       tick();
-    await writeStatKey("dSum", 0x18, BigInt(dur.totalDecadeMs ?? 0)); tick();
-    await writeStatKey("dCnt", 0x14, (dur.decadeCount  ?? 0));        tick();
-    await writeStatKey("rSum", 0x18, BigInt(dur.totalRosaryMs ?? 0)); tick();
-    await writeStatKey("rCnt", 0x14, (dur.rosaryCount  ?? 0));        tick();
-
-    // ask device to refresh JSON chars
-    await chCtrl.writeValue(new Uint8Array([OP_REST_DONE]));
+  // ring[30]
+  for (let i=0;i<30;i++){
+    const key = `r${String(i).padStart(2,'0')}`;
+    sumKV(key, 0x12, ringArr[i] ?? 0);
   }
+
+  // sets totals set0..set4
+  for (let si=0; si<5; si++){
+    sumKV(`set${si}`, 0x14, setsObj[order[si]] ?? 0);
+  }
+
+  // parts pXY
+  for (let si=0; si<5; si++){
+    const arr = partsObj[order[si]] || [0,0,0,0,0];
+    for (let pi=0; pi<5; pi++){
+      sumKV(`p${si}${pi}`, 0x14, arr[pi] ?? 0);
+    }
+  }
+
+  // durations: sums+counts
+  sumKV("bSum", 0x18, BigInt(durObj.totalBeadMs   ?? 0));
+  sumKV("bInt", 0x14, (durObj.beadIntervals ?? 0));
+  sumKV("dSum", 0x18, BigInt(durObj.totalDecadeMs ?? 0));
+  sumKV("dCnt", 0x14, (durObj.decadeCount  ?? 0));
+  sumKV("rSum", 0x18, BigInt(durObj.totalRosaryMs ?? 0));
+  sumKV("rCnt", 0x14, (durObj.rosaryCount  ?? 0));
+  // NEW — Chaplet:
+  sumKV("cSum", 0x18, BigInt(durObj.totalChapletMs ?? 0));
+  sumKV("cCnt", 0x14, (stAll.totals?.chaplets ?? durObj.chapletCount ?? 0));
+
+  // Send RESTORE_BEGIN so ESP32 can display progress based on bytes
+  const begin = new Uint8Array(1+2+4);
+  begin[0] = OP_REST_BEGIN;
+  begin.set(le16(totalSteps), 1);
+  begin.set(le32(totalBytes), 3);
+  await chCtrl.writeValue(begin);
+
+  // ---- ACTUAL WRITES ----
+
+  // prefs booleans
+  await writePrefKey("haptic-en",     0x01, !!prefs.haptic);                     tick();
+  await writePrefKey("m-preset-en",   0x01, !!(prefs.mystery?.preset));          tick();
+  await writePrefKey("m-autosave-en", 0x01, !!(prefs.mystery?.autosave));        tick();
+  await writePrefKey("m-intro-en",    0x01, !!(prefs.mystery?.intro));           tick();
+  await writePrefKey("i-en",          0x01, !!(prefs.intentions?.enabled));      tick();
+
+  // prefs ints
+  await writePrefKey("disp-bright",   0x21, prefs.display?.brightness ?? 0);     tick();
+  await writePrefKey("disp-rot",      0x21, prefs.display?.rotation ?? 0);       tick();
+  await writePrefKey("wall-bright",   0x21, prefs.wallpaper?.brightness ?? 0);   tick();
+  await writePrefKey("ImageIndex",    0x21, prefs.wallpaper?.imageIndex ?? 0);   tick();
+  await writePrefKey("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);     tick();
+  await writePrefKey("m-pos",         0x21, prefs.mystery?.pos ?? 0);            tick();
+  await writePrefKey("m-part",        0x21, prefs.mystery?.part ?? 0);           tick();
+  await writePrefKey("i-pos",         0x21, prefs.intentions?.pos ?? 0);         tick();
+
+  // stats scalars
+  await writeStatKey("beads",    0x14, totalsObj.beads    ?? 0); tick();
+  await writeStatKey("paters",   0x14, totalsObj.paters   ?? 0); tick();
+  await writeStatKey("glorias",  0x14, totalsObj.glorias  ?? 0); tick();
+  await writeStatKey("decades",  0x14, totalsObj.decades  ?? 0); tick();
+  await writeStatKey("rosaries", 0x14, totalsObj.rosaries ?? 0); tick();
+
+  // last mystery + ts (legacy)
+  await writeStatKey("lastSet", 0x11, setMap[lastObj.set] ?? 0);     tick();
+  await writeStatKey("lastIdx", 0x11, lastObj.index ?? 0);           tick();
+  await writeStatKey("lastTs",  0x14, stAll.lastPrayer ?? 0);        tick();
+
+  // streak + baseDay
+  await writeStatKey("streak",  0x12, stAll.streakDays ?? 0);        tick();
+  await writeStatKey("baseDay", 0x14, 0);                            tick();
+
+  // ring[30]
+  for (let i=0;i<30;i++){
+    const key = `r${String(i).padStart(2,'0')}`;
+    await writeStatKey(key, 0x12, ringArr[i] ?? 0);                  tick();
+  }
+
+  // sets totals set0..set4
+  for (let si=0; si<5; si++){
+    await writeStatKey(`set${si}`, 0x14, setsObj[order[si]] ?? 0);   tick();
+  }
+
+  // parts pXY
+  for (let si=0; si<5; si++){
+    const arr = partsObj[order[si]] || [0,0,0,0,0];
+    for (let pi=0; pi<5; pi++){
+      await writeStatKey(`p${si}${pi}`, 0x14, arr[pi] ?? 0);         tick();
+    }
+  }
+
+  // durations: sums+counts
+  await writeStatKey("bSum", 0x18, BigInt(durObj.totalBeadMs   ?? 0)); tick();
+  await writeStatKey("bInt", 0x14, (durObj.beadIntervals ?? 0));       tick();
+  await writeStatKey("dSum", 0x18, BigInt(durObj.totalDecadeMs ?? 0)); tick();
+  await writeStatKey("dCnt", 0x14, (durObj.decadeCount  ?? 0));        tick();
+  await writeStatKey("rSum", 0x18, BigInt(durObj.totalRosaryMs ?? 0)); tick();
+  await writeStatKey("rCnt", 0x14, (durObj.rosaryCount  ?? 0));        tick();
+  // NEW — Chaplet:
+  await writeStatKey("cSum", 0x18, BigInt(durObj.totalChapletMs ?? 0));                    tick();
+  await writeStatKey("cCnt", 0x14, (stAll.totals?.chaplets ?? durObj.chapletCount ?? 0));  tick();
+
+  // ask device to refresh JSON chars
+  await chCtrl.writeValue(new Uint8Array([OP_REST_DONE]));
+}
 
   // UI wiring
   $('connectBtn').addEventListener('click', connectBLE);
