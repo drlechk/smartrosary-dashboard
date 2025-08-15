@@ -231,7 +231,7 @@
       partsTitle: "Mystery Parts (I–V per set)",
       device: "Device", firmware: "FW", lastMystery: "Last mystery",
       chartBead: "Bead", chartDecade: "Decade", chartRosary: "Rosary", chartChaplet: "Chaplet",
-      sets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
+      sets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplets"],
       errPick: "Picked device is not a rosary.",
       errWB: "Web Bluetooth not supported in this browser.",
       confirmReset: "Reset all statistics on the device? This cannot be undone.",
@@ -252,7 +252,7 @@
       pillDevice: "Device",
       pillFW: "FW",
       pillLastMystery: "Last mystery",
-      sets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
+      lastsets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
       avgLegend: "Avg (s)",
     },
     pl: {
@@ -269,8 +269,8 @@
       donutTitle: "Podział tajemnic",
       partsTitle: "Tajemnice — części (I–V)",
       device: "Urządzenie", firmware: "FW", lastMystery: "Ostatnia tajemnica",
-      chartBead: "Pac.", chartDecade: "Dzies.", chartRosary: "Róż.", chartChaplet: "Kor.",
-      sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Chaplet"],
+      chartBead: "Pacierz", chartDecade: "Dziesiątka", chartRosary: "Różańiec", chartChaplet: "Koronka",
+      sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronki"],
       errPick: "Wybrane urządzenie to nie różaniec.",
       errWB: "Przeglądarka nie obsługuje Web Bluetooth.",
       confirmReset: "Zresetować wszystkie statystyki na urządzeniu? Tej operacji nie można cofnąć.",
@@ -291,7 +291,7 @@
       pillDevice: "Urządzenie",
       pillFW: "FW",
       pillLastMystery: "Ostatnia tajemnica",
-      sets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronki"],
+      lastsets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronka"], 
       avgLegend: "Śr. (s)",
     },
     de: {
@@ -330,7 +330,7 @@
       pillDevice: "Gerät",
       pillFW: "FW",
       pillLastMystery: "Letztes Geheimnis",
-      sets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Koronen"],
+      lastsets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
       avgLegend: "Ø (s)",
     }
   };
@@ -359,8 +359,16 @@
       const idx = idxMap[enName];
       if (idx == null) return enName;
       const L = i18n[langCode] || i18n.en;
-      return L.sets[idx] || enName;
+      return (L.lastsets && L.lastsets[idx]) ? L.lastsets[idx] : enName;
     }
+
+function localizeLastSetName(enName, langCode = lang) {
+  const idxMap = { None:0, Joyful:1, Sorrowful:2, Glorious:3, Luminous:4, Chaplet:5 };
+  const idx = idxMap[enName];
+  if (idx == null) return enName;
+  const L = i18n[langCode] || i18n.en;
+  return (L.lastsets && L.lastsets[idx]) ? L.lastsets[idx] : enName;
+}
 
     function renderPillsFromCache(){
       if (!lastStats || !lastSettings) return;
@@ -372,7 +380,7 @@
 
       const lastSetEN  = lastStats.lastMystery?.set;
       const lastIndex  = lastStats.lastMystery?.index;
-      const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
+      const lastSetLOC = lastSetEN ? localizeLastSetName(lastSetEN) : '—';
       $('valLastMystery').textContent = `${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
     }
 
@@ -458,7 +466,10 @@
     },
     options: {
       responsive:true, maintainAspectRatio:false,
-      scales:{ y:{ beginAtZero:true, ticks:{ precision:0 }, grid:{ color:'#1a2733' } }, x:{ grid:{ color:'#1a2733' } } },
+      scales:{
+        x:{ stacked:true, grid:{ color:'#1a2733' }, ticks:{ color:'#cfe4ff' } },
+        y:{ stacked:true, beginAtZero:true, grid:{ color:'#1a2733' }, ticks:{ color:'#cfe4ff', precision:0 } }
+      },
       plugins:{ legend:{ display:false } }
     }
   });
@@ -605,15 +616,15 @@ async function refresh(){
     $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
     $('kpiChaplets').textContent = (jsStats.totals?.chaplets ?? '—');
 
-// update only values; labels will come from applyI18n()/language switch
-$('valDevice').textContent = jsStats.device || '—';
-$('valFW').textContent     = jsSettings.fwVersion || '—';
+    // update only values; labels will come from applyI18n()/language switch
+    $('valDevice').textContent = jsStats.device || '—';
+    $('valFW').textContent     = jsSettings.fwVersion || '—';
 
-const lastSetEN  = jsStats.lastMystery?.set;
-const lastIndex  = jsStats.lastMystery?.index;
-const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
-$('valLastMystery').textContent =
-  `${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
+    const lastSetEN  = jsStats.lastMystery?.set;
+    const lastIndex  = jsStats.lastMystery?.index;
+    const lastSetLOC = lastSetEN ? localizeLastSetName(lastSetEN) : '—';
+    $('valLastMystery').textContent =
+      `${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
 
     // Durations
     const d = jsStats.durations || {};
