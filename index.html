@@ -68,14 +68,14 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 16px 12px;  /* Increased vertical padding */
+  padding: 16px 12px;
 }
 
 .header-with-lang h1 {
   margin: 0;
-  font-size: 1.5em;
-  text-align: center;
+  font-size: 1.2em;
   line-height: 1.2;
+  text-align: center;
 }
 
 #langSelect {
@@ -83,6 +83,16 @@
   right: 12px;
   font-size: 1em;
   padding: 4px 6px;
+}
+
+/* Mobile override: left-align title */
+@media (max-width: 600px) {
+  .header-with-lang {
+    justify-content: flex-start;
+  }
+  .header-with-lang h1 {
+    text-align: left;
+  }
 }
 
 </style>
