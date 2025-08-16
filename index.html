@@ -18,10 +18,15 @@
   }
   h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:.2px; }
   .toolbar-wrap { display:flex; justify-content:center; }
+
+
   .toolbar {
-    display:flex; gap:8px; padding:12px; flex-wrap:wrap; align-items:center;
-    width:100%; max-width: 980px;
-  }
+  display: flex;
+  padding:12px;
+  justify-content: center;   /* center horizontally */
+  gap: 10px;                 /* spacing between buttons */
+}
+
   button, select {
     border:0; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer;
     transition:transform .05s ease; background:#1f2937; color:#eaf0f6;
@@ -35,8 +40,16 @@
   #resetBtn       { background:#9c27b0; color:#fff; }
   #langSelect     { background:#0f1720; border:1px solid #1f2b3a; }
   #status { text-align:center; color:#95a7ba; font-size:13px; padding-bottom:8px; }
-  .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
-  .grid { display:grid; gap:16px; grid-template-columns: repeat(2, minmax(280px, 1fr)); }
+.wrap {
+  max-width: 1400px;  /* or 1400px if you want even wider */
+  margin: 0 auto;
+  padding: 12px;
+}
+.grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+}
   @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
   .card {
     background:#101722; border:1px solid #1a2733; border-radius:14px; padding:16px;
@@ -224,8 +237,6 @@ input[type="range"]::-ms-track {
       <button id="connectBtn">Connect</button>
       <button id="refreshBtn" disabled>Refresh</button>
       <button id="disconnectBtn" disabled>Disconnect</button>
-      <span style="flex:1"></span>
-
     </div>
   </div>
 
@@ -255,39 +266,6 @@ input[type="range"]::-ms-track {
           <button id="resetBtn" disabled>Reset Statistics</button>
           <progress id="restoreProg" max="100" value="0" hidden></progress>
         </div>
-      </div>
-
-      <div class="card">
-        <h3 id="avgTitle">Durations & Averages</h3>
-         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
-          <div class="kpi"><div class="label" id="lblAvgBead">Avg bead</div><div class="value" id="kpiAvgBead">—</div></div>
-          <div class="kpi"><div class="label" id="lblAvgDecade">Avg decade</div><div class="value" id="kpiAvgDecade">—</div></div>
-          <div class="kpi"><div class="label" id="lblAvgRosary">Avg rosary</div><div class="value" id="kpiAvgRosary">—</div></div>
-          <div class="kpi"><div class="label" id="lblAvgChaplet">Avg chaplet</div><div class="value" id="kpiAvgChaplet">—</div></div>
-        </div>
-        <p class="smallnote" id="avgNote">Averages are computed from lifetime device totals.</p>
-        <h3 id="totalsTitle">Totals (time)</h3>
-        <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
-          <div class="kpi"><div class="label" id="lblTrosary">Rosary</div><div class="value" id="totRosary">—</div></div>
-          <div class="kpi"><div class="label" id="lblTdecades">Decades</div><div class="value" id="totDecade">—</div></div>
-          <div class="kpi"><div class="label" id="lblTbeads">Beads</div><div class="value" id="totBead">—</div></div>
-          <div class="kpi"><div class="label" id="lblTchaplet">Chaplet</div><div class="value" id="totChaplet">—</div></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3 id="barTitle">Average durations (s)</h3>
-        <div class="chart"><canvas id="barWindow"></canvas></div>
-      </div>
-
-      <div class="card">
-        <h3 id="donutTitle">Mystery Sets Breakdown</h3>
-        <div class="chart"><canvas id="donutSets"></canvas></div>
-      </div>
-
-      <div class="card">
-        <h3 id="partsTitle">Mystery Parts (I–V per set)</h3>
-        <div class="chart"><canvas id="partsChart"></canvas></div>
       </div>
 
       <div class="card">
@@ -356,6 +334,41 @@ input[type="range"]::-ms-track {
           </div>
         </div>
       </div>
+
+      <div class="card">
+        <h3 id="avgTitle">Durations & Averages</h3>
+         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
+          <div class="kpi"><div class="label" id="lblAvgBead">Avg bead</div><div class="value" id="kpiAvgBead">—</div></div>
+          <div class="kpi"><div class="label" id="lblAvgDecade">Avg decade</div><div class="value" id="kpiAvgDecade">—</div></div>
+          <div class="kpi"><div class="label" id="lblAvgRosary">Avg rosary</div><div class="value" id="kpiAvgRosary">—</div></div>
+          <div class="kpi"><div class="label" id="lblAvgChaplet">Avg chaplet</div><div class="value" id="kpiAvgChaplet">—</div></div>
+        </div>
+        <p class="smallnote" id="avgNote">Averages are computed from lifetime device totals.</p>
+        <h3 id="totalsTitle">Totals (time)</h3>
+        <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
+          <div class="kpi"><div class="label" id="lblTrosary">Rosary</div><div class="value" id="totRosary">—</div></div>
+          <div class="kpi"><div class="label" id="lblTdecades">Decades</div><div class="value" id="totDecade">—</div></div>
+          <div class="kpi"><div class="label" id="lblTbeads">Beads</div><div class="value" id="totBead">—</div></div>
+          <div class="kpi"><div class="label" id="lblTchaplet">Chaplet</div><div class="value" id="totChaplet">—</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 id="barTitle">Average durations (s)</h3>
+        <div class="chart"><canvas id="barWindow"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h3 id="donutTitle">Mystery Sets Breakdown</h3>
+        <div class="chart"><canvas id="donutSets"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h3 id="partsTitle">Mystery Parts (I–V per set)</h3>
+        <div class="chart"><canvas id="partsChart"></canvas></div>
+      </div>
+
+
       <div class="card">
         <h3 id="rcTitle">Remote control</h3>
         <div class="remote-wrap">
