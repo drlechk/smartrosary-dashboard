@@ -429,24 +429,6 @@ input[type="range"]::-ms-track {
 
   function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
 
-  let _ctrlQueue = Promise.resolve();
-  async function writeCtrlQueued(u8, {retry=1, pause=25} = {}) {
-    _ctrlQueue = _ctrlQueue.then(async () => {
-      // prefer Write With Response for ordering/back-pressure
-      for (let i=0; i <= retry; i++) {
-        try {
-          await chCtrl.writeValue(u8);
-          break;
-        } catch (e) {
-          if (i === retry) throw e;
-          await sleep(60);
-        }
-      }
-      await sleep(pause); // small pacing between writes
-    });
-    return _ctrlQueue;
-  }
-
   async function withRetry(fn, {tries=5, base=120} = {}) {
     let err;
     for (let i=0;i<tries;i++){
@@ -932,42 +914,88 @@ async function refresh(){
   try{
     if (!chStats || !chSettings) return;
 
-    // Android quirk: give discovery/MTU a moment before first reads
-    await sleep(200);
+    await sleep(200); // Android settle
 
-    // Read small blobs first (settings, parts), then the big stats blob last.
+    // Read small blobs first
     const [vSettings, vPartsMaybe] = await Promise.all([
       readWithRetry(chSettings),
       chParts ? readWithRetry(chParts).catch(()=>null) : Promise.resolve(null)
     ]);
 
-    // Stats is usually the largest – do it after a tiny pause and with retry.
+    // Then stats (largest)
     await sleep(80);
     const vStats = await readWithRetry(chStats);
 
-    const jsStats    = JSON.parse(u8ToStr(vStats));
-    const jsSettings = JSON.parse(u8ToStr(vSettings));
+    // ---- DEBUG: raw buffers + decoded text ----
+    console.log('[BLE] settings bytes:', vSettings?.byteLength ?? vSettings?.length);
+    console.log('[BLE] parts    bytes:', vPartsMaybe?.byteLength ?? vPartsMaybe?.length);
+    console.log('[BLE] stats    bytes:', vStats?.byteLength ?? vStats?.length);
 
-    // cache for later re-localization without BLE reads
+    const rawSettings = u8ToStr(vSettings);
+    const rawStats    = u8ToStr(vStats);
+    const rawParts    = vPartsMaybe ? u8ToStr(vPartsMaybe) : null;
+
+    console.log('[BLE] raw settings string:', rawSettings);
+    console.log('[BLE] raw stats string   :', rawStats);
+    if (rawParts != null) console.log('[BLE] raw parts string   :', rawParts);
+
+    // Guard: empty/partial payloads (don’t throw, just skip this refresh)
+    if (!rawSettings || !rawSettings.trim() || rawSettings.trim() === '{}') {
+      console.warn('empty settings JSON; retrying…');
+      statusLine.textContent = 'Read failed: empty settings JSON';
+      return;
+    }
+    if (!rawStats || !rawStats.trim() || rawStats.trim() === '{}') {
+      console.warn('empty stats JSON; retrying…');
+      statusLine.textContent = 'Read failed: empty stats JSON';
+      return;
+    }
+
+    // Parse with error context
+    let jsSettings, jsStats, jsParts = null;
+    try {
+      jsSettings = JSON.parse(rawSettings);
+      console.log('[BLE] parsed settings:', jsSettings);
+    } catch (e) {
+      console.error('Failed to parse settings JSON:', e, '\nRAW:', rawSettings);
+      statusLine.textContent = 'Read failed: bad settings JSON';
+      return;
+    }
+    try {
+      jsStats = JSON.parse(rawStats);
+      console.log('[BLE] parsed stats:', jsStats);
+    } catch (e) {
+      console.error('Failed to parse stats JSON:', e, '\nRAW:', rawStats);
+      statusLine.textContent = 'Read failed: bad stats JSON';
+      return;
+    }
+    if (rawParts != null) {
+      try {
+        jsParts = JSON.parse(rawParts);
+        console.log('[BLE] parsed parts:', jsParts);
+      } catch (e) {
+        console.warn('Parts JSON parse skipped:', e, '\nRAW:', rawParts);
+      }
+    }
+
+    // cache for re-localization
     lastStats = jsStats;
     lastSettings = jsSettings;
 
+    // ---- UI update (unchanged below) ----
     $('kpiBeads').textContent    = (jsStats.totals?.beads ?? '—');
     $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
     $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
     $('kpiChaplets').textContent = (jsStats.totals?.chaplets ?? '—');
 
-    // update only values; labels will come from applyI18n()/language switch
     $('valDevice').textContent = jsStats.device || '—';
     $('valFW').textContent     = jsSettings.fwVersion || '—';
 
     const lastSetEN  = jsStats.lastMystery?.set;
     const lastIndex  = jsStats.lastMystery?.index;
     const lastSetLOC = lastSetEN ? localizeLastSetName(lastSetEN) : '—';
-    $('valLastMystery').textContent =
-      `${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
+    $('valLastMystery').textContent = `${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
 
-    // Durations
     const d = jsStats.durations || {};
     const avgBeadMs     = safeNum(d.avgBeadMs,     0);
     const avgDecadeMs   = safeNum(d.avgDecadeMs,   0);
@@ -996,13 +1024,12 @@ async function refresh(){
     ];
     barWindow.update();
 
-    // Sets (unchanged — chaplet is not a mystery set)
     const totalDec = (jsStats.totals?.decades ?? 0);
     const joyful   = (jsStats.sets?.joyful ?? 0);
     const sorrow   = (jsStats.sets?.sorrowful ?? 0);
     const glor     = (jsStats.sets?.glorious ?? 0);
     const lumi     = (jsStats.sets?.luminous ?? 0);
-    const chap = (jsStats.totals?.chaplets ?? 0);
+    const chap     = (jsStats.totals?.chaplets ?? 0);
     let none       = jsStats.sets?.none;
     if (none == null) {
       const sumKnown = joyful + sorrow + glor + lumi;
@@ -1011,33 +1038,25 @@ async function refresh(){
     donutSets.data.datasets[0].data = [none, joyful, sorrow, glor, lumi, chap];
     donutSets.update();
 
-    // Parts (optional char; tolerate failures)
-    if (vPartsMaybe) {
-      try {
-        const jsParts = JSON.parse(u8ToStr(vPartsMaybe));
-        const sp = jsParts.setsParts || {};
-        const setsOrder = ['none','joyful','luminous','sorrowful','glorious']; // UI order
-        const dataByPart = [0,1,2,3,4].map(()=>[0,0,0,0,0]);
-
-        setsOrder.forEach((name, si) => {
-          const arr = sp[name] || [0,0,0,0,0];
-          for (let p=0;p<5;p++) dataByPart[p][si] = Number(arr[p]||0);
-        });
-        for (let p=0;p<5;p++) partsChart.data.datasets[p].data = dataByPart[p];
-        partsChart.update();
-      } catch(e) {
-        console.warn('Parts parse/read failed:', e);
-      }
+    if (jsParts) {
+      const sp = jsParts.setsParts || {};
+      const setsOrder = ['none','joyful','luminous','sorrowful','glorious']; // UI order
+      const dataByPart = [0,1,2,3,4].map(()=>[0,0,0,0,0]);
+      setsOrder.forEach((name, si) => {
+        const arr = sp[name] || [0,0,0,0,0];
+        for (let p=0;p<5;p++) dataByPart[p][si] = Number(arr[p]||0);
+      });
+      for (let p=0;p<5;p++) partsChart.data.datasets[p].data = dataByPart[p];
+      partsChart.update();
     }
 
     statusLine.textContent = L.statusUpdated;
     renderPillsFromCache();
 
     $('swHaptic').checked = !!jsSettings.haptic;
-    $('swPreset').checked = !!(jsSettings.mystery?.preset);  // NEW
+    $('swPreset').checked = !!(jsSettings.mystery?.preset);
     $('swAutosave').checked = !!(jsSettings.mystery && jsSettings.mystery.autosave);
 
-    // NEW: slider value + badge
     const db = Math.max(0, Math.min(100, Number(jsSettings.display?.brightness ?? 0)));
     $('slDispBright').value = db;
     $('slDispBrightVal').textContent = db + '%';
@@ -1226,14 +1245,6 @@ async function doBackup(){
   }
 }
 
-async function pauseSettingsNotifs(pause){
-  if (!chSettings) return;
-  try {
-    if (pause) await chSettings.stopNotifications();
-    else       await chSettings.startNotifications();
-  } catch (_) {}
-}
-
 async function subscribeSettingsNotifs(){
   if (!chSettings) return;
   await chSettings.startNotifications();
@@ -1391,7 +1402,7 @@ function onSettingsNotif(ev){
       default: throw new Error('bad type');
     }
     const payload = packKV(OP_SET_PREF, type, key, valBytes);
-    await writeCtrlQueued(payload, {pause: 25});
+    await chCtrl.writeValue(payload);
   }
   async function writeStatKey(key, type, value){
     let valBytes;
@@ -1403,7 +1414,7 @@ function onSettingsNotif(ev){
       default: throw new Error('bad type');
     }
     const payload = packKV(OP_SET_STAT, type, key, valBytes);
-    await writeCtrlQueued(payload, {pause: 25});
+    await chCtrl.writeValue(payload);
   }
 
   async function restoreFromJson(js, onProgress){
@@ -1472,13 +1483,11 @@ function onSettingsNotif(ev){
     const key = `r${String(i).padStart(2,'0')}`;
     sumKV(key, 0x12, ringArr[i] ?? 0);
   }
-  await sleep(80);
 
   // sets totals set0..set4
   for (let si=0; si<5; si++){
     sumKV(`set${si}`, 0x14, setsObj[order[si]] ?? 0);
   }
-  await sleep(80);
 
   // parts pXY
   for (let si=0; si<5; si++){
@@ -1487,7 +1496,6 @@ function onSettingsNotif(ev){
       sumKV(`p${si}${pi}`, 0x14, arr[pi] ?? 0);
     }
   }
-  await sleep(80);
 
   // durations: sums+counts
   sumKV("bSum", 0x18, BigInt(durObj.totalBeadMs   ?? 0));
@@ -1505,7 +1513,7 @@ function onSettingsNotif(ev){
   begin[0] = OP_REST_BEGIN;
   begin.set(le16(totalSteps), 1);
   begin.set(le32(totalBytes), 3);
-  await writeCtrlQueued(begin, {pause: 40});
+  await chCtrl.writeValue(begin);
 
   // ---- ACTUAL WRITES ----
 
@@ -1574,7 +1582,7 @@ function onSettingsNotif(ev){
   
 
   // ask device to refresh JSON chars
-  await writeCtrlQueued(new Uint8Array([OP_REST_DONE]), {pause: 40});
+  await chCtrl.writeValue(new Uint8Array([OP_REST_DONE]));
 }
 
   // UI wiring
@@ -1596,7 +1604,6 @@ function onSettingsNotif(ev){
     statusLine.textContent = L.restoreStart;
     const onProg = (step,total)=>{ prog.value = Math.floor(step*100/total); };
     try{
-      await pauseSettingsNotifs(true);        // <— add this
       await restoreFromJson(js, onProg);
       await refresh();
       statusLine.textContent = L.restoreDone;
@@ -1604,7 +1611,6 @@ function onSettingsNotif(ev){
       console.error(err);
       statusLine.textContent = 'Restore failed: ' + err.message;
     } finally {
-      await pauseSettingsNotifs(false);       // <— and this
       setTimeout(()=>{ prog.hidden = true; }, 600);
       e.target.value = '';
     }
