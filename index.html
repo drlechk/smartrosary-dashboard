@@ -429,6 +429,24 @@ input[type="range"]::-ms-track {
 
   function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
 
+  let _ctrlQueue = Promise.resolve();
+  async function writeCtrlQueued(u8, {retry=1, pause=25} = {}) {
+    _ctrlQueue = _ctrlQueue.then(async () => {
+      // prefer Write With Response for ordering/back-pressure
+      for (let i=0; i <= retry; i++) {
+        try {
+          await chCtrl.writeValue(u8);
+          break;
+        } catch (e) {
+          if (i === retry) throw e;
+          await sleep(60);
+        }
+      }
+      await sleep(pause); // small pacing between writes
+    });
+    return _ctrlQueue;
+  }
+
   async function withRetry(fn, {tries=5, base=120} = {}) {
     let err;
     for (let i=0;i<tries;i++){
@@ -1208,6 +1226,14 @@ async function doBackup(){
   }
 }
 
+async function pauseSettingsNotifs(pause){
+  if (!chSettings) return;
+  try {
+    if (pause) await chSettings.stopNotifications();
+    else       await chSettings.startNotifications();
+  } catch (_) {}
+}
+
 async function subscribeSettingsNotifs(){
   if (!chSettings) return;
   await chSettings.startNotifications();
@@ -1365,7 +1391,7 @@ function onSettingsNotif(ev){
       default: throw new Error('bad type');
     }
     const payload = packKV(OP_SET_PREF, type, key, valBytes);
-    await chCtrl.writeValue(payload);
+    await writeCtrlQueued(payload, {pause: 25});
   }
   async function writeStatKey(key, type, value){
     let valBytes;
@@ -1377,7 +1403,7 @@ function onSettingsNotif(ev){
       default: throw new Error('bad type');
     }
     const payload = packKV(OP_SET_STAT, type, key, valBytes);
-    await chCtrl.writeValue(payload);
+    await writeCtrlQueued(payload, {pause: 25});
   }
 
   async function restoreFromJson(js, onProgress){
@@ -1446,11 +1472,13 @@ function onSettingsNotif(ev){
     const key = `r${String(i).padStart(2,'0')}`;
     sumKV(key, 0x12, ringArr[i] ?? 0);
   }
+  await sleep(80);
 
   // sets totals set0..set4
   for (let si=0; si<5; si++){
     sumKV(`set${si}`, 0x14, setsObj[order[si]] ?? 0);
   }
+  await sleep(80);
 
   // parts pXY
   for (let si=0; si<5; si++){
@@ -1459,6 +1487,7 @@ function onSettingsNotif(ev){
       sumKV(`p${si}${pi}`, 0x14, arr[pi] ?? 0);
     }
   }
+  await sleep(80);
 
   // durations: sums+counts
   sumKV("bSum", 0x18, BigInt(durObj.totalBeadMs   ?? 0));
@@ -1476,7 +1505,7 @@ function onSettingsNotif(ev){
   begin[0] = OP_REST_BEGIN;
   begin.set(le16(totalSteps), 1);
   begin.set(le32(totalBytes), 3);
-  await chCtrl.writeValue(begin);
+  await writeCtrlQueued(begin, {pause: 40});
 
   // ---- ACTUAL WRITES ----
 
@@ -1545,7 +1574,7 @@ function onSettingsNotif(ev){
   
 
   // ask device to refresh JSON chars
-  await chCtrl.writeValue(new Uint8Array([OP_REST_DONE]));
+  await writeCtrlQueued(new Uint8Array([OP_REST_DONE]), {pause: 40});
 }
 
   // UI wiring
@@ -1567,6 +1596,7 @@ function onSettingsNotif(ev){
     statusLine.textContent = L.restoreStart;
     const onProg = (step,total)=>{ prog.value = Math.floor(step*100/total); };
     try{
+      await pauseSettingsNotifs(true);        // <— add this
       await restoreFromJson(js, onProg);
       await refresh();
       statusLine.textContent = L.restoreDone;
@@ -1574,6 +1604,7 @@ function onSettingsNotif(ev){
       console.error(err);
       statusLine.textContent = 'Restore failed: ' + err.message;
     } finally {
+      await pauseSettingsNotifs(false);       // <— and this
       setTimeout(()=>{ prog.hidden = true; }, 600);
       e.target.value = '';
     }
