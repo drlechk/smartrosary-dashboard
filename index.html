@@ -667,8 +667,13 @@ function localizeLastSetName(enName, langCode = lang) {
       const L = i18n[lang];
 
       // labels are handled by applyI18n(); values here only
-      $('valDevice').textContent = lastStats.device || '—';
-      $('valFW').textContent     = lastSettings.fwVersion || '—';
+const cachedName =
+  (lastSettings && lastSettings.device) ||
+  (lastStats && lastStats.device) ||
+  (device && device.name) ||
+  '—';
+$('valDevice').textContent = cachedName;
+$('valFW').textContent     = (lastSettings && lastSettings.fwVersion) || '—';
 
       const lastSetEN  = lastStats.lastMystery?.set;
       const lastIndex  = lastStats.lastMystery?.index;
@@ -1001,8 +1006,13 @@ async function refresh(){
     $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
     $('kpiChaplets').textContent = (jsStats.totals?.chaplets ?? '—');
 
-    $('valDevice').textContent = jsStats.device || '—';
-    $('valFW').textContent     = jsSettings.fwVersion || '—';
+const devName =
+  (jsSettings && jsSettings.device) ||
+  (jsStats && jsStats.device) ||
+  (device && device.name) ||
+  '—';
+$('valDevice').textContent = devName;
+$('valFW').textContent     = jsSettings.fwVersion || '—';
 
     const lastSetEN  = jsStats.lastMystery?.set;
     const lastIndex  = jsStats.lastMystery?.index;
