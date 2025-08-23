@@ -191,6 +191,8 @@
   const TOUCH_CHAR_UUID = '12345678-1234-5678-1234-56789abcdea1'; // 5-byte pointer
   const KEYS_CHAR_UUID  = '12345678-1234-5678-1234-56789abcdea2'; // 1-byte command
 
+  const STATUS_UUID = '12345678-1234-5678-1234-56789abcdef2'; 
+
   // Control opcodes
   const OP_SET_PREF  = 0x50;
   const OP_SET_STAT  = 0x53;
@@ -223,6 +225,9 @@
   setRemoteMuted(true);
 
   let device, server, service, chStats, chSettings, chCtrl, chParts;
+
+  let statusChar = null;
+  let readyFlag = true; // gate writes; true = allowed to write next
 
   function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
 
@@ -457,6 +462,41 @@ function localizeLastSetName(enName, langCode = lang) {
     }
   });
 
+async function waitReady(timeoutMs = 4000) {
+  const start = Date.now();
+  while (!readyFlag) {
+    if (Date.now() - start > timeoutMs) throw new Error('BLE pacing timeout');
+    await sleep(30);
+  }
+  // consume one permit
+  readyFlag = false;
+}
+
+async function helloAndAwaitConsent(server) {
+  const svc   = await server.getPrimaryService(OTA_SVC_UUID);
+  const ctrl  = await svc.getCharacteristic(INFO_CTRL_UUID);
+  const stat  = await svc.getCharacteristic(STATUS_UUID);
+
+  // subscribe to status
+  await stat.startNotifications();
+
+  const result = await new Promise(async (resolve) => {
+    const onStatus = (ev) => {
+      const v = new Uint8Array(ev.target.value.buffer)[0];
+      if (v === 0xA1) { stat.removeEventListener('characteristicvaluechanged', onStatus); resolve(true); }
+      if (v === 0xA0) { stat.removeEventListener('characteristicvaluechanged', onStatus); resolve(false); }
+    };
+    stat.addEventListener('characteristicvaluechanged', onStatus);
+
+    // send HELLO_WEB
+    await ctrl.writeValue(Uint8Array.from([0x41]));
+    // (optional) add a JS timeout to fail if no response in e.g. 25s
+    setTimeout(()=>{ resolve(false); }, 25000);
+  });
+
+  if (!result) throw new Error('Device denied consent or timed out.');
+}
+
 async function connectBLE(){
   const L = i18n[lang];
   try{
@@ -484,16 +524,26 @@ async function connectBLE(){
 
     statusLine.textContent = 'Connecting…';
     server  = await device.gatt.connect();
+    await helloAndAwaitConsent(server);
 
-    // 🔧 Android quirk: give the GATT a moment to finish service discovery.
+    // Android settle
     await sleep(300);
 
-    // Get service/characteristics with retries (Android sometimes races here)
-    service   = await withRetry(() => server.getPrimaryService(OTA_SVC_UUID));
-    chSettings= await withRetry(() => service.getCharacteristic(INFO_SETTINGS_UUID));
-    chParts   = await withRetry(() => service.getCharacteristic(INFO_PARTS_UUID));
-    chStats   = await withRetry(() => service.getCharacteristic(INFO_STATS_UUID));
-    chCtrl    = await withRetry(() => service.getCharacteristic(INFO_CTRL_UUID));
+    // Get service + chars
+    service    = await withRetry(() => server.getPrimaryService(OTA_SVC_UUID));
+    chSettings = await withRetry(() => service.getCharacteristic(INFO_SETTINGS_UUID));
+    chParts    = await withRetry(() => service.getCharacteristic(INFO_PARTS_UUID));
+    chStats    = await withRetry(() => service.getCharacteristic(INFO_STATS_UUID));
+    chCtrl     = await withRetry(() => service.getCharacteristic(INFO_CTRL_UUID));
+
+    // NOW wire STATUS pacing
+    statusChar = await withRetry(() => service.getCharacteristic(STATUS_UUID));
+    await statusChar.startNotifications();
+    statusChar.addEventListener('characteristicvaluechanged', (ev) => {
+      const v = new Uint8Array(ev.target.value.buffer)[0];
+      if (v === 0x01) readyFlag = true; // READY tick from firmware
+    });
+
 
     // Remote control characteristics (optional — don't fail connection if missing)
     try {
@@ -528,6 +578,7 @@ async function connectBLE(){
     
     // 🔔 start live updates from ESP32
     await subscribeSettingsNotifs();
+    subscribeSettingsNotifs();
 
     $('disconnectBtn').disabled = false;
     $('swHaptic').disabled = false;
@@ -542,78 +593,46 @@ async function connectBLE(){
 
 async function refresh(){
   const L = i18n[lang];
-  try{
-    if (!chStats || !chSettings) return;
+  let ok = false;
 
-    await sleep(200); // Android settle
+  try{
+    if (!chStats || !chSettings) return false;
+
+    // small settle for Android
+    await sleep(200);
 
     // Read small blobs first
     const [vSettings, vPartsMaybe] = await Promise.all([
-      readWithRetry(chSettings),
-      chParts ? readWithRetry(chParts).catch(()=>null) : Promise.resolve(null)
+      robustRead(chSettings),
+      chParts ? robustRead(chParts).catch(()=>null) : Promise.resolve(null)
     ]);
 
     // Then stats (largest)
     await sleep(80);
-    const vStats = await readWithRetry(chStats);
+    const vStats = await robustRead(chStats);
 
-    // ---- DEBUG: raw buffers + decoded text ----
-    console.log('[BLE] settings bytes:', vSettings?.byteLength ?? vSettings?.length);
-    console.log('[BLE] parts    bytes:', vPartsMaybe?.byteLength ?? vPartsMaybe?.length);
-    console.log('[BLE] stats    bytes:', vStats?.byteLength ?? vStats?.length);
-
+    // Decode
     const rawSettings = u8ToStr(vSettings);
     const rawStats    = u8ToStr(vStats);
     const rawParts    = vPartsMaybe ? u8ToStr(vPartsMaybe) : null;
 
-    console.log('[BLE] raw settings string:', rawSettings);
-    console.log('[BLE] raw stats string   :', rawStats);
-    if (rawParts != null) console.log('[BLE] raw parts string   :', rawParts);
+    // Bail quietly if firmware hasn’t rebuilt JSON yet
+    if (!rawSettings || !rawSettings.trim() || rawSettings.trim() === '{}') return false;
+    if (!rawStats    || !rawStats.trim()    || rawStats.trim()    === '{}') return false;
 
-    // Guard: empty/partial payloads (don’t throw, just skip this refresh)
-    if (!rawSettings || !rawSettings.trim() || rawSettings.trim() === '{}') {
-      console.warn('empty settings JSON; retrying…');
-      statusLine.textContent = 'Read failed: empty settings JSON';
-      return;
-    }
-    if (!rawStats || !rawStats.trim() || rawStats.trim() === '{}') {
-      console.warn('empty stats JSON; retrying…');
-      statusLine.textContent = 'Read failed: empty stats JSON';
-      return;
-    }
-
-    // Parse with error context
+    // Parse with guardrails
     let jsSettings, jsStats, jsParts = null;
-    try {
-      jsSettings = JSON.parse(rawSettings);
-      console.log('[BLE] parsed settings:', jsSettings);
-    } catch (e) {
-      console.error('Failed to parse settings JSON:', e, '\nRAW:', rawSettings);
-      statusLine.textContent = 'Read failed: bad settings JSON';
-      return;
-    }
-    try {
-      jsStats = JSON.parse(rawStats);
-      console.log('[BLE] parsed stats:', jsStats);
-    } catch (e) {
-      console.error('Failed to parse stats JSON:', e, '\nRAW:', rawStats);
-      statusLine.textContent = 'Read failed: bad stats JSON';
-      return;
-    }
+    try { jsSettings = JSON.parse(rawSettings); } catch { return false; }
+    try { jsStats    = JSON.parse(rawStats);    } catch { return false; }
     if (rawParts != null) {
-      try {
-        jsParts = JSON.parse(rawParts);
-        console.log('[BLE] parsed parts:', jsParts);
-      } catch (e) {
-        console.warn('Parts JSON parse skipped:', e, '\nRAW:', rawParts);
-      }
+      try { jsParts = JSON.parse(rawParts); } catch { jsParts = null; }
     }
 
-    // cache for re-localization
-    lastStats = jsStats;
+    // Cache for re-localization
+    lastStats    = jsStats;
     lastSettings = jsSettings;
 
-    // ---- UI update (unchanged below) ----
+    // ---- UI updates ----
     $('kpiBeads').textContent    = (jsStats.totals?.beads ?? '—');
     $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
     $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
@@ -624,8 +643,8 @@ async function refresh(){
       (jsStats && jsStats.device) ||
       (device && device.name) ||
       '—';
-      $('valDevice').textContent = devName;
-      $('valFW').textContent     = jsSettings.fwVersion || '—';
+    $('valDevice').textContent = devName;
+    $('valFW').textContent     = jsSettings.fwVersion || '—';
 
     const lastSetEN  = jsStats.lastMystery?.set;
     const lastIndex  = jsStats.lastMystery?.index;
@@ -686,11 +705,10 @@ async function refresh(){
       partsChart.update();
     }
 
-    statusLine.textContent = L.statusUpdated;
     renderPillsFromCache();
 
-    $('swHaptic').checked = !!jsSettings.haptic;
-    $('swPreset').checked = !!(jsSettings.mystery?.preset);
+    $('swHaptic').checked   = !!jsSettings.haptic;
+    $('swPreset').checked   = !!(jsSettings.mystery?.preset);
     $('swAutosave').checked = !!(jsSettings.mystery && jsSettings.mystery.autosave);
 
     const db = Math.max(0, Math.min(100, Number(jsSettings.display?.brightness ?? 0)));
@@ -701,9 +719,14 @@ async function refresh(){
     $('slWallBright').value = wb;
     $('wallBrightVal').textContent = wb + '%';
 
+    statusLine.textContent = L.statusUpdated;
+    ok = true;
+    return true;
+
   } catch(err){
     console.error(err);
     statusLine.textContent = 'Read failed: ' + err.message;
+    return ok; // false unless we already updated successfully
   }
 }
 
@@ -713,6 +736,7 @@ async function refresh(){
       if (!chCtrl) return;
       if (!confirm(L.confirmReset)) return;
       await chCtrl.writeValue(new Uint8Array([0x01]));
+      await waitReady();
       setTimeout(refresh, 300);
       statusLine.textContent = L.statusResetReq;
     } catch(err){
@@ -1039,7 +1063,9 @@ function onSettingsNotif(ev){
     }
     const payload = packKV(OP_SET_PREF, type, key, valBytes);
     await chCtrl.writeValue(payload);
+    await waitReady();                 // <-- ADD
   }
+
   async function writeStatKey(key, type, value){
     let valBytes;
     switch (type){
@@ -1051,6 +1077,7 @@ function onSettingsNotif(ev){
     }
     const payload = packKV(OP_SET_STAT, type, key, valBytes);
     await chCtrl.writeValue(payload);
+    await waitReady();                 // <-- ADD
   }
 
   async function restoreFromJson(js, onProgress){
@@ -1150,6 +1177,7 @@ function onSettingsNotif(ev){
   begin.set(le16(totalSteps), 1);
   begin.set(le32(totalBytes), 3);
   await chCtrl.writeValue(begin);
+  try { await waitReady(); } catch { readyFlag = true; /* proceed to first KV */ }
 
   // ---- ACTUAL WRITES ----
 
@@ -1219,6 +1247,24 @@ function onSettingsNotif(ev){
 
   // ask device to refresh JSON chars
   await chCtrl.writeValue(new Uint8Array([OP_REST_DONE]));
+  await waitReady(); 
+}
+
+async function refreshUntilValid({tries=8, delay=250} = {}) {
+  for (let i=0;i<tries;i++){
+    const ok = await refresh();
+    if (ok) return true;
+    await sleep(delay * Math.pow(1.4, i));
+    if (i === 2) { try { await reacquireChars(); } catch {} }
+  }
+  return false;
+}
+
+async function subscribeDataNotifs(){
+  if (chStats)   { await chStats.startNotifications();
+    chStats.addEventListener('characteristicvaluechanged', () => refresh()); }
+  if (chParts)   { await chParts.startNotifications();
+    chParts.addEventListener('characteristicvaluechanged', () => refresh()); }
 }
 
   // UI wiring
@@ -1241,7 +1287,7 @@ function onSettingsNotif(ev){
     const onProg = (step,total)=>{ prog.value = Math.floor(step*100/total); };
     try{
       await restoreFromJson(js, onProg);
-      await refresh();
+      await refreshUntilValid({ tries: 12, delay: 250 });
       statusLine.textContent = L.restoreDone;
     } catch(err){
       console.error(err);
