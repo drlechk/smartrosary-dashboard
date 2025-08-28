@@ -42,7 +42,7 @@
           <span class="pill" id="pillFW"><span id="lblFW">FW</span>: <span id="valFW">—</span></span>
           <span class="pill" id="pillLastMystery"><span id="lblLastMystery">Last mystery</span>: <span id="valLastMystery">—</span></span>
         </div>
-        <p class="smallnote" id="bkNote"></p></br>
+        <p class="smallnote" id="bkNote"></p>
         <h3 id="lblBackupRestore">Backup & Restore</h3>
         <div class="row">
           <button id="backupBtn"  disabled>Download</button>
@@ -50,6 +50,12 @@
           <button id="restoreBtn" disabled>Restore</button>
           <button id="resetBtn" disabled>Reset Statistics</button>
           <progress id="restoreProg" max="100" value="0" hidden></progress>
+        </div>
+
+        <div class="row">
+          <button id="keysBackupBtn"  disabled>Download Keys</button>
+          <input type="file" id="keysRestoreFile" accept="application/json" style="display:none">
+          <button id="keysRestoreBtn" disabled>Restore Keys</button>
         </div>
       </div>
 
@@ -191,6 +197,9 @@
   const TOUCH_CHAR_UUID = '12345678-1234-5678-1234-56789abcdea1'; // 5-byte pointer
   const KEYS_CHAR_UUID  = '12345678-1234-5678-1234-56789abcdea2'; // 1-byte command
 
+  const AUTH_INFO_UUID = '8b40f200-78e7-4a6b-b1d3-6b5f3a10a201';
+  const AUTH_CTRL_UUID = '8b40f201-78e7-4a6b-b1d3-6b5f3a10a201';
+
   const STATUS_UUID = '12345678-1234-5678-1234-56789abcdef2'; 
 
   // Control opcodes
@@ -225,6 +234,8 @@
   setRemoteMuted(true);
 
   let device, server, service, chStats, chSettings, chCtrl, chParts;
+  let chAuthInfo = null, chAuthCtrl = null;
+  let consentOk = false;
 
   let statusChar = null;
   let readyFlag = true; // gate writes; true = allowed to write next
@@ -322,64 +333,105 @@ function localizeLastSetName(enName, langCode = lang) {
     }
   
   function applyI18n() {
-    const L = i18n[lang];
-    $('titleTxt').textContent   = L.title;
-    $('connectBtn').textContent = L.connect;
-    $('refreshBtn').textContent = L.refresh;
-    $('resetBtn').textContent   = L.reset;
-    $('disconnectBtn').textContent = L.disconnect;
-    $('backupBtn').textContent  = L.backup;
-    $('restoreBtn').textContent = L.restore;
-    statusLine.textContent = L.statusNot;
+  const L = i18n[lang];
+  $('titleTxt').textContent   = L.title;
+  $('connectBtn').textContent = L.connect;
+  $('refreshBtn').textContent = L.refresh;
+  $('resetBtn').textContent   = L.reset;
+  $('disconnectBtn').textContent = L.disconnect;
+  $('backupBtn').textContent  = L.backup;
+  $('restoreBtn').textContent = L.restore;
+  statusLine.textContent = L.statusNot;
 
-    $('overviewTitle').textContent = L.overview;
-    $('lblBeads').textContent   = L.beads;
-    $('lblDecades').textContent = L.decades;
-    $('lblRosaries').textContent= L.rosaries;
-    $('lblChaplets').textContent= L.chaplets;
+  $('overviewTitle').textContent = L.overview;
+  $('lblBeads').textContent   = L.beads;
+  $('lblDecades').textContent = L.decades;
+  $('lblRosaries').textContent= L.rosaries;
+  $('lblChaplets').textContent= L.chaplets;
 
-    $('avgTitle').textContent = L.averages;
-    $('lblAvgBead').textContent    = L.avgBead;
-    $('lblAvgDecade').textContent  = L.avgDecade;
-    $('lblAvgRosary').textContent  = L.avgRosary;
-    $('lblAvgChaplet').textContent = L.avgChaplet;
-    $('avgNote').textContent       = L.avgNote;
+  $('avgTitle').textContent = L.averages;
+  $('lblAvgBead').textContent    = L.avgBead;
+  $('lblAvgDecade').textContent  = L.avgDecade;
+  $('lblAvgRosary').textContent  = L.avgRosary;
+  $('lblAvgChaplet').textContent = L.avgChaplet;
+  $('avgNote').textContent       = L.avgNote;
 
-    $('barTitle').textContent   = L.barTitle;
-    $('donutTitle').textContent = L.donutTitle;
-    $('partsTitle').textContent = L.partsTitle;
-    $('bkNote').textContent     = L.bkTip;
+  $('barTitle').textContent   = L.barTitle;
+  $('donutTitle').textContent = L.donutTitle;
+  $('partsTitle').textContent = L.partsTitle;
+  $('bkNote').textContent     = L.bkTip;
 
-    $('totalsTitle').textContent = L.totalsTitle;
-    $('lblTbeads').textContent   = L.totBeads;
-    $('lblTdecades').textContent = L.totDecades;
-    $('lblTrosary').textContent  = L.totRosary;
-    $('lblTchaplet').textContent = L.totChaplet;
+  $('totalsTitle').textContent = L.totalsTitle;
+  $('lblTbeads').textContent   = L.totBeads;
+  $('lblTdecades').textContent = L.totDecades;
+  $('lblTrosary').textContent  = L.totRosary;
+  $('lblTchaplet').textContent = L.totChaplet;
 
-    $('lblDevice').textContent      = L.pillDevice;
-    $('lblFW').textContent          = L.pillFW;
-    $('lblLastMystery').textContent = L.pillLastMystery;
+  $('lblDevice').textContent      = L.pillDevice;
+  $('lblFW').textContent          = L.pillFW;
+  $('lblLastMystery').textContent = L.pillLastMystery;
 
-    $('lblBackupRestore').textContent = L.backuprestore;
+  $('lblBackupRestore').textContent = L.backuprestore;
 
-    $('settingsTitle').textContent = L.settingsTitle;
-    $('lblHaptic').textContent = L.lblHaptic;
-    $('descHaptic').textContent = L.descHaptic;
-    $('lblPreset').textContent   = L.lblPreset;
-    $('descPreset').textContent  = L.descPreset;
-    $('lblAutosave').textContent = L.lblAutosave;
-    $('descAutosave').textContent= L.descAutosave
-    $('lblDispBright').textContent = L.lblDispBright;
-    $('descDispBright').textContent = L.descDispBright;
-    $('lblWallBright').textContent = L.lblWallBright;
-    $('descWallBright').textContent = L.descWallBright;
+  // --- Settings ---
+  $('settingsTitle').textContent = L.settingsTitle;
+  $('lblHaptic').textContent     = L.lblHaptic;
+  $('descHaptic').textContent    = L.descHaptic;
+  $('lblPreset').textContent     = L.lblPreset;
+  $('descPreset').textContent    = L.descPreset;
+  $('lblAutosave').textContent   = L.lblAutosave;
+  $('descAutosave').textContent  = L.descAutosave;
+  $('lblDispBright').textContent = L.lblDispBright;
+  $('descDispBright').textContent= L.descDispBright;
+  $('lblWallBright').textContent = L.lblWallBright;
+  $('descWallBright').textContent= L.descWallBright;
 
-    $('rcTitle').textContent = L.rcTitle;
-    $('rcStatus').textContent = L.rcInactive;
+  // --- Remote control ---
+  $('rcTitle').textContent  = L.rcTitle;
+  $('rcStatus').textContent = L.rcInactive;
 
-    relabelCharts();
-    renderPillsFromCache();
+  // --- Keys Backup/Restore (NEW) ---
+  $('keysBackupBtn').textContent  = L.keysBackupBtn;
+  $('keysRestoreBtn').textContent = L.keysRestoreBtn;
+
+  relabelCharts();
+  renderPillsFromCache();
+}
+
+// before: async function requestKeysConsent(){
+async function requestKeysConsent(mode = 'export'){  // 'export' | 'restore'
+  const ctrl = chCtrl;
+  const stat = statusChar;
+  if (!ctrl || !stat) throw new Error('Control/Status characteristics missing');
+
+  const res = await new Promise(async (resolve) => {
+    const onStatus = (ev) => {
+      const v = new Uint8Array(ev.target.value.buffer)[0];
+      if (v === 0xB1 || v === 0x01) { stat.removeEventListener('characteristicvaluechanged', onStatus); resolve(true); }
+      if (v === 0xB0) { stat.removeEventListener('characteristicvaluechanged', onStatus); resolve(false); }
+    };
+    stat.addEventListener('characteristicvaluechanged', onStatus);
+
+    // KEYS_HELLO (0x64) + mode byte: 0x01 export, 0x02 restore
+    const modeByte = (mode === 'restore') ? 0x02 : 0x01;
+    await ctrl.writeValue(Uint8Array.from([0x64, modeByte]));
+    setTimeout(()=>{ resolve(false); }, 25000);
+  });
+  if (!res) throw new Error('On-device key consent denied or timed out.');
+}
+
+  function authSetFrame(key, strVal) {
+    const k = new TextEncoder().encode(key);
+    const v = new TextEncoder().encode(String(strVal));
+    const out = new Uint8Array(3 + k.length + v.length);
+    out[0] = 0x61;     // AUTH_SET
+    out[1] = 0x31;     // type: string
+    out[2] = k.length;
+    out.set(k, 3);
+    out.set(v, 3 + k.length);
+    return out;
   }
+
 
   function u8ToStr(v){ return new TextDecoder().decode(v); }
   function safeNum(x, d=0){ const v = Number(x); return isFinite(v) ? v : d; }
@@ -525,6 +577,7 @@ async function connectBLE(){
     statusLine.textContent = 'Connecting…';
     server  = await device.gatt.connect();
     await helloAndAwaitConsent(server);
+    consentOk = true;     
 
     // Android settle
     await sleep(300);
@@ -535,6 +588,15 @@ async function connectBLE(){
     chParts    = await withRetry(() => service.getCharacteristic(INFO_PARTS_UUID));
     chStats    = await withRetry(() => service.getCharacteristic(INFO_STATS_UUID));
     chCtrl     = await withRetry(() => service.getCharacteristic(INFO_CTRL_UUID));
+
+    try { chAuthInfo = await withRetry(() => service.getCharacteristic(AUTH_INFO_UUID)); }
+    catch (e) { chAuthInfo = null; console.warn('AUTH_INFO not found', e); }
+
+    try { chAuthCtrl = await withRetry(() => service.getCharacteristic(AUTH_CTRL_UUID)); }
+    catch (e) { chAuthCtrl = null; console.warn('AUTH_CTRL not found', e); }
+
+    $('keysBackupBtn').disabled  = !(consentOk && chAuthCtrl && chAuthInfo);
+    $('keysRestoreBtn').disabled = !(consentOk && chAuthCtrl && chAuthInfo);
 
     // NOW wire STATUS pacing
     statusChar = await withRetry(() => service.getCharacteristic(STATUS_UUID));
@@ -570,6 +632,8 @@ async function connectBLE(){
     $('disconnectBtn').disabled = true;
     $('slDispBright').disabled = false;
     $('slWallBright').disabled = false; 
+    $('keysBackupBtn').disabled  = false;
+    $('keysRestoreBtn').disabled = false;
 
     statusLine.textContent = L.statusConnected;
 
@@ -578,7 +642,6 @@ async function connectBLE(){
     
     // 🔔 start live updates from ESP32
     await subscribeSettingsNotifs();
-    subscribeSettingsNotifs();
 
     $('disconnectBtn').disabled = false;
     $('swHaptic').disabled = false;
@@ -589,6 +652,89 @@ async function connectBLE(){
     console.error(err);
     statusLine.textContent = 'Error: ' + err.message;
   }
+}
+
+async function backupKeys(){
+  const L = i18n[lang];
+  try {
+    if (!chAuthInfo) throw new Error('Auth info characteristic missing');
+
+    await requestKeysConsent('export');
+
+    statusLine.textContent = L.backupKeysStart || 'Preparing key export…';
+
+    const v  = await robustRead(chAuthInfo);
+    const js = JSON.parse(new TextDecoder().decode(v));
+
+    if (!js?.id || !js?.pubKey || !js?.privKey)
+      throw new Error('Device did not return full keys.');
+
+    const blob = new Blob([JSON.stringify({ id: js.id, pubKey: js.pubKey, privKey: js.privKey }, null, 2)],
+                          { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = (js.id || 'rosary') + '_keys.json';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    statusLine.textContent = L.backupKeysDone || 'Keys downloaded.';
+  } catch (e) {
+    console.error(e);
+    statusLine.textContent = 'Keys backup failed: ' + e.message;
+  }
+}
+$('keysBackupBtn').addEventListener('click', backupKeys);
+
+$('keysRestoreBtn').addEventListener('click', () => {
+  $('keysRestoreFile').click();
+});
+
+
+$('keysRestoreFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+
+  try {
+    // Read + validate first (so we don’t bother the user on device if file is bad)
+    const js = JSON.parse(await f.text());
+    const id  = js.id, pub = js.pubKey, priv = js.privKey;
+    if (!id || !pub || !priv) throw new Error('File must contain {id, pubKey, privKey}');
+
+    // Now request on-device consent (modal on ESP32)
+    await requestKeysConsent('restore');
+
+    statusLine.textContent = (i18n[lang].restoreKeysStart || 'Restoring keys…');
+
+    // AUTH writes (paced)
+await chAuthCtrl.writeValue(Uint8Array.from([0x60]));        // AUTH_BEGIN
+await waitReady();
+await chAuthCtrl.writeValue(authSetFrame('id', id));         await waitReady();
+await chAuthCtrl.writeValue(authSetFrame('pubKey', pub));    await waitReady();
+await chAuthCtrl.writeValue(authSetFrame('privKey', priv));  await waitReady();
+await chAuthCtrl.writeValue(Uint8Array.from([0x62]));        // AUTH_COMMIT
+await waitReady();
+
+    statusLine.textContent = (i18n[lang].restoreKeysDone || 'Keys restored.');
+  } catch (err) {
+    console.error(err);
+    statusLine.textContent = 'Keys restore cancelled: ' + err.message;
+  } finally {
+    e.target.value = ''; // reset file input
+  }
+});
+
+function packAuthSetStr(key, value){
+  const enc = new TextEncoder();
+  const k = enc.encode(key);
+  const v = enc.encode(String(value));
+  const out = new Uint8Array(1 + 1 + 1 + k.length + v.length);
+  out[0]=0x61; // AUTH_SET
+  out[1]=0x31; // type = string
+  out[2]=k.length;
+  out.set(k, 3);
+  out.set(v, 3 + k.length);
+  return out;
 }
 
 async function refresh(){
@@ -762,6 +908,7 @@ async function refresh(){
     setDpadEnabled(false);
     setRemoteMuted(true);
     rcStatus.textContent = i18n[lang].rcInactive;
+    consentOk = false; 
   }
 
   async function disconnectBLE(){
@@ -781,6 +928,8 @@ async function reacquireChars() {
   catch { chParts = null; }
   chStats    = await withRetry(() => service.getCharacteristic(INFO_STATS_UUID));
   chCtrl     = await withRetry(() => service.getCharacteristic(INFO_CTRL_UUID));
+  chAuthInfo = await withRetry(() => service.getCharacteristic(AUTH_INFO_UUID)).catch(()=>null);
+  chAuthCtrl = await withRetry(() => service.getCharacteristic(AUTH_CTRL_UUID)).catch(()=>null);
 }
 
 async function robustRead(ch) {
@@ -858,7 +1007,6 @@ async function doBackup(){
       const avg = Number(d.avgChapletMs || 0);
       chapCnt = avg > 0 ? Math.floor(chapSum / avg) : 0;
     }
-
 
     jsStats.durations = {
       ...d,
@@ -1108,6 +1256,7 @@ function onSettingsNotif(ev){
   let totalBytes = 0;
   const sumKV = (key, type, value) => { totalBytes += key.length + encSize(type, value); };
 
+
   // prefs booleans
   sumKV("haptic-en",     0x01, !!prefs.haptic);
   sumKV("m-preset-en",   0x01, !!(prefs.mystery?.preset));
@@ -1268,7 +1417,7 @@ async function subscribeDataNotifs(){
 }
 
   // UI wiring
-  $('connectBtn').addEventListener('click', connectBLE);
+  $('connectBtn').addEventListener('click', connectBLE); 
   $('refreshBtn').addEventListener('click', refresh);
   $('resetBtn').addEventListener('click', resetStats);
   $('disconnectBtn').addEventListener('click', disconnectBLE);
