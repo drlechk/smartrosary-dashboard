@@ -60,6 +60,47 @@ export const i18n = {
     restoreKeysDone: "Keys restored.",
     keysBackupBtn:  "Download Keys",
     keysRestoreBtn: "Restore Keys",
+    wp: {
+          title: "Wallpaper",
+          select: "Select file…",
+          upload: "Upload",
+          saveBin: "Save .bin",
+          savePng: "Save .png",
+
+          // Table headers
+          thFile: "File",
+          thSize: "Size",
+          thActions: "Actions",
+
+          // Table action tooltips / labels
+          actDownload: "Download (preview here)",
+          actShow: "Show on device",
+          actDelete: "Delete",
+          actRename: "Rename",
+
+          // Prompts / confirms
+          confirmDelete: (name) => `Delete ${name}?`,
+          promptRename:  (name) => `New name (with extension):`,
+
+          // Progress + statuses
+          uploading: "Uploading…",
+          receiving: "Receiving…",
+          kib: (doneKiB, totalKiB) => `${doneKiB.toFixed(1)} KiB / ${totalKiB.toFixed(1)} KiB`,
+
+          // Errors / info
+          unsupportedFile:   "Unsupported file. Use PNG/JPEG/WebP or RGB565 .bin/.raw.",
+          unsupportedPreset: "Unsupported preset. Use PNG/JPEG/WebP or RGB565 .bin/.raw.",
+          presetLoadFailed:  "Failed to load preset. See console for details.",
+          connectFirst:      "Connect and allow on device first.",
+
+          // Capacity
+          fullBanner: "🚫 Storage full (6/6) — delete one on the device first.",
+          fullShort:  "Storage full (6/6). Delete one first.",
+
+          // Presets UI
+          presetPlaceholder: "— Preset —",
+          presetTitle:       "Choose a preset",
+        },
   },
   pl: {
     title: "SmartRosary — Panel",
@@ -122,6 +163,47 @@ export const i18n = {
     restoreKeysDone: "Klucze przywrócone.",
     keysBackupBtn:  "Pobierz klucze",
     keysRestoreBtn: "Przywróć klucze",
+    wp: {
+          title: "Tapeta",
+          select: "Wybierz plik…",
+          upload: "Wyślij",
+          saveBin: "Zapisz .bin",
+          savePng: "Zapisz .png",
+
+          // Nagłówki tabeli
+          thFile: "Plik",
+          thSize: "Rozmiar",
+          thActions: "Akcje",
+
+          // Etykiety / podpowiedzi
+          actDownload: "Pobierz (podgląd tutaj)",
+          actShow: "Pokaż na urządzeniu",
+          actDelete: "Usuń",
+          actRename: "Zmień nazwę",
+
+          // Dialogi
+          confirmDelete: (name) => `Usunąć ${name}?`,
+          promptRename:  (name) => `Nowa nazwa (z rozszerzeniem):`,
+
+          // Postęp
+          uploading: "Wysyłanie…",
+          receiving: "Odbieranie…",
+          kib: (doneKiB, totalKiB) => `${doneKiB.toFixed(1)} KiB / ${totalKiB.toFixed(1)} KiB`,
+
+          // Błędy / info
+          unsupportedFile:   "Nieobsługiwany plik. Użyj PNG/JPEG/WebP lub RGB565 .bin/.raw.",
+          unsupportedPreset: "Nieobsługiwany preset. Użyj PNG/JPEG/WebP lub RGB565 .bin/.raw.",
+          presetLoadFailed:  "Nie udało się wczytać presetu. Szczegóły w konsoli.",
+          connectFirst:      "Najpierw połącz i zezwól na urządzeniu.",
+
+          // Pojemność
+          fullBanner: "🚫 Pamięć pełna (6/6) — usuń obraz na urządzeniu.",
+          fullShort:  "Pamięć pełna (6/6). Najpierw usuń jeden.",
+
+          // Presety
+          presetPlaceholder: "— Preset —",
+          presetTitle:       "Wybierz preset",
+        },
   },
   de: {
     title: "SmartRosary — Dashboard",
@@ -183,5 +265,46 @@ export const i18n = {
     restoreKeysDone: "Schlüssel wiederhergestellt.",
     keysBackupBtn:  "Schlüssel herunterladen",
     keysRestoreBtn: "Schlüssel wiederherstellen",
+    wp: {
+      title: "Hintergrundbild",
+      select: "Datei wählen…",
+      upload: "Hochladen",
+      saveBin: "Als .bin speichern",
+      savePng: "Als .png speichern",
+
+      // Tabellenspalten
+      thFile: "Datei",
+      thSize: "Größe",
+      thActions: "Aktionen",
+
+      // Aktionslabels
+      actDownload: "Herunterladen (Vorschau hier)",
+      actShow: "Auf Gerät anzeigen",
+      actDelete: "Löschen",
+      actRename: "Umbenennen",
+
+      // Dialoge
+      confirmDelete: (name) => `„${name}“ löschen?`,
+      promptRename:  (name) => `Neuer Name (mit Erweiterung):`,
+
+      // Fortschritt
+      uploading: "Wird hochgeladen…",
+      receiving: "Empfange…",
+      kib: (doneKiB, totalKiB) => `${doneKiB.toFixed(1)} KiB / ${totalKiB.toFixed(1)} KiB`,
+
+      // Fehler / Hinweise
+      unsupportedFile:   "Nicht unterstützte Datei. PNG/JPEG/WebP oder RGB565 .bin/.raw verwenden.",
+      unsupportedPreset: "Nicht unterstütztes Preset. PNG/JPEG/WebP oder RGB565 .bin/.raw verwenden.",
+      presetLoadFailed:  "Preset konnte nicht geladen werden. Details in der Konsole.",
+      connectFirst:      "Bitte zuerst verbinden und auf dem Gerät erlauben.",
+
+      // Kapazität
+      fullBanner: "🚫 Speicher voll (6/6) — bitte erst ein Bild auf dem Gerät löschen.",
+      fullShort:  "Speicher voll (6/6). Bitte zuerst löschen.",
+
+      // Presets
+      presetPlaceholder: "— Preset —",
+      presetTitle:       "Preset wählen",
+    }
   }
 };
