@@ -237,5 +237,16 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Your modules -->
   <script type="module" src="./js/main.js"></script>
+  <script src="https://lib.arvancloud.ir/nosleep/0.9.0/NoSleep.min.js"></script>
+  <script>
+        // Wake lock
+      let wakeLock = null;
+      async function enableWakeLock() {
+        try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }
+        catch (err) { console.warn('WakeLock error:', err); }
+      }
+      const noSleep = new NoSleep();
+      function preventStandby(){ enableWakeLock(); try{ noSleep.enable(); }catch{} }
+  </script>
 </body>
 </html>
