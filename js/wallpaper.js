@@ -72,6 +72,16 @@ const TAG_DATA = 0x90;   // ... 0x91 (read/write data)
 const MAX_IMAGES = 6;
 const TARGET_W = 240, TARGET_H = 240;
 
+// Adaptive upload/read controls
+const CHUNK_MAX = 200;         // your previous cap
+const CHUNK_MIN = 40;          // conservative floor
+const CHUNK_STEP_UP = 16;      // how we ramp back up
+const CREDIT_STALL_MS = 2000;  // backoff if no credits for this long
+const PROGRESS_HARD_TIMEOUT_MS = 30000; // abort if no progress this long
+
+let lastCreditTs = 0;
+let lastProgressTs = 0;
+
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
 const ui = {
@@ -536,6 +546,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset=4) {
   busy.uploading = true;
 
   try {
+    if (typeof preventStandby === 'function') preventStandby();
     // WRITE_BEGIN
     const enc = new TextEncoder();
     const nm = enc.encode(filename);
@@ -550,9 +561,12 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset=4) {
 
     // chunk sizing
     const mtu = 517;
-    let payload = (mtu >= 23) ? (mtu - 3) : 20;
-    let chunk = payload - 1 - 4;
-    if (chunk > 200) chunk = 200;
+   let payload = (mtu >= 23) ? (mtu - 3) : 20;
+   let chunk = payload - 1 - 4;
+   let dynChunk = Math.min(CHUNK_MAX, Math.max(CHUNK_MIN, chunk));
+   // Prime watchdogs
+   lastCreditTs = performance.now();
+   lastProgressTs = performance.now();
 
     // progress UI (show only now)
     _showProgress(sz, WP().uploading || 'Uploading…');
@@ -578,7 +592,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset=4) {
 
     // loop chunks
     for (let off=0; off<sz; ) {
-      const n = Math.min(chunk, sz-off);
+      const n = Math.min(dynChunk, sz - off);
       const slice = bytes.subarray(off, off+n);
       const c = _crc32(slice);
       const pkt = new Uint8Array(1 + n + 4);
@@ -588,11 +602,36 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset=4) {
       pkt[3+n] = (c>>16)   &0xFF;
       pkt[4+n] = (c>>24)   &0xFF;
 
-      while (fsCredits <= 0) await _sleep(1);
+     while (fsCredits <= 0) {
+       const now = performance.now();
+       // Backoff chunk size if credits stalled
+       if (now - lastCreditTs > CREDIT_STALL_MS) {
+         dynChunk = Math.max(CHUNK_MIN, Math.floor(dynChunk / 2));
+         // move the “lastCreditTs” forward so we don't hammer backoff
+         lastCreditTs = now;
+       }
+       // Hard timeout: no progress for too long
+       if (now - lastProgressTs > PROGRESS_HARD_TIMEOUT_MS) {
+         throw new Error('Upload timed out: no progress from device');
+       }
+       await _sleep(10);
+     }
       fsCredits--;
-      await fsCtrl.writeValue(pkt);
+     // Write with retry in case the stack glitches
+     let wrote = false, tries = 0;
+     while (!wrote && tries < 3) {
+       try {
+         await fsCtrl.writeValue(pkt);
+         wrote = true;
+       } catch (err) {
+         tries++;
+         await _sleep(20);
+         if (tries >= 3) throw err;
+       }
+     }
       off += n;
       sent = off;
+      lastProgressTs = performance.now();
 
       if (ui.prog) ui.prog.value = off;
       if (ui.progText) {
@@ -603,6 +642,10 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset=4) {
       const pct = (sent * 100) / sz;
       rowsRevealed = redrawBase();
       _drawBadge(rowsRevealed, pct, redrawBase);
+     // Gentle ramp-up if things are flowing
+     if (performance.now() - lastCreditTs < 300) {
+       dynChunk = Math.min(CHUNK_MAX, dynChunk + CHUNK_STEP_UP);
+     }
     }
 
     // finish visuals
@@ -616,19 +659,25 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset=4) {
     await _listAfter(300);
   } finally {
     busy.uploading = false;
+    if (typeof releaseWakeLock === 'function') releaseWakeLock();
   }
 }
 
 // ---------- FS notifications ----------
 function _onFsStat(e){
   const dv = e.target.value;
-  const code = dv.getUint8(0);
-  if (code === 0x01) {
-    fsCredits++;
-  } else if (code === 0x00) {
-    // Only hide when we're not in the middle of an upload/read
-    if (!busy.uploading && !busy.reading) _hideProgress();
-  }
+ // Device may pack multiple bytes; count all 0x01 credits.
+ let added = 0;
+ for (let i = 0; i < dv.byteLength; i++) {
+   const code = dv.getUint8(i);
+   if (code === 0x01) {
+     fsCredits++;
+     added++;
+   } else if (code === 0x00) {
+     if (!busy.uploading && !busy.reading) _hideProgress();
+   }
+ }
+ if (added) lastCreditTs = performance.now();
 }
 let listChunks = [];
 function _onFsInfo(e){
