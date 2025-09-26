@@ -542,121 +542,155 @@ async function _uploadFromCanvas(nameHint) {
   const bytes = _canvasToLVGL();
   await _uploadBytes(bytes, _clip16Bin(_cleanName(nameHint||'image.bin')), workCanvas.width, workCanvas.height, 4);
 }
-async function _uploadBytes(bytes, filename, w, h, pixelOffset=4) {
+async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
   busy.uploading = true;
 
   try {
     if (typeof preventStandby === 'function') preventStandby();
-    // WRITE_BEGIN
+
+    // --- WRITE_BEGIN header ---
     const enc = new TextEncoder();
-    const nm = enc.encode(filename);
-    const hdr = new Uint8Array(1+1+2+2+4+nm.length);
-    hdr[0]=0x20; hdr[1]=nm.length;
-    hdr[2]= w & 0xFF; hdr[3]=w>>8;
-    hdr[4]= h & 0xFF; hdr[5]=h>>8;
-    const sz = bytes.length>>>0;
-    hdr[6]= sz &0xFF; hdr[7]=(sz>>8)&0xFF; hdr[8]=(sz>>16)&0xFF; hdr[9]=(sz>>24)&0xFF;
+    const nm  = enc.encode(filename);
+    const sz  = bytes.length >>> 0;
+
+    const hdr = new Uint8Array(1 + 1 + 2 + 2 + 4 + nm.length);
+    hdr[0] = 0x20;              // WRITE_BEGIN
+    hdr[1] = nm.length;
+    hdr[2] =  w & 0xFF;
+    hdr[3] = (w >> 8) & 0xFF;
+    hdr[4] =  h & 0xFF;
+    hdr[5] = (h >> 8) & 0xFF;
+    hdr[6] =  sz        & 0xFF;
+    hdr[7] = (sz >>  8) & 0xFF;
+    hdr[8] = (sz >> 16) & 0xFF;
+    hdr[9] = (sz >> 24) & 0xFF;
     hdr.set(nm, 10);
+
     await fsCtrl.writeValue(hdr);
 
-    // chunk sizing
-    const mtu = 517;
-   let payload = (mtu >= 23) ? (mtu - 3) : 20;
-   let chunk = payload - 1 - 4;
-   let dynChunk = Math.min(CHUNK_MAX, Math.max(CHUNK_MIN, chunk));
-   // Prime watchdogs
-   lastCreditTs = performance.now();
-   lastProgressTs = performance.now();
+    // --- Fresh credit state every upload ---
+    fsCredits = 0;
+    lastCreditTs   = performance.now();
+    lastProgressTs = performance.now();
 
-    // progress UI (show only now)
+    // --- Wait explicitly for the first credit (fixes "stuck at ~0.5 KiB") ---
+    while (fsCredits <= 0) {
+      const now = performance.now();
+      if (now - lastCreditTs > CREDIT_STALL_MS) {
+        // just nudge the timestamp; device will emit 0x01 when ready
+        lastCreditTs = now;
+      }
+      if (now - lastProgressTs > PROGRESS_HARD_TIMEOUT_MS) {
+        throw new Error('Upload timed out waiting for initial credit');
+      }
+      await _sleep(10);
+    }
+
+    // --- Chunk sizing (BLE 517 MTU typical, but cap to CHUNK_MAX) ---
+    const mtu = 517;
+    let payload  = (mtu >= 23) ? (mtu - 3) : 20;  // ATT header
+    let baseChunk = payload - 1 /*tag*/ - 4 /*CRC*/;
+    let dynChunk  = Math.min(CHUNK_MAX, Math.max(CHUNK_MIN, baseChunk));
+
+    // --- Progress UI / overlay ---
     _showProgress(sz, WP().uploading || 'Uploading…');
 
-    // set up overlay (shade unrevealed rows & center badge)
-    const rowBytes = w*2;
-    let sent = 0;
+    const rowBytes = w * 2;
+    let   sent     = 0;
+
     const redrawBase = () => {
       const avail = Math.max(0, sent - pixelOffset);
-      const rows = Math.min(h, Math.floor(avail / rowBytes));
+      const rows  = Math.min(h, Math.floor(avail / rowBytes));
       _blit();
       viewCtx.save();
-      viewCtx.fillStyle = "rgba(0,0,0,0.35)";
+      viewCtx.fillStyle = 'rgba(0,0,0,0.35)';
       const yv = _workYtoViewY(rows);
       viewCtx.fillRect(0, yv, ui.canvas.clientWidth, ui.canvas.clientHeight - yv);
       viewCtx.restore();
       return rows;
     };
 
-    // draw 0%
+    // 0% badge
     let rowsRevealed = redrawBase();
     _drawBadge(rowsRevealed, 0, redrawBase);
 
-    // loop chunks
-    for (let off=0; off<sz; ) {
-      const n = Math.min(dynChunk, sz - off);
-      const slice = bytes.subarray(off, off+n);
-      const c = _crc32(slice);
-      const pkt = new Uint8Array(1 + n + 4);
-      pkt[0]=0x21; pkt.set(slice,1);
-      pkt[1+n] =  c        &0xFF;
-      pkt[2+n] = (c>>8)    &0xFF;
-      pkt[3+n] = (c>>16)   &0xFF;
-      pkt[4+n] = (c>>24)   &0xFF;
-
-     while (fsCredits <= 0) {
-       const now = performance.now();
-       // Backoff chunk size if credits stalled
-       if (now - lastCreditTs > CREDIT_STALL_MS) {
-         dynChunk = Math.max(CHUNK_MIN, Math.floor(dynChunk / 2));
-         // move the “lastCreditTs” forward so we don't hammer backoff
-         lastCreditTs = now;
-       }
-       // Hard timeout: no progress for too long
-       if (now - lastProgressTs > PROGRESS_HARD_TIMEOUT_MS) {
-         throw new Error('Upload timed out: no progress from device');
-       }
-       await _sleep(10);
-     }
+    // --- Send chunks ---
+    for (let off = 0; off < sz; ) {
+      // credit gate
+      while (fsCredits <= 0) {
+        const now = performance.now();
+        if (now - lastCreditTs > CREDIT_STALL_MS) {
+          dynChunk = Math.max(CHUNK_MIN, (dynChunk / 2) | 0); // backoff
+          lastCreditTs = now;
+        }
+        if (now - lastProgressTs > PROGRESS_HARD_TIMEOUT_MS) {
+          throw new Error('Upload timed out: no progress from device');
+        }
+        await _sleep(10);
+      }
       fsCredits--;
-     // Write with retry in case the stack glitches
-     let wrote = false, tries = 0;
-     while (!wrote && tries < 3) {
-       try {
-         await fsCtrl.writeValue(pkt);
-         wrote = true;
-       } catch (err) {
-         tries++;
-         await _sleep(20);
-         if (tries >= 3) throw err;
-       }
-     }
-      off += n;
-      sent = off;
+
+      const n     = Math.min(dynChunk, sz - off);
+      const slice = bytes.subarray(off, off + n);
+      const c     = _crc32(slice);
+
+      const pkt = new Uint8Array(1 + n + 4);
+      pkt[0] = 0x21;            // WRITE_DATA
+      pkt.set(slice, 1);
+      pkt[1 + n] =  c        & 0xFF;
+      pkt[2 + n] = (c >>  8) & 0xFF;
+      pkt[3 + n] = (c >> 16) & 0xFF;
+      pkt[4 + n] = (c >> 24) & 0xFF;
+
+      // write with small retry
+      let wrote = false, tries = 0;
+      while (!wrote && tries < 3) {
+        try {
+          await fsCtrl.writeValue(pkt);
+          wrote = true;
+        } catch (err) {
+          tries++;
+          await _sleep(20);
+          if (tries >= 3) throw err;
+        }
+      }
+
+      off  += n;
+      sent  = off;
       lastProgressTs = performance.now();
 
       if (ui.prog) ui.prog.value = off;
       if (ui.progText) {
-        const doneKiB = off/1024, totalKiB = sz/1024;
-        ui.progText.textContent = (WP().kib ? WP().kib(doneKiB, totalKiB) : `${doneKiB.toFixed(1)} KiB / ${totalKiB.toFixed(1)} KiB`);
+        const doneKiB  = off / 1024;
+        const totalKiB = sz  / 1024;
+        ui.progText.textContent =
+          (WP().kib ? WP().kib(doneKiB, totalKiB)
+                    : `${doneKiB.toFixed(1)} KiB / ${totalKiB.toFixed(1)} KiB`);
       }
 
       const pct = (sent * 100) / sz;
       rowsRevealed = redrawBase();
       _drawBadge(rowsRevealed, pct, redrawBase);
-     // Gentle ramp-up if things are flowing
-     if (performance.now() - lastCreditTs < 300) {
-       dynChunk = Math.min(CHUNK_MAX, dynChunk + CHUNK_STEP_UP);
-     }
+
+      // gentle ramp-up if credits flowing quickly
+      if (performance.now() - lastCreditTs < 300) {
+        dynChunk = Math.min(CHUNK_MAX, dynChunk + CHUNK_STEP_UP);
+      }
     }
+
+    // try a CLOSE/flush (0x22); ignore errors
+    try { await fsCtrl.writeValue(new Uint8Array([0x22])); } catch {}
 
     // finish visuals
     _blit();
     _fadeBadge(h, _blit);
     _hideProgress();
 
-    // show on device, then refresh
+    // show on device and refresh list
     await _sleep(120);
     await _show(filename);
     await _listAfter(300);
+
   } finally {
     busy.uploading = false;
     if (typeof releaseWakeLock === 'function') releaseWakeLock();
