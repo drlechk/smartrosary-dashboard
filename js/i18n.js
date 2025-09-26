@@ -100,6 +100,9 @@ export const i18n = {
           // Presets UI
           presetPlaceholder: "— Preset —",
           presetTitle:       "Choose a preset",
+          
+          cannotDeleteLast: "Cannot delete the last remaining image.",
+          mustKeepOne: "At least one image must remain on the device.",
         },
   },
   pl: {
@@ -203,6 +206,9 @@ export const i18n = {
           // Presety
           presetPlaceholder: "— Preset —",
           presetTitle:       "Wybierz preset",
+
+          cannotDeleteLast: "Nie można usunąć ostatniego pozostałego obrazu.",
+          mustKeepOne: "Na urządzeniu musi pozostać co najmniej jeden obraz."
         },
   },
   de: {
@@ -305,6 +311,9 @@ export const i18n = {
       // Presets
       presetPlaceholder: "— Preset —",
       presetTitle:       "Preset wählen",
+
+      cannotDeleteLast: "Das letzte verbleibende Bild kann nicht gelöscht werden.",
+      mustKeepOne: "Mindestens ein Bild muss auf dem Gerät verbleiben."
     }
   }
 };

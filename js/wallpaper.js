@@ -144,6 +144,11 @@ let readState = null;
 const busy = { uploading:false, reading:false };
 
 // ---------- Utils ----------
+
+function _canDelete() {
+  return Array.isArray(files) && files.length > 1;
+}
+
 const _norm = (s) => (s && s.startsWith('/') ? s : '/' + s);
 const _toKiB = (n) => (n/1024).toFixed(1)+' KiB';
 const _sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
@@ -853,11 +858,24 @@ function _findNextNameFromList(list, current) {
 }
 
 async function _deleteWithSwitch(name){
+  // hard guard in case of races
+  if (!_canDelete()) {
+    alert(WP().mustKeepOne || 'At least one image must remain on the device.');
+    return;
+  }
+
   const deleting   = _norm(name);
   const wasCurrent = _norm(lastShownName) === deleting;
 
   // compute candidate from current in-memory list first
   const localAfter = (files || []).filter(f => _norm(f.name) !== deleting);
+
+  // If deleting would leave 0, block (extra safety)
+  if (localAfter.length === 0) {
+    alert(WP().mustKeepOne || 'At least one image must remain on the device.');
+    return;
+  }
+
   const candidateNext = _findNextNameFromList(localAfter, deleting);
 
   if (wasCurrent) { _clearPreview(); _resetUrls(); }
@@ -919,11 +937,21 @@ async function _renderList(j) {
 
     const bDown = _mkIconBtn('download', (WP().actDownload || 'Download (preview here)'), async () => { await _read(f.name); });
     const bShow = _mkIconBtn('slideshow', (WP().actShow || 'Show on device'), async () => { await _show(f.name); });
-    const bDel  = _mkIconBtn('delete',   (WP().actDelete || 'Delete'), async () => {
+    const bDel  = _mkIconBtn('delete', (WP().actDelete || 'Delete'), async () => {
+      // click-time guard (UI might be stale)
+      if (!_canDelete()) {
+        alert(WP().mustKeepOne || 'At least one image must remain on the device.');
+        return;
+      }
       const msg = (WP().confirmDelete ? WP().confirmDelete(dispName) : ('Delete ' + dispName + '?'));
       if (!confirm(msg)) return;
       await _deleteWithSwitch(f.name);
     });
+    // If only one image is present, disable Delete button and adjust tooltip
+    if (!_canDelete()) {
+      bDel.disabled = true;
+      bDel.title = WP().cannotDeleteLast || 'Cannot delete the last remaining image.';
+    }
     const bRen  = _mkIconBtn('edit',     (WP().actRename || 'Rename'), async () => {
       const promptMsg = (WP().promptRename ? WP().promptRename(dispName) : 'New name (with extension):');
       let nn = prompt(promptMsg, dispName);
