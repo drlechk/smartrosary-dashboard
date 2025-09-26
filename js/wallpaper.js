@@ -15,7 +15,7 @@ function _applyStaticTexts() {
   if (ui.uploadBtn)  ui.uploadBtn.textContent  = WP().upload || 'Upload';
   if (ui.saveBinBtn) ui.saveBinBtn.textContent = WP().saveBin || 'Save .bin';
   if (ui.savePngBtn) ui.savePngBtn.textContent = WP().savePng || 'Save .png';
-  if (ui.fullMsg)    ui.fullMsg.textContent    = WP().fullBanner || '🚫 Storage full (6/6) — delete one on the device first.';
+  if (ui.fullMsg)    ui.fullMsg.textContent    = WP().fullBanner || '🚫 Storage full (5/5) — delete one on the device first.';
 
   const thFile    = document.querySelector('#wpFilesPanel thead th.name');
   const thSize    = document.querySelector('#wpFilesPanel thead th.size');
@@ -69,7 +69,7 @@ const FS_STAT_UUID = "12345678-1234-5678-1234-56789abcf004";
 const TAG_LIST = 0xE0;   // ... 0xE1 (chunked listing)
 const TAG_DATA = 0x90;   // ... 0x91 (read/write data)
 
-const MAX_IMAGES = 6;
+const MAX_IMAGES = 5;
 const TARGET_W = 240, TARGET_H = 240;
 
 // Adaptive upload/read controls
@@ -111,7 +111,7 @@ const ui = {
   saveBinBtn: $('wpSaveBinBtn'),
   savePngBtn: $('wpSavePngBtn'),
 
-  fullMsg:       $('wpFullMsg'),       // 🚫 6/6 banner
+  fullMsg:       $('wpFullMsg'),       // 🚫 5/5 banner
   presetSelect:  $('wpPresetSelect'),  // optional dropdown
 };
 
@@ -289,7 +289,7 @@ ui.fileInput?.addEventListener('change', async (e) => {
 ui.uploadBtn?.addEventListener('click', async () => {
   if (!staged || !staged.type) { alert(WP().select || 'Select file…'); return; }
   if (!connected || !consent) { alert(WP().connectFirst || 'Connect and allow on device first.'); return; }
-  if (_isFull()) { alert(WP().fullShort || 'Storage full (6/6). Delete one first.'); return; }
+  if (_isFull()) { alert(WP().fullShort || 'Storage full (5/5). Delete one first.'); return; }
 
   if (staged.fromCanvas) {
     await _uploadFromCanvas(staged.name || 'image.bin');
@@ -1046,7 +1046,7 @@ ui.presetSelect?.addEventListener('change', async (e) => {
   }
 
   // capacity / state checks
-  if (_isFull()) { alert(WP().fullShort || 'Storage is full (6/6). Delete one first.'); e.target.value = ''; return; }
+  if (_isFull()) { alert(WP().fullShort || 'Storage is full (5/5). Delete one first.'); e.target.value = ''; return; }
   if (!connected || !consent) { alert(WP().connectFirst || 'Connect and allow on device first.'); e.target.value = ''; return; }
 
   const preset = PRESETS.find(p => p.id === id);

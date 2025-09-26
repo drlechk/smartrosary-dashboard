@@ -94,8 +94,8 @@ export const i18n = {
           connectFirst:      "Connect and allow on device first.",
 
           // Capacity
-          fullBanner: "🚫 Storage full (6/6) — delete one on the device first.",
-          fullShort:  "Storage full (6/6). Delete one first.",
+          fullBanner: "🚫 Storage full (5/5) — delete one on the device first.",
+          fullShort:  "Storage full (5/5). Delete one first.",
 
           // Presets UI
           presetPlaceholder: "— Preset —",
@@ -197,8 +197,8 @@ export const i18n = {
           connectFirst:      "Najpierw połącz i zezwól na urządzeniu.",
 
           // Pojemność
-          fullBanner: "🚫 Pamięć pełna (6/6) — usuń obraz na urządzeniu.",
-          fullShort:  "Pamięć pełna (6/6). Najpierw usuń jeden.",
+          fullBanner: "🚫 Pamięć pełna (5/5) — usuń obraz na urządzeniu.",
+          fullShort:  "Pamięć pełna (5/5). Najpierw usuń jeden.",
 
           // Presety
           presetPlaceholder: "— Preset —",
@@ -299,8 +299,8 @@ export const i18n = {
       connectFirst:      "Bitte zuerst verbinden und auf dem Gerät erlauben.",
 
       // Kapazität
-      fullBanner: "🚫 Speicher voll (6/6) — bitte erst ein Bild auf dem Gerät löschen.",
-      fullShort:  "Speicher voll (6/6). Bitte zuerst löschen.",
+      fullBanner: "🚫 Speicher voll (5/5) — bitte erst ein Bild auf dem Gerät löschen.",
+      fullShort:  "Speicher voll (5/5). Bitte zuerst löschen.",
 
       // Presets
       presetPlaceholder: "— Preset —",
