@@ -121,6 +121,8 @@ const ui = {
 let serverRef = null;
 let fsCtrl=null, fsInfo=null, fsData=null, fsStat=null;
 let fsCredits = 0;
+let fsLastError = null; // latest FS error from status stream
+let fsBindPromise = null;
 
 let consent = false;
 let connected = false;
@@ -209,7 +211,9 @@ export function setWallpaperConsent(ok) {
   consent = !!ok;
   _updateMuted();
   _uiEnable(connected && consent);
-  if (connected && consent) _list();
+  if (connected && consent) {
+    _list().catch((err) => console.warn('Wallpaper list failed', err));
+  }
 }
 
 export async function attachWallpaperFS(server) {
@@ -218,26 +222,14 @@ export async function attachWallpaperFS(server) {
   _hideProgress(); // ensure hidden on load
 
   try {
-    const fss = await server.getPrimaryService(FS_SVC_UUID);
-    fsCtrl = await fss.getCharacteristic(FS_CTRL_UUID);
-    fsInfo = await fss.getCharacteristic(FS_INFO_UUID);
-    fsData = await fss.getCharacteristic(FS_DATA_UUID);
-    fsStat = await fss.getCharacteristic(FS_STAT_UUID);
-
-    await fsInfo.startNotifications();
-    await fsData.startNotifications();
-    await fsStat.startNotifications();
-
-    fsInfo.addEventListener('characteristicvaluechanged', _onFsInfo);
-    fsData.addEventListener('characteristicvaluechanged', _onFsData);
-    fsStat.addEventListener('characteristicvaluechanged', _onFsStat);
-
-    connected = true;
+    await _rebindFsService();
     _updateMuted();
     _uiEnable(connected && consent);
 
 
-    if (connected && consent) _list();
+    if (connected && consent) {
+      _list().catch((err) => console.warn('Wallpaper list failed', err));
+    }
   } catch (e) {
     connected = false;
     _updateMuted();
@@ -249,11 +241,103 @@ export async function attachWallpaperFS(server) {
 export function resetWallpaperFS() {
   connected = false;
   fsCtrl=fsInfo=fsData=fsStat=null;
+  fsLastError = null;
+  fsBindPromise = null;
   _resetUrls();
   _clearPreview();
   _uiEnable(false);
   _updateMuted();
   _hideProgress();
+}
+
+function _isInvalidCharError(err) {
+  if (!err) return false;
+  if (err.name === 'InvalidStateError') return true;
+  const msg = String(err.message || '').toLowerCase();
+  return msg.includes('no longer valid') || msg.includes('gatt characteristic');
+}
+
+function _detachFsListeners() {
+  try { fsInfo?.removeEventListener('characteristicvaluechanged', _onFsInfo); } catch {}
+  try { fsData?.removeEventListener('characteristicvaluechanged', _onFsData); } catch {}
+  try { fsStat?.removeEventListener('characteristicvaluechanged', _onFsStat); } catch {}
+  try { fsInfo?.stopNotifications?.(); } catch {}
+  try { fsData?.stopNotifications?.(); } catch {}
+  try { fsStat?.stopNotifications?.(); } catch {}
+}
+
+async function _rebindFsService() {
+  if (!serverRef) throw new Error('Wallpaper FS server not attached');
+  if (fsBindPromise) return fsBindPromise;
+
+  fsBindPromise = (async () => {
+    _detachFsListeners();
+    fsCtrl = fsInfo = fsData = fsStat = null;
+
+    const svc = await serverRef.getPrimaryService(FS_SVC_UUID);
+    const ctrl = await svc.getCharacteristic(FS_CTRL_UUID);
+    const info = await svc.getCharacteristic(FS_INFO_UUID);
+    const data = await svc.getCharacteristic(FS_DATA_UUID);
+    const stat = await svc.getCharacteristic(FS_STAT_UUID);
+
+    await info.startNotifications();
+    await data.startNotifications();
+    await stat.startNotifications();
+
+    info.addEventListener('characteristicvaluechanged', _onFsInfo);
+    data.addEventListener('characteristicvaluechanged', _onFsData);
+    stat.addEventListener('characteristicvaluechanged', _onFsStat);
+
+    fsCtrl = ctrl;
+    fsInfo = info;
+    fsData = data;
+    fsStat = stat;
+
+    connected = true;
+    fsLastError = null;
+    fsCredits = 0;
+    lastCreditTs = performance.now();
+    lastProgressTs = performance.now();
+    _updateMuted();
+    _uiEnable(connected && consent);
+  })();
+
+  try {
+    await fsBindPromise;
+  } finally {
+    fsBindPromise = null;
+  }
+}
+
+function _isFsActive() {
+  try {
+    const dev = fsCtrl?.service?.device;
+    return !!(dev && dev.gatt && dev.gatt.connected);
+  } catch {
+    return connected;
+  }
+}
+
+async function _ensureFsService() {
+  if (!fsCtrl || !_isFsActive()) {
+    connected = false;
+    await _rebindFsService();
+  }
+}
+
+async function _writeFs(buf) {
+  await _ensureFsService();
+  try {
+    await fsCtrl.writeValue(buf);
+  } catch (err) {
+    if (_isInvalidCharError(err)) {
+      connected = false;
+      await _rebindFsService();
+      await fsCtrl.writeValue(buf);
+      return;
+    }
+    throw err;
+  }
 }
 
 // ---------- UI wiring ----------
@@ -296,15 +380,25 @@ ui.uploadBtn?.addEventListener('click', async () => {
   if (!connected || !consent) { alert(WP().connectFirst || 'Connect and allow on device first.'); return; }
   if (_isFull()) { alert(WP().fullShort || 'Storage full (5/5). Delete one first.'); return; }
 
-  if (staged.fromCanvas) {
-    await _uploadFromCanvas(staged.name || 'image.bin');
-  } else {
-    const fname = _clip16Bin(_cleanName(staged.name || 'image.bin'));
-    await _uploadBytes(staged.bytes, fname, staged.w, staged.h, staged.pixelOffset);
-  }
+  try {
+    if (staged.fromCanvas) {
+      await _uploadFromCanvas(staged.name || 'image.bin');
+    } else {
+      const fname = _clip16Bin(_cleanName(staged.name || 'image.bin'));
+      await _uploadBytes(staged.bytes, fname, staged.w, staged.h, staged.pixelOffset);
+    }
 
-  _clearStaged();
-  if (ui.uploadBtn) ui.uploadBtn.disabled = true;
+    _clearStaged();
+    if (ui.uploadBtn) ui.uploadBtn.disabled = true;
+  } catch (err) {
+    console.error('Wallpaper upload failed', err);
+    const msg = err?.message || WP().uploadFailed || 'Upload failed.';
+    const statusEl = document.getElementById('status');
+    if (statusEl) statusEl.textContent = msg;
+    if (ui.prog) ui.prog.style.display = 'none';
+    if (ui.progText) ui.progText.textContent = msg;
+    if (ui.uploadBtn) ui.uploadBtn.disabled = false;
+  }
 });
 
 // optional manual list refresh (if you keep a button)
@@ -504,7 +598,7 @@ function _canvasToLVGL(cf=4){
 async function _list() {
   if (!connected || !consent) return;
   // FS_LS_BEGIN path="/" pattern=""
-  await fsCtrl.writeValue(new Uint8Array([0x10, 0x01, 0x00, '/'.charCodeAt(0)]));
+  await _writeFs(new Uint8Array([0x10, 0x01, 0x00, '/'.charCodeAt(0)]));
   if (!busy.uploading && !busy.reading) _hideProgress();
 }
 async function _listAfter(ms=300){ await _sleep(ms); await _list(); }
@@ -515,7 +609,7 @@ async function _read(name) {
   const nm = enc.encode(name.startsWith('/')? name : '/'+name);
   const buf = new Uint8Array(2 + nm.length);
   buf[0]=0x11; buf[1]=nm.length; buf.set(nm,2);
-  await fsCtrl.writeValue(buf);
+  await _writeFs(buf);
   readState = { name, header:false, size:0, off:0, w:0, h:0, offset:4, rowsDrawn:0, bigEndian:true, buf:null };
 }
 async function _show(name) {
@@ -523,7 +617,7 @@ async function _show(name) {
   const nm = enc.encode(name.startsWith('/')? name : '/'+name);
   const buf = new Uint8Array(2 + nm.length);
   buf[0]=0x40; buf[1]=nm.length; buf.set(nm,2);
-  await fsCtrl.writeValue(buf);
+  await _writeFs(buf);
   lastShownName = _norm(name);
 }
 async function _delete(name) {
@@ -531,7 +625,7 @@ async function _delete(name) {
   const nm = enc.encode(name.startsWith('/')? name : '/'+name);
   const buf = new Uint8Array(2 + nm.length);
   buf[0]=0x30; buf[1]=nm.length; buf.set(nm,2);
-  await fsCtrl.writeValue(buf);
+  await _writeFs(buf);
 }
 async function _rename(from, to) {
   const enc = new TextEncoder();
@@ -539,7 +633,7 @@ async function _rename(from, to) {
   const b = enc.encode(to  .startsWith('/')? to   : '/'+to);
   const buf = new Uint8Array(3 + a.length + b.length);
   buf[0]=0x31; buf[1]=a.length; buf[2]=b.length; buf.set(a,3); buf.set(b,3+a.length);
-  await fsCtrl.writeValue(buf);
+  await _writeFs(buf);
 }
 
 // ---------- Uploads ----------
@@ -552,6 +646,8 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
 
   try {
     if (typeof preventStandby === 'function') preventStandby();
+
+    fsLastError = null;
 
     // --- WRITE_BEGIN header ---
     const enc = new TextEncoder();
@@ -571,15 +667,18 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
     hdr[9] = (sz >> 24) & 0xFF;
     hdr.set(nm, 10);
 
-    await fsCtrl.writeValue(hdr);
+    await _writeFs(hdr);
 
     // --- Fresh credit state every upload ---
     fsCredits = 0;
     lastCreditTs   = performance.now();
     lastProgressTs = performance.now();
 
+    _throwIfFsError();
+
     // --- Wait explicitly for the first credit (fixes "stuck at ~0.5 KiB") ---
     while (fsCredits <= 0) {
+      _throwIfFsError();
       const now = performance.now();
       if (now - lastCreditTs > CREDIT_STALL_MS) {
         // just nudge the timestamp; device will emit 0x01 when ready
@@ -589,6 +688,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
         throw new Error('Upload timed out waiting for initial credit');
       }
       await _sleep(10);
+      _throwIfFsError();
     }
 
     // --- Chunk sizing (BLE 517 MTU typical, but cap to CHUNK_MAX) ---
@@ -621,8 +721,11 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
 
     // --- Send chunks ---
     for (let off = 0; off < sz; ) {
+      _throwIfFsError();
+
       // credit gate
       while (fsCredits <= 0) {
+        _throwIfFsError();
         const now = performance.now();
         if (now - lastCreditTs > CREDIT_STALL_MS) {
           dynChunk = Math.max(CHUNK_MIN, (dynChunk / 2) | 0); // backoff
@@ -632,6 +735,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
           throw new Error('Upload timed out: no progress from device');
         }
         await _sleep(10);
+        _throwIfFsError();
       }
       fsCredits--;
 
@@ -651,7 +755,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
       let wrote = false, tries = 0;
       while (!wrote && tries < 3) {
         try {
-          await fsCtrl.writeValue(pkt);
+          await _writeFs(pkt);
           wrote = true;
         } catch (err) {
           tries++;
@@ -659,6 +763,8 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
           if (tries >= 3) throw err;
         }
       }
+
+      _throwIfFsError();
 
       off  += n;
       sent  = off;
@@ -684,7 +790,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
     }
 
     // try a CLOSE/flush (0x22); ignore errors
-    try { await fsCtrl.writeValue(new Uint8Array([0x22])); } catch {}
+    try { await _writeFs(new Uint8Array([0x22])); } catch {}
 
     // finish visuals
     _blit();
@@ -703,20 +809,71 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
 }
 
 // ---------- FS notifications ----------
+function _fsStatusMessage(code) {
+  const hex = code.toString(16).padStart(2, '0');
+  const w = WP();
+  switch (code) {
+    case 0xE9: return w.errNoFs || 'Wallpaper storage unavailable on device.';
+    case 0xF1: return w.errRead || 'Failed to open file on device.';
+    case 0xF2: return w.errCreate || 'Failed to create file on device.';
+    case 0xF3: return w.errSession || 'Upload session is not active. Try again.';
+    case 0xC3: return w.errCrc || 'Device rejected chunk (CRC mismatch).';
+    case 0xF4: return w.errWrite || 'Device write failed (check free space).';
+    case 0xF5: return w.errDelete || 'Delete failed on device.';
+    case 0xF6: return w.errRename || 'Rename failed on device.';
+    case 0xFE: return w.errUnknown ? (typeof w.errUnknown === 'function' ? w.errUnknown(`0x${hex}`) : w.errUnknown) : `Device reported error (0x${hex}).`;
+    default:
+      if (code >= 0x80) {
+        if (typeof w.errUnknown === 'function') return w.errUnknown(`0x${hex}`);
+        return w.errUnknown || `Device reported error (0x${hex}).`;
+      }
+      return '';
+  }
+}
+
+function _recordFsError(code, aux) {
+  const previous = fsLastError?.code;
+  const message = _fsStatusMessage(code) || `Device reported error (0x${code.toString(16)})`;
+  fsLastError = { code, aux, message };
+  console.warn('[WallpaperFS] status 0x' + code.toString(16) + ' aux=' + aux);
+  if (ui.prog) ui.prog.style.display = 'none';
+  if (ui.progText) ui.progText.textContent = message;
+  const statusEl = document.getElementById('status');
+  if (statusEl && message) statusEl.textContent = message;
+  if (previous !== code) console.error(message);
+}
+
+function _throwIfFsError() {
+  if (!fsLastError) return;
+  const err = fsLastError;
+  fsLastError = null;
+  throw new Error(err.message || `Device error (0x${err.code.toString(16)})`);
+}
+
 function _onFsStat(e){
   const dv = e.target.value;
- // Device may pack multiple bytes; count all 0x01 credits.
- let added = 0;
- for (let i = 0; i < dv.byteLength; i++) {
-   const code = dv.getUint8(i);
-   if (code === 0x01) {
-     fsCredits++;
-     added++;
-   } else if (code === 0x00) {
-     if (!busy.uploading && !busy.reading) _hideProgress();
-   }
- }
- if (added) lastCreditTs = performance.now();
+  let offset = 0;
+  while (offset < dv.byteLength) {
+    const remaining = dv.byteLength - offset;
+    const code = dv.getUint8(offset);
+    let aux = 0;
+    if (remaining >= 5) {
+      aux = dv.getUint32(offset + 1, true);
+      offset += 5;
+    } else {
+      offset += 1;
+    }
+
+    if (code === 0x01) {
+      fsCredits++;
+      lastCreditTs = performance.now();
+    } else if (code === 0x00) {
+      fsLastError = null;
+      if (!busy.uploading && !busy.reading) _hideProgress();
+    } else if (code !== 0xFF) {
+      _recordFsError(code, aux);
+    }
+  }
 }
 let listChunks = [];
 function _onFsInfo(e){
