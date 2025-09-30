@@ -32,62 +32,63 @@ export function setLang(v){ lang = v; applyI18n(); }
 
 export function applyI18n() {
   const L = i18n[lang] || i18n.en;
-  $('titleTxt').textContent   = L.title;
-  $('connectBtn').textContent = L.connect;
-  $('refreshBtn').textContent = L.refresh;
-  $('resetBtn').textContent   = L.reset;
-  $('disconnectBtn').textContent = L.disconnect;
-  $('backupBtn').textContent  = L.backup;
-  $('restoreBtn').textContent = L.restore;
-  $('status').textContent     = L.statusNot;
+  const setTxt = (id, value) => { const el = $(id); if (el) el.textContent = value; };
 
-  $('overviewTitle').textContent = L.overview;
-  $('lblBeads').textContent   = L.beads;
-  $('lblDecades').textContent = L.decades;
-  $('lblRosaries').textContent= L.rosaries;
-  $('lblChaplets').textContent= L.chaplets;
+  setTxt('titleTxt', L.title);
+  setTxt('connectBtn', L.connect);
+  setTxt('refreshBtn', L.refresh);
+  setTxt('resetBtn', L.reset);
+  setTxt('disconnectBtn', L.disconnect);
+  setTxt('backupBtn', L.backup);
+  setTxt('restoreBtn', L.restore);
+  setTxt('status', L.statusNot);
 
-  $('avgTitle').textContent   = L.averages;
-  $('lblAvgBead').textContent = L.avgBead;
-  $('lblAvgDecade').textContent = L.avgDecade;
-  $('lblAvgRosary').textContent = L.avgRosary;
-  $('lblAvgChaplet').textContent= L.avgChaplet;
-  $('avgNote').textContent    = L.avgNote;
+  setTxt('overviewTitle', L.overview);
+  setTxt('lblBeads', L.beads);
+  setTxt('lblDecades', L.decades);
+  setTxt('lblRosaries', L.rosaries);
+  setTxt('lblChaplets', L.chaplets);
 
-  $('barTitle').textContent   = L.barTitle;
-  $('donutTitle').textContent = L.donutTitle;
-  $('partsTitle').textContent = L.partsTitle;
-  $('bkNote').textContent     = L.bkTip;
+  setTxt('avgTitle', L.averages);
+  setTxt('lblAvgBead', L.avgBead);
+  setTxt('lblAvgDecade', L.avgDecade);
+  setTxt('lblAvgRosary', L.avgRosary);
+  setTxt('lblAvgChaplet', L.avgChaplet);
+  setTxt('avgNote', L.avgNote);
 
-  $('totalsTitle').textContent = L.totalsTitle;
-  $('lblTbeads').textContent   = L.totBeads;
-  $('lblTdecades').textContent = L.totDecades;
-  $('lblTrosary').textContent  = L.totRosary;
-  $('lblTchaplet').textContent = L.totChaplet;
+  setTxt('donutTitle', L.donutTitle);
+  setTxt('partsTitle', L.partsTitle);
+  setTxt('bkNote', L.bkTip);
 
-  $('lblDevice').textContent      = L.pillDevice;
-  $('lblFW').textContent          = L.pillFW;
-  $('lblLastMystery').textContent = L.pillLastMystery;
+  setTxt('totalsTitle', L.totalsTitle);
+  setTxt('lblTbeads', L.totBeads);
+  setTxt('lblTdecades', L.totDecades);
+  setTxt('lblTrosary', L.totRosary);
+  setTxt('lblTchaplet', L.totChaplet);
 
-  $('lblBackupRestore').textContent = L.backuprestore;
+  setTxt('lblDevice', L.pillDevice);
+  setTxt('lblFW', L.pillFW);
+  setTxt('lblLastMystery', L.pillLastMystery);
 
-  $('settingsTitle').textContent = L.settingsTitle;
-  $('lblHaptic').textContent     = L.lblHaptic;
-  $('descHaptic').textContent    = L.descHaptic;
-  $('lblPreset').textContent     = L.lblPreset;
-  $('descPreset').textContent    = L.descPreset;
-  $('lblAutosave').textContent   = L.lblAutosave;
-  $('descAutosave').textContent  = L.descAutosave;
-  $('lblDispBright').textContent = L.lblDispBright;
-  $('descDispBright').textContent= L.descDispBright;
-  $('lblWallBright').textContent = L.lblWallBright;
-  $('descWallBright').textContent= L.descWallBright;
+  setTxt('lblBackupRestore', L.backuprestore);
 
-  $('rcTitle').textContent  = L.rcTitle;
-  $('rcStatus').textContent = L.rcInactive;
+  setTxt('settingsTitle', L.settingsTitle);
+  setTxt('lblHaptic', L.lblHaptic);
+  setTxt('descHaptic', L.descHaptic);
+  setTxt('lblPreset', L.lblPreset);
+  setTxt('descPreset', L.descPreset);
+  setTxt('lblAutosave', L.lblAutosave);
+  setTxt('descAutosave', L.descAutosave);
+  setTxt('lblDispBright', L.lblDispBright);
+  setTxt('descDispBright', L.descDispBright);
+  setTxt('lblWallBright', L.lblWallBright);
+  setTxt('descWallBright', L.descWallBright);
 
-  $('keysBackupBtn').textContent  = L.keysBackupBtn;
-  $('keysRestoreBtn').textContent = L.keysRestoreBtn;
+  setTxt('rcTitle', L.rcTitle);
+  setTxt('rcStatus', L.rcInactive);
+
+  setTxt('keysBackupBtn', L.keysBackupBtn);
+  setTxt('keysRestoreBtn', L.keysRestoreBtn);
 
   setChartLabels(L);
   renderPillsFromCache();

@@ -35,6 +35,8 @@
       <div class="card">
         <h3 id="overviewTitle">Overview</h3>
         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
+
+
           <div class="kpi"><div class="label" id="lblBeads">Beads</div><div class="value" id="kpiBeads">—</div></div>
           <div class="kpi"><div class="label" id="lblDecades">Decades</div><div class="value" id="kpiDecades">—</div></div>
           <div class="kpi"><div class="label" id="lblRosaries">Rosaries</div><div class="value" id="kpiRosaries">—</div></div>
@@ -54,12 +56,12 @@
           <button id="resetBtn" disabled>Reset Statistics</button>
           <progress id="restoreProg" max="100" value="0" hidden></progress>
         </div>
-
-        <div class="row">
-          <button id="keysBackupBtn"  disabled>Download Keys</button>
-          <input type="file" id="keysRestoreFile" accept="application/json" style="display:none">
-          <button id="keysRestoreBtn" disabled>Restore Keys</button>
+        <div class="row history-row overview-history">
+          <button id="histDownloadBtn" disabled>Download history.bin</button>
+          <button id="histRestoreBtn" disabled>Upload &amp; Restore</button>
+          <span id="histUploadProg" class="badge pill muted" style="display:none;"></span>
         </div>
+
       </div>
 
       <div class="card">
@@ -137,54 +139,29 @@
       </div>
 
       <div class="card">
-        <h3 id="barTitle">Average durations (s)</h3>
-        <div class="chart"><canvas id="barWindow"></canvas></div>
-      </div>
-
-      <div class="card">
         <h3 id="donutTitle">Mystery Sets Breakdown</h3>
         <div class="chart"><canvas id="donutSets"></canvas></div>
-      </div>
-
-      <div class="card">
+        <div class="card-separator"></div>
         <h3 id="partsTitle">Mystery Parts (I–V per set)</h3>
         <div class="chart"><canvas id="partsChart"></canvas></div>
       </div>
 
       <div class="card history-card" id="historyCard">
         <div class="history-head">
-          <h3 id="historyTitle">History (BLE)</h3>
+          <h3 id="historyTitle">History</h3>
+                    <span id="histParseSummary" class="badge"></span>
+          <span id="histDownloadProgress" class="badge pill muted" style="display:none;"></span>
         </div>
 
         <div class="history-columns">
           <section class="history-panel">
-            <div class="history-restore-row">
-              <button id="histDownloadBtn" disabled>Download history.bin</button>
-              <button id="histRestoreBtn" disabled>Upload &amp; Restore</button>
-              <span id="histUploadProg" class="badge pill muted" style="display:none;"></span>
-            </div>
-
-            <div class="history-sep"></div>
-
-            <div id="histFsInfo" class="muted"></div>
-
-            <div class="row history-row">
-              <span id="histParseSummary" class="badge"></span>
-              <span id="histDownloadProgress" class="badge pill muted" style="display:none;"></span>
-            </div>
-
-            <div id="histFileList" class="history-file-list"></div>
-          </section>
-
-          <section class="history-panel">
             <div class="history-chart-head">
-              <strong id="histActivityTitle">Activity</strong>
               <div class="row history-chart-controls">
                 <label for="histBucketSel" id="histBucketLabel">Bucket:</label>
                 <select id="histBucketSel" disabled>
-                  <option value="day">Day</option>
+                  <option value="day" selected>Day</option>
                   <option value="week">Week</option>
-                  <option value="month" selected>Month</option>
+                  <option value="month">Month</option>
                   <option value="year">Year</option>
                 </select>
                 <button id="histPrevBtn" disabled>&#x25C0; Prev</button>

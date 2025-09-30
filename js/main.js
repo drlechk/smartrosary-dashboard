@@ -366,8 +366,8 @@ async function handleConnect() {
     $('slWallBright').disabled = false;
 
     // key mgmt buttons depend on auth chars
-    $('keysBackupBtn').disabled  = !(client.consentOk && client.chAuthCtrl && client.chAuthInfo);
-    $('keysRestoreBtn').disabled = !(client.consentOk && client.chAuthCtrl && client.chAuthInfo);
+    //$('keysBackupBtn').disabled  = !(client.consentOk && client.chAuthCtrl && client.chAuthInfo);
+    //$('keysRestoreBtn').disabled = !(client.consentOk && client.chAuthCtrl && client.chAuthInfo);
 
     // remote availability UI
     remoteAPI.onRemoteAvailability({ touch: !!client.touchChar, keys: !!client.keysChar });
@@ -568,33 +568,38 @@ function wireControls() {
   });
 
   // Keys backup/restore
-  $('keysBackupBtn').addEventListener('click', async () => {
-    try {
-      await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode:'export' });
-      await backupKeys({ chAuthInfo: client.chAuthInfo, statusEl: $('status'), i18nL: i18n[getLang()] });
-    } catch (e) {
-      console.error(e);
-      status('Keys backup failed: ' + e.message);
-    }
-  });
+  const keysBackupBtn = $('keysBackupBtn');
+  const keysRestoreBtn = $('keysRestoreBtn');
+  const keysRestoreFile = $('keysRestoreFile');
+  if (keysBackupBtn && keysRestoreBtn && keysRestoreFile) {
+    keysBackupBtn.addEventListener('click', async () => {
+      try {
+        await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode:'export' });
+        await backupKeys({ chAuthInfo: client.chAuthInfo, statusEl: $('status'), i18nL: i18n[getLang()] });
+      } catch (e) {
+        console.error(e);
+        status('Keys backup failed: ' + e.message);
+      }
+    });
 
-  $('keysRestoreBtn').addEventListener('click', () => $('keysRestoreFile').click());
-  $('keysRestoreFile').addEventListener('change', async (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    try {
-      const js = JSON.parse(await f.text());
-      const id  = js.id, pub = js.pubKey, priv = js.privKey;
-      if (!id || !pub || !priv) throw new Error('File must contain {id, pubKey, privKey}');
-      await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode:'restore' });
-      await restoreKeys({ chAuthCtrl: client.chAuthCtrl, statusEl: $('status'), waitReady: (...a)=>client.waitReady(...a), id, pubKey:pub, privKey:priv, i18nL: i18n[getLang()] });
-    } catch (e2) {
-      console.error(e2);
-      status('Keys restore cancelled: ' + e2.message);
-    } finally {
-      e.target.value = '';
-    }
-  });
+    keysRestoreBtn.addEventListener('click', () => keysRestoreFile.click());
+    keysRestoreFile.addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try {
+        const js = JSON.parse(await f.text());
+        const id  = js.id, pub = js.pubKey, priv = js.privKey;
+        if (!id || !pub || !priv) throw new Error('File must contain {id, pubKey, privKey}');
+        await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode:'restore' });
+        await restoreKeys({ chAuthCtrl: client.chAuthCtrl, statusEl: $('status'), waitReady: (...a)=>client.waitReady(...a), id, pubKey:pub, privKey:priv, i18nL: i18n[getLang()] });
+      } catch (e2) {
+        console.error(e2);
+        status('Keys restore cancelled: ' + e2.message);
+      } finally {
+        e.target.value = '';
+      }
+    });
+  }
 
   // Lang selector
   wireLangSelector(() => {

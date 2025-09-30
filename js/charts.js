@@ -3,25 +3,38 @@ import { $, safeNum } from './utils.js';
 let barWindow, donutSets, partsChart;
 
 export function initCharts() {
-  const ctxBar   = $('barWindow').getContext('2d');
-  const ctxDonut = $('donutSets').getContext('2d');
-  const ctxParts = $('partsChart').getContext('2d');
+  const ctxBarEl   = $('barWindow');
+  const ctxDonutEl = $('donutSets');
+  const ctxPartsEl = $('partsChart');
 
-  barWindow = new Chart(ctxBar, {
-    type: 'bar',
-    data: {
-      labels: ['Bead','Decade','Rosary','Chaplet'],
-      datasets: [{ label:'Avg (s)', data:[0,0,0,0], backgroundColor:['#66b2ff','#66b2ff','#66b2ff','#8b5a2b'] }]
-    },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      scales:{
-        x:{ stacked:true, grid:{ color:'#1a2733' }, ticks:{ color:'#cfe4ff' } },
-        y:{ stacked:true, beginAtZero:true, grid:{ color:'#1a2733' }, ticks:{ color:'#cfe4ff', precision:0 } }
+  const ctxBar   = ctxBarEl ? ctxBarEl.getContext('2d') : null;
+  const ctxDonut = ctxDonutEl ? ctxDonutEl.getContext('2d') : null;
+  const ctxParts = ctxPartsEl ? ctxPartsEl.getContext('2d') : null;
+
+  if (!ctxDonut || !ctxParts) {
+    console.warn('initCharts: required canvases missing, aborting');
+    return;
+  }
+
+  if (ctxBar) {
+    barWindow = new Chart(ctxBar, {
+      type: 'bar',
+      data: {
+        labels: ['Bead','Decade','Rosary','Chaplet'],
+        datasets: [{ label:'Avg (s)', data:[0,0,0,0], backgroundColor:['#66b2ff','#66b2ff','#66b2ff','#8b5a2b'] }]
       },
-      plugins:{ legend:{ display:false } }
-    }
-  });
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        scales:{
+          x:{ stacked:true, grid:{ color:'#1a2733' }, ticks:{ color:'#cfe4ff' } },
+          y:{ stacked:true, beginAtZero:true, grid:{ color:'#1a2733' }, ticks:{ color:'#cfe4ff', precision:0 } }
+        },
+        plugins:{ legend:{ display:false } }
+      }
+    });
+  } else {
+    barWindow = null;
+  }
 
   donutSets = new Chart(ctxDonut, {
     type: 'doughnut',

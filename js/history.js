@@ -134,7 +134,7 @@ function setControlsEnabled(enabled) {
     if (!el) return;
     el.disabled = !enabled;
   });
-  if (dom.bucketSel && !enabled) dom.bucketSel.value = 'month';
+  if (dom.bucketSel && !enabled) dom.bucketSel.value = 'day';
   setCardMuted(!enabled);
 }
 
@@ -731,7 +731,7 @@ function buildDatasetsFixed(mode) {
 
 function renderChart() {
   if (!dom.chartCanvas) return;
-  const bucket = dom.bucketSel?.value || 'month';
+  const bucket = dom.bucketSel?.value || 'day';
   const { labels, datasets } = buildDatasetsFixed(bucket);
   log('renderChart: datasets built', { bucket, labels: labels.length, ds: datasets.length, first: datasets[0]?.data });
 
@@ -745,8 +745,8 @@ function renderChart() {
     maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { type: 'category', stacked: true, ticks: { color: '#cfe4ff', autoSkip: false, maxRotation: 45, minRotation: 45 }, grid: { color: '#1a2733' } },
-      y: { stacked: true, beginAtZero: true, ticks: { color: '#cfe4ff', precision: 0 }, grid: { color: '#1a2733' } }
+      x: { type: 'category', stacked: true, ticks: { color: '#cfe4ff', autoSkip: false, maxRotation: 45, minRotation: 45, font: { size: 10 } }, grid: { color: '#1a2733' } },
+      y: { stacked: true, beginAtZero: true, ticks: { color: '#cfe4ff', precision: 0, font: { size: 10 } }, grid: { color: '#1a2733' } }
     },
     animations: { y: { from: 0, duration: 700, easing: 'easeOutCubic' } }
   };
@@ -844,7 +844,7 @@ function parseHistory(bytes) {
 
   log('parseHistory:', { nrec, decades, chaplets, intentions, bucket: dom.bucketSel?.value });
 
-  const bucket = dom.bucketSel?.value || 'month';
+  const bucket = dom.bucketSel?.value || 'day';
   setAnchorToNow(bucket);
   renderChart();
 }
@@ -971,12 +971,12 @@ function wireUi() {
     renderChart();
   });
   dom.prevBtn?.addEventListener('click', () => {
-    const mode = dom.bucketSel?.value || 'month';
+    const mode = dom.bucketSel?.value || 'day';
     shiftAnchor(mode, -1);
     renderChart();
   });
   dom.nextBtn?.addEventListener('click', () => {
-    const mode = dom.bucketSel?.value || 'month';
+    const mode = dom.bucketSel?.value || 'day';
     shiftAnchor(mode, +1);
     renderChart();
   });
@@ -988,7 +988,7 @@ function bootDefaults() {
   resetUploadProgress();
   if (dom.parseSummary) dom.parseSummary.textContent = '';
   if (dom.fsInfo) dom.fsInfo.textContent = '';
-  if (dom.bucketSel) dom.bucketSel.value = 'month';
+  if (dom.bucketSel) dom.bucketSel.value = 'day';
   periodAnchor = startOfTodayUTC();
   renderLegend();
 }
