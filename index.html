@@ -56,12 +56,6 @@
           <button id="resetBtn" disabled>Reset Statistics</button>
           <progress id="restoreProg" max="100" value="0" hidden></progress>
         </div>
-        <div class="row history-row overview-history">
-          <button id="histDownloadBtn" disabled>Download history.bin</button>
-          <button id="histRestoreBtn" disabled>Upload &amp; Restore</button>
-          <span id="histUploadProg" class="badge pill muted" style="display:none;"></span>
-        </div>
-
       </div>
 
       <div class="card">
@@ -149,8 +143,13 @@
       <div class="card history-card" id="historyCard">
         <div class="history-head">
           <h3 id="historyTitle">History</h3>
-                    <span id="histParseSummary" class="badge"></span>
+          <span id="histParseSummary" class="badge"></span>
           <span id="histDownloadProgress" class="badge pill muted" style="display:none;"></span>
+        </div>
+        <div class="row history-row overview-history">
+          <button id="histDownloadBtn" disabled>Download</button>
+          <button id="histRestoreBtn" disabled>Restore</button>
+          <span id="histUploadProg" class="badge pill muted" style="display:none;"></span>
         </div>
 
         <div class="history-columns">

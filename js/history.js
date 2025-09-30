@@ -26,6 +26,13 @@ const dom = {
   bucketLabel: $('histBucketLabel'),
 };
 
+const FALLBACK_LEGEND_SETS = ['None','Joyful','Sorrowful','Glorious','Luminous','Chaplet'];
+const FALLBACK_LEGEND_ROMAN = ['I','II','III','IV','V'];
+
+let legendSets = [...FALLBACK_LEGEND_SETS];
+let legendIntentLabel = 'Intention';
+let legendRoman = [...FALLBACK_LEGEND_ROMAN];
+
 const hiddenRestoreInput = (() => {
   const input = document.createElement('input');
   input.type = 'file';
@@ -785,21 +792,24 @@ function renderLegend() {
   dom.legendRow1.innerHTML = '';
   dom.legendRow2.innerHTML = '';
 
+  const sets = legendSets.length >= 6 ? legendSets : FALLBACK_LEGEND_SETS;
+  const romans = legendRoman.length >= 5 ? legendRoman : FALLBACK_LEGEND_ROMAN;
+
   const top = [
-    makeLegendItem('#808080', 'None'),
-    makeLegendItem('#3399ff', 'Joyful'),
-    makeLegendItem('#ff6666', 'Sorrowful'),
-    makeLegendItem('#00cc00', 'Glorious'),
-    makeLegendItem('#ffcc00', 'Luminous'),
-    makeLegendItem('#8B4513', 'Chaplet'),
-    makeLegendItem('#eeeeee', 'Intention', true),
+    makeLegendItem('#808080', sets[0] ?? FALLBACK_LEGEND_SETS[0]),
+    makeLegendItem('#3399ff', sets[1] ?? FALLBACK_LEGEND_SETS[1]),
+    makeLegendItem('#ff6666', sets[2] ?? FALLBACK_LEGEND_SETS[2]),
+    makeLegendItem('#00cc00', sets[3] ?? FALLBACK_LEGEND_SETS[3]),
+    makeLegendItem('#ffcc00', sets[4] ?? FALLBACK_LEGEND_SETS[4]),
+    makeLegendItem('#8B4513', sets[5] ?? FALLBACK_LEGEND_SETS[5]),
+    makeLegendItem('#eeeeee', legendIntentLabel, true),
   ];
   const bottom = [
-    makeLegendItem('#9e9e9e', 'I'),
-    makeLegendItem('#8f8f8f', 'II'),
-    makeLegendItem('#808080', 'III'),
-    makeLegendItem('#717171', 'IV'),
-    makeLegendItem('#626262', 'V'),
+    makeLegendItem('#9e9e9e', romans[0] ?? FALLBACK_LEGEND_ROMAN[0]),
+    makeLegendItem('#8f8f8f', romans[1] ?? FALLBACK_LEGEND_ROMAN[1]),
+    makeLegendItem('#808080', romans[2] ?? FALLBACK_LEGEND_ROMAN[2]),
+    makeLegendItem('#717171', romans[3] ?? FALLBACK_LEGEND_ROMAN[3]),
+    makeLegendItem('#626262', romans[4] ?? FALLBACK_LEGEND_ROMAN[4]),
   ];
 
   top.forEach((el) => dom.legendRow1.appendChild(el));
@@ -1027,6 +1037,14 @@ export function applyHistoryI18n(dict) {
       if (dict.bucketOptions.year)  opts[3].textContent = dict.bucketOptions.year;
     }
   }
+  if (Array.isArray(dict.legendSets) && dict.legendSets.length >= 6) {
+    legendSets = dict.legendSets.slice();
+  }
+  if (dict.legendIntent) legendIntentLabel = dict.legendIntent;
+  if (Array.isArray(dict.legendRoman) && dict.legendRoman.length >= 5) {
+    legendRoman = dict.legendRoman.slice();
+  }
+  renderLegend();
 }
 
 export function setHistoryConsent(ok) {

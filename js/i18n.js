@@ -61,16 +61,19 @@ export const i18n = {
     keysBackupBtn:  "Download Keys",
     keysRestoreBtn: "Restore Keys",
     history: {
-      title: "History (BLE)",
-      downloadRaw: "Download history.bin",
+      title: "History",
+      downloadRaw: "Download",
       restoreLabel: "Restore history.bin",
-      uploadRestore: "Upload & Restore",
+      uploadRestore: "Restore",
       activity: "Activity",
       bucket: "Bucket:",
       bucketOptions: { day: "Day", week: "Week", month: "Month", year: "Year" },
       prev: "◀ Prev",
       next: "Next ▶",
-      notConnected: "– not connected –"
+      notConnected: "– not connected –",
+      legendSets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
+      legendIntent: "Intention",
+      legendRoman: ["I","II","III","IV","V"]
     },
     wp: {
           title: "Wallpaper",
@@ -189,16 +192,19 @@ export const i18n = {
     keysBackupBtn:  "Pobierz klucze",
     keysRestoreBtn: "Przywróć klucze",
     history: {
-      title: "Historia (BLE)",
-      downloadRaw: "Pobierz history.bin",
+      title: "Historia",
+      downloadRaw: "Pobierz",
       restoreLabel: "Przywróć history.bin",
-      uploadRestore: "Wyślij i przywróć",
+      uploadRestore: "Przywróć",
       activity: "Aktywność",
       bucket: "Okres:",
       bucketOptions: { day: "Dzień", week: "Tydzień", month: "Miesiąc", year: "Rok" },
       prev: "◀ Poprzedni",
       next: "Następny ▶",
-      notConnected: "– brak połączenia –"
+      notConnected: "– brak połączenia –",
+      legendSets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronka"],
+      legendIntent: "Intencja",
+      legendRoman: ["I","II","III","IV","V"]
     },
     wp: {
           title: "Tapeta",
@@ -317,16 +323,19 @@ export const i18n = {
     keysBackupBtn:  "Schlüssel herunterladen",
     keysRestoreBtn: "Schlüssel wiederherstellen",
     history: {
-      title: "Historie (BLE)",
-      downloadRaw: "history.bin herunterladen",
+      title: "Historie",
+      downloadRaw: "Herunterladen",
       restoreLabel: "history.bin wiederherstellen",
-      uploadRestore: "Hochladen & wiederherstellen",
+      uploadRestore: "Wiederherstellen",
       activity: "Aktivität",
       bucket: "Zeitraum:",
       bucketOptions: { day: "Tag", week: "Woche", month: "Monat", year: "Jahr" },
       prev: "◀ Zurück",
       next: "Weiter ▶",
-      notConnected: "– nicht verbunden –"
+      notConnected: "– nicht verbunden –",
+      legendSets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
+      legendIntent: "Intention",
+      legendRoman: ["I","II","III","IV","V"]
     },
     wp: {
       title: "Hintergrundbild",
