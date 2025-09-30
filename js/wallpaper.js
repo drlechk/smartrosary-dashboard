@@ -397,12 +397,14 @@ ui.uploadBtn?.addEventListener('click', async () => {
   if (!connected || !consent) { alert(WP().connectFirst || 'Connect and allow on device first.'); return; }
   if (_isFull()) { alert(WP().fullShort || 'Storage full (5/5). Delete one first.'); return; }
 
-  if (staged.fromCanvas) {
-    await _uploadFromCanvas(staged.name || 'image.bin');
-  } else {
-    const fname = _clip16Bin(_cleanName(staged.name || 'image.bin'));
-    await _uploadBytes(staged.bytes, fname, staged.w, staged.h, staged.pixelOffset);
-  }
+  try {
+    log('upload click', { staged });
+    if (staged.fromCanvas) {
+      await _uploadFromCanvas(staged.name || 'image.bin');
+    } else {
+      const fname = _clip16Bin(_cleanName(staged.name || 'image.bin'));
+      await _uploadBytes(staged.bytes, fname, staged.w, staged.h, staged.pixelOffset);
+    }
 
     _clearStaged();
     if (ui.uploadBtn) ui.uploadBtn.disabled = true;
