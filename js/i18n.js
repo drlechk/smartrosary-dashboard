@@ -112,7 +112,17 @@ export const i18n = {
           // Presets UI
           presetPlaceholder: "— Preset —",
           presetTitle:       "Choose a preset",
-          
+          uploadFailed:      "Upload failed.",
+          errNoFs:           "Wallpaper storage unavailable on device.",
+          errRead:           "Failed to open file on device.",
+          errCreate:         "Failed to create file on device.",
+          errSession:        "Upload session is not active. Try again.",
+          errCrc:            "Device rejected chunk (CRC mismatch).",
+          errWrite:          "Device write failed (check free space).",
+          errDelete:         "Delete failed on device.",
+          errRename:         "Rename failed on device.",
+          errUnknown:        (code) => `Device reported error (${code}).`,
+
           cannotDeleteLast: "Cannot delete the last remaining image.",
           mustKeepOne: "At least one image must remain on the device.",
         },
@@ -231,6 +241,17 @@ export const i18n = {
           presetPlaceholder: "— Preset —",
           presetTitle:       "Wybierz preset",
 
+          uploadFailed:      "Przesyłanie nie powiodło się.",
+          errNoFs:           "Pamięć tapet w urządzeniu niedostępna.",
+          errRead:           "Nie udało się otworzyć pliku w urządzeniu.",
+          errCreate:         "Nie udało się utworzyć pliku w urządzeniu.",
+          errSession:        "Sesja wysyłania wygasła. Spróbuj ponownie.",
+          errCrc:            "Urządzenie odrzuciło blok (błąd CRC).",
+          errWrite:          "Błąd zapisu w urządzeniu (sprawdź wolne miejsce).",
+          errDelete:         "Nie udało się usunąć pliku w urządzeniu.",
+          errRename:         "Nie udało się zmienić nazwy pliku w urządzeniu.",
+          errUnknown:        (code) => `Urządzenie zgłosiło błąd (${code}).`,
+
           cannotDeleteLast: "Nie można usunąć ostatniego pozostałego obrazu.",
           mustKeepOne: "Na urządzeniu musi pozostać co najmniej jeden obraz."
         },
@@ -347,6 +368,17 @@ export const i18n = {
       // Presets
       presetPlaceholder: "— Preset —",
       presetTitle:       "Preset wählen",
+
+      uploadFailed:      "Upload fehlgeschlagen.",
+      errNoFs:           "Speicher auf dem Gerät nicht verfügbar.",
+      errRead:           "Datei konnte auf dem Gerät nicht geöffnet werden.",
+      errCreate:         "Datei konnte auf dem Gerät nicht erstellt werden.",
+      errSession:        "Upload-Sitzung ist abgelaufen. Bitte erneut versuchen.",
+      errCrc:            "Gerät hat Block verworfen (CRC-Fehler).",
+      errWrite:          "Schreibfehler auf dem Gerät (Speicher prüfen).",
+      errDelete:         "Löschen auf dem Gerät fehlgeschlagen.",
+      errRename:         "Umbenennen auf dem Gerät fehlgeschlagen.",
+      errUnknown:        (code) => `Gerät meldete Fehler (${code}).`,
 
       cannotDeleteLast: "Das letzte verbleibende Bild kann nicht gelöscht werden.",
       mustKeepOne: "Mindestens ein Bild muss auf dem Gerät verbleiben."
