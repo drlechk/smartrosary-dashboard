@@ -60,6 +60,18 @@ export const i18n = {
     restoreKeysDone: "Keys restored.",
     keysBackupBtn:  "Download Keys",
     keysRestoreBtn: "Restore Keys",
+    history: {
+      title: "History (BLE)",
+      downloadRaw: "Download history.bin",
+      restoreLabel: "Restore history.bin",
+      uploadRestore: "Upload & Restore",
+      activity: "Activity",
+      bucket: "Bucket:",
+      bucketOptions: { day: "Day", week: "Week", month: "Month", year: "Year" },
+      prev: "◀ Prev",
+      next: "Next ▶",
+      notConnected: "– not connected –"
+    },
     wp: {
           title: "Wallpaper",
           select: "Select file…",
@@ -166,6 +178,18 @@ export const i18n = {
     restoreKeysDone: "Klucze przywrócone.",
     keysBackupBtn:  "Pobierz klucze",
     keysRestoreBtn: "Przywróć klucze",
+    history: {
+      title: "Historia (BLE)",
+      downloadRaw: "Pobierz history.bin",
+      restoreLabel: "Przywróć history.bin",
+      uploadRestore: "Wyślij i przywróć",
+      activity: "Aktywność",
+      bucket: "Okres:",
+      bucketOptions: { day: "Dzień", week: "Tydzień", month: "Miesiąc", year: "Rok" },
+      prev: "◀ Poprzedni",
+      next: "Następny ▶",
+      notConnected: "– brak połączenia –"
+    },
     wp: {
           title: "Tapeta",
           select: "Wybierz plik…",
@@ -271,6 +295,18 @@ export const i18n = {
     restoreKeysDone: "Schlüssel wiederhergestellt.",
     keysBackupBtn:  "Schlüssel herunterladen",
     keysRestoreBtn: "Schlüssel wiederherstellen",
+    history: {
+      title: "Historie (BLE)",
+      downloadRaw: "history.bin herunterladen",
+      restoreLabel: "history.bin wiederherstellen",
+      uploadRestore: "Hochladen & wiederherstellen",
+      activity: "Aktivität",
+      bucket: "Zeitraum:",
+      bucketOptions: { day: "Tag", week: "Woche", month: "Monat", year: "Jahr" },
+      prev: "◀ Zurück",
+      next: "Weiter ▶",
+      notConnected: "– nicht verbunden –"
+    },
     wp: {
       title: "Hintergrundbild",
       select: "Datei wählen…",

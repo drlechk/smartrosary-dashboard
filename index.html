@@ -151,6 +151,59 @@
         <div class="chart"><canvas id="partsChart"></canvas></div>
       </div>
 
+      <div class="card history-card" id="historyCard">
+        <div class="history-head">
+          <h3 id="historyTitle">History (BLE)</h3>
+        </div>
+
+        <div class="history-columns">
+          <section class="history-panel">
+            <div class="history-restore-row">
+              <button id="histDownloadBtn" disabled>Download history.bin</button>
+              <button id="histRestoreBtn" disabled>Upload &amp; Restore</button>
+              <span id="histUploadProg" class="badge pill muted" style="display:none;"></span>
+            </div>
+
+            <div class="history-sep"></div>
+
+            <div id="histFsInfo" class="muted"></div>
+
+            <div class="row history-row">
+              <span id="histParseSummary" class="badge"></span>
+              <span id="histDownloadProgress" class="badge pill muted" style="display:none;"></span>
+            </div>
+
+            <div id="histFileList" class="history-file-list"></div>
+          </section>
+
+          <section class="history-panel">
+            <div class="history-chart-head">
+              <strong id="histActivityTitle">Activity</strong>
+              <div class="row history-chart-controls">
+                <label for="histBucketSel" id="histBucketLabel">Bucket:</label>
+                <select id="histBucketSel" disabled>
+                  <option value="day">Day</option>
+                  <option value="week">Week</option>
+                  <option value="month" selected>Month</option>
+                  <option value="year">Year</option>
+                </select>
+                <button id="histPrevBtn" disabled>&#x25C0; Prev</button>
+                <button id="histNextBtn" disabled>Next &#x25B6;</button>
+                <span id="histPeriodLabel" class="badge"></span>
+              </div>
+            </div>
+
+            <div class="chart history-chart-wrap">
+              <canvas id="histChart"></canvas>
+            </div>
+            <div id="histLegend" class="history-legend">
+              <div class="legend-row" id="histLegendRow1"></div>
+              <div class="legend-row" id="histLegendRow2"></div>
+            </div>
+          </section>
+        </div>
+      </div>
+
 <!-- Wallpaper / SPIFFS Explorer -->
 <div class="card wp-muted" id="wpCard">
   <div class="wp-header">
@@ -235,6 +288,7 @@
 
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/patternomaly@1.3.2/dist/patternomaly.min.js"></script>
   <!-- Your modules -->
   <script type="module" src="./js/main.js"></script>
  <script src="https://lib.arvancloud.ir/nosleep/0.9.0/NoSleep.min.js"></script>

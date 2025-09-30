@@ -8,8 +8,11 @@ import { requestKeysConsent, backupKeys, restoreKeys } from './auth.js';
 import { initRemote } from './remote.js';
 import { i18n } from './i18n.js';
 import { attachWallpaperFS, resetWallpaperFS, setWallpaperConsent } from './wallpaper.js';
+import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetHistoryCard, refreshHistory } from './history.js';
 
 const client = new BleClient();
+
+initHistory();
 
 function status(text){ $('status').textContent = text; }
 
@@ -17,6 +20,7 @@ async function refreshOnce() {
   const L = i18n[getLang()];
   try {
     if (!client.chStats || !client.chSettings) return false;
+    console.log('[stats] refreshOnce: starting read');
     await sleep(200);
     const [vSettings, vPartsMaybe] = await Promise.all([
       client.robustRead(client.chSettings),
@@ -28,16 +32,71 @@ async function refreshOnce() {
     const rawSettings = u8ToStr(vSettings);
     const rawStats    = u8ToStr(vStats);
     const rawParts    = vPartsMaybe ? u8ToStr(vPartsMaybe) : null;
+    console.log('[stats] raw settings payload', rawSettings);
+    console.log('[stats] raw stats payload', rawStats);
+    if (rawParts != null) console.log('[stats] raw parts payload', rawParts);
     if (!rawSettings?.trim() || rawSettings.trim()==='{}') return false;
     if (!rawStats?.trim()    || rawStats.trim()==='{}')    return false;
 
     let jsSettings, jsStats, jsParts=null;
-    try { jsSettings = JSON.parse(rawSettings); } catch { return false; }
-    try { jsStats    = JSON.parse(rawStats);    } catch { return false; }
-    if (rawParts != null) {
-      try { jsParts = JSON.parse(rawParts); } catch { jsParts=null; }
+    let settingsPayload = rawSettings;
+
+    const healers = [
+      (raw) => {
+        if (!raw) return null;
+        const marker = '"entries":"';
+        const idx = raw.indexOf(marker);
+        if (idx < 0) return null;
+        const prefix = raw.slice(0, idx + marker.length);
+        return `${prefix}""}}`;
+      },
+      (raw) => {
+        if (!raw) return null;
+        const marker = ',"intentions"';
+        const idx = raw.indexOf(marker);
+        if (idx < 0) return null;
+        const prefix = raw.slice(0, idx);
+        return `${prefix}}`;
+      }
+    ];
+
+    let parseOk = false;
+    for (let step = 0; step <= healers.length; step++) {
+      try {
+        jsSettings = JSON.parse(settingsPayload);
+        parseOk = true;
+        break;
+      } catch (err) {
+        if (step === healers.length) {
+          console.warn('[stats] settings JSON parse failed', err);
+          return false;
+        }
+        const healed = healers[step](rawSettings);
+        if (!healed) {
+          console.warn('[stats] settings healer', step + 1, 'not applicable');
+          return false;
+        }
+        console.warn(`[stats] applying settings healer #${step + 1}`, err);
+        settingsPayload = healed;
+        console.log(`[stats] healed settings payload #${step + 1}`, settingsPayload);
+      }
     }
 
+    if (!parseOk) return false;
+
+    try { jsStats    = JSON.parse(rawStats);    } catch (err) {
+      console.warn('[stats] stats JSON parse failed', err);
+      return false;
+    }
+    if (rawParts != null) {
+      try { jsParts = JSON.parse(rawParts); } catch (err) {
+        console.warn('[stats] parts JSON parse failed', err);
+        jsParts=null;
+      }
+    }
+
+    console.log('[stats] parsed settings', jsSettings);
+    console.log('[stats] parsed stats', jsStats);
     updateFromJson({ jsStats, jsSettings, jsParts });
     status(L.statusUpdated);
     return true;
@@ -103,6 +162,7 @@ async function handleConnect() {
     await client.connect();
 
     setWallpaperConsent(!!client.consentOk);
+    setHistoryConsent(!!client.consentOk);
     try {
       await attachWallpaperFS(client.server);
     } catch (e) {
@@ -126,7 +186,19 @@ async function handleConnect() {
 
     status(L.statusConnected);
 
-    await refreshUntilValid({ tries: 12, delay: 250 });
+    const statsOk = await refreshUntilValid({ tries: 12, delay: 250 });
+    if (!statsOk) {
+      await refreshOnce();
+    }
+
+    if (client.consentOk) {
+      try {
+        await attachHistoryFS(client.server);
+        await refreshHistory();
+      } catch (e) {
+        console.warn('History attach skipped:', e);
+      }
+    }
 
     // Live updates for settings
     if (client.chSettings) {
@@ -135,6 +207,7 @@ async function handleConnect() {
         try {
             const u8 = new Uint8Array(ev.target.value.buffer, ev.target.value.byteOffset, ev.target.value.byteLength);
             const js = JSON.parse(new TextDecoder().decode(u8));
+            console.log('[stats] settings notification', js);
             updateSettingsOnly(js);               // only tweak settings UI
             // leave charts/KPIs untouched
         } catch (e) {
@@ -151,11 +224,14 @@ async function handleConnect() {
   } catch (err) {
     console.error(err);
     status('Error: ' + err.message);
+    setHistoryConsent(false);
+    try { await resetHistoryCard(); } catch {}
   }
 }
 
 async function handleDisconnect() {
   try { resetWallpaperFS(); } catch {}
+  try { await resetHistoryCard(); } catch {}
   await client.disconnect();
   const L = i18n[getLang()];
   status(L.statusDisconnected);
@@ -170,6 +246,7 @@ async function handleDisconnect() {
   $('slDispBright').disabled = true;
   $('slWallBright').disabled = true;
   remoteAPI.onRemoteAvailability({ touch:false, keys:false });
+  setHistoryConsent(false);
 }
 
 // UI handlers
@@ -177,7 +254,17 @@ let updatingFromDevice = false;
 function wireControls() {
   $('connectBtn').addEventListener('click', handleConnect);
   $('disconnectBtn').addEventListener('click', handleDisconnect);
-  $('refreshBtn').addEventListener('click', refreshOnce);
+  $('refreshBtn').addEventListener('click', async () => {
+    try {
+      await refreshOnce();
+    } finally {
+      try {
+        await refreshHistory();
+      } catch (e) {
+        console.warn('History refresh failed:', e);
+      }
+    }
+  });
 
   $('resetBtn').addEventListener('click', async () => {
     const L = i18n[getLang()];

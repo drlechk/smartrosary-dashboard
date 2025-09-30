@@ -17,8 +17,52 @@ export async function doBackup({ chSettings, chParts, chStats, statusEl, i18nL, 
   await sleep(80);
   const vStats = await robustRead(chStats);
 
-  const jsStats    = JSON.parse(u8ToStr(vStats));
-  const jsSettings = JSON.parse(u8ToStr(vSettings));
+  let jsStats, jsSettings;
+  let rawStats = u8ToStr(vStats);
+  let rawSettings = u8ToStr(vSettings);
+  try {
+    jsStats = JSON.parse(rawStats);
+  } catch (err) {
+    console.warn('[backup] stats JSON parse failed', err, rawStats);
+    throw err;
+  }
+
+  const healers = [
+    (raw) => {
+      const idx = raw.indexOf('"entries":"');
+      if (idx < 0) return null;
+      return `${raw.slice(0, idx + 11)}""}}`;
+    },
+    (raw) => {
+      const idx = raw.indexOf(',"intentions"');
+      if (idx < 0) return null;
+      return `${raw.slice(0, idx)}}`;
+    },
+    (raw) => {
+      const idx = raw.indexOf('"intentions"');
+      if (idx < 0) return null;
+      return `${raw.slice(0, idx - 1)}}`;
+    }
+  ];
+
+  for (let i = 0; i <= healers.length; i++) {
+    try {
+      jsSettings = JSON.parse(rawSettings);
+      break;
+    } catch (err) {
+      if (i === healers.length) {
+        console.warn('[backup] settings JSON parse failed', err, rawSettings);
+        throw err;
+      }
+      const healed = healers[i](rawSettings);
+      if (!healed) {
+        console.warn('[backup] settings healer', i + 1, 'not applicable');
+        throw err;
+      }
+      console.warn(`[backup] applying settings healer #${i + 1}`);
+      rawSettings = healed;
+    }
+  }
 
   const d = jsStats?.durations || {};
   const beadSum = Number(d.totalBeadMs ?? 0);

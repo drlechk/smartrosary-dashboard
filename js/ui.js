@@ -1,11 +1,31 @@
 import { $, u8ToStr, safeNum } from './utils.js';
 import { setChartLabels, updateAverages, updateDonut, updateParts } from './charts.js';
 import { applyWallpaperI18n, setWallpaperLang } from './wallpaper.js';
+import { applyHistoryI18n } from './history.js';
 import { i18n } from './i18n.js';
 
 let lang = 'pl';
 let lastStats = null;
 let lastSettings = null;
+
+const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
+
+function mergeSettings(base, patch) {
+  if (!isPlainObject(patch)) return patch ?? base ?? null;
+  const target = isPlainObject(base) ? { ...base } : {};
+  for (const [key, val] of Object.entries(patch)) {
+    target[key] = isPlainObject(val)
+      ? mergeSettings(target[key], val)
+      : val;
+  }
+  return target;
+}
+
+function cacheSettings(patch) {
+  if (!patch) return lastSettings;
+  lastSettings = mergeSettings(lastSettings, patch);
+  return lastSettings;
+}
 
 export function getLang() { return lang; }
 export function setLang(v){ lang = v; applyI18n(); }
@@ -73,6 +93,7 @@ export function applyI18n() {
   renderPillsFromCache();
   setWallpaperLang(lang);
   applyWallpaperI18n();
+  applyHistoryI18n(L.history);
 }
 
 function fmtMs(ms){
@@ -96,30 +117,28 @@ function localizeSetName(enName, langCode = lang){
 }
 
 export function renderPillsFromCache(){
-  if (!lastStats || !lastSettings) return;
-  const cachedName =
-    (lastSettings && lastSettings.device) ||
-    (lastStats && lastStats.device) || '—';
-  $('valDevice').textContent = cachedName;
-  $('valFW').textContent     = (lastSettings && lastSettings.fwVersion) || '—';
+  const deviceName = lastSettings?.device ?? lastStats?.device ?? '—';
+  $('valDevice').textContent = deviceName;
+  $('valFW').textContent     = lastSettings?.fwVersion ?? '—';
 
-  const lastSetEN  = lastStats.lastMystery?.set;
-  const lastIndex  = lastStats.lastMystery?.index;
+  const lastSetEN  = lastStats?.lastMystery?.set;
+  const lastIndex  = lastStats?.lastMystery?.index;
   const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
-  $('valLastMystery').textContent = `${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
+  const suffix = lastIndex ? ` #${lastIndex}` : '';
+  $('valLastMystery').textContent = `${lastSetLOC}${suffix}`;
 }
 
 export function updateFromJson({ jsStats, jsSettings, jsParts }) {
   lastStats = jsStats;
-  lastSettings = jsSettings;
+  const mergedSettings = cacheSettings(jsSettings) || {};
 
   $('kpiBeads').textContent    = (jsStats.totals?.beads ?? '—');
   $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
   $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
   $('kpiChaplets').textContent = (jsStats.totals?.chaplets ?? '—');
 
-  $('valDevice').textContent = jsSettings.device || jsStats.device || '—';
-  $('valFW').textContent     = jsSettings.fwVersion || '—';
+  $('valDevice').textContent = mergedSettings.device || jsStats.device || '—';
+  $('valFW').textContent     = mergedSettings.fwVersion || '—';
 
   const lastSetEN  = jsStats.lastMystery?.set;
   const lastIndex  = jsStats.lastMystery?.index;
@@ -165,6 +184,8 @@ export function updateFromJson({ jsStats, jsSettings, jsParts }) {
     updateParts(jsParts.setsParts || {});
   }
 
+  applySettingsUi(mergedSettings);
+  renderPillsFromCache();
   $('status').textContent = (i18n[lang].statusUpdated);
 }
 
@@ -177,36 +198,38 @@ export function wireLangSelector(onChange) {
 
 // ADD (near other exports)
 export function updateSettingsOnly(jsSettings) {
-  // cache
-  lastSettings = jsSettings;
+  const merged = cacheSettings(jsSettings);
+  applySettingsUi(merged);
+  renderPillsFromCache();
+}
 
-  // --- toggle switches ---
+function applySettingsUi(settings) {
+  if (!settings) return;
+
   const swH = document.getElementById('swHaptic');
-  if (swH) swH.checked = !!jsSettings.haptic;
+  if (swH) swH.checked = !!settings.haptic;
 
   const swP = document.getElementById('swPreset');
   const swA = document.getElementById('swAutosave');
-  if (swP) swP.checked = !!(jsSettings.mystery?.preset);
-  if (swA) swA.checked = !!(jsSettings.mystery && jsSettings.mystery.autosave);
-
+  const presetOn = !!settings.mystery?.preset;
+  const autosaveOn = !!settings.mystery?.autosave;
+  if (swP) swP.checked = presetOn;
+  if (swA) swA.checked = autosaveOn;
   if (swP && swA) {
-    swA.disabled = swP.checked;
-    swP.disabled = swA.checked ? true : false;
+    swA.disabled = presetOn;
+    swP.disabled = autosaveOn;
   }
 
-  // --- sliders ---
-  const db = Math.max(0, Math.min(100, Number(jsSettings.display?.brightness ?? 0)));
+  const db = Math.max(0, Math.min(100, Number(settings.display?.brightness ?? 0)));
   const sl = document.getElementById('slDispBright');
   const sv = document.getElementById('slDispBrightVal');
   if (sl && sv) { sl.value = db; sv.textContent = db + '%'; }
 
-  const wb = Math.max(0, Math.min(100, Number(jsSettings.wallpaper?.brightness ?? 0)));
+  const wb = Math.max(0, Math.min(100, Number(settings.wallpaper?.brightness ?? 0)));
   const slw = document.getElementById('slWallBright');
   const wv  = document.getElementById('wallBrightVal');
   if (slw && wv) { slw.value = wb; wv.textContent = wb + '%'; }
 
-  // --- pills that rely on settings only ---
-  document.getElementById('valFW').textContent = jsSettings.fwVersion || '—';
-
-  // DO NOT touch KPIs/charts here — they come from stats.
+  const fwEl = document.getElementById('valFW');
+  if (fwEl) fwEl.textContent = settings.fwVersion || '—';
 }

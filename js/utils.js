@@ -19,7 +19,14 @@ export async function readWithRetry(ch, tries = 5) {
   return withRetry(() => ch.readValue(), { tries, base: 150 });
 }
 
-export const u8ToStr = (u8) => dec.decode(u8);
+export const u8ToStr = (u8) => {
+  try {
+    return dec.decode(u8);
+  } catch (e) {
+    console.warn('u8ToStr decode failed, falling back to latin1', e);
+    return Array.from(u8).map((c) => String.fromCharCode(c)).join('');
+  }
+};
 export const safeNum = (x, d=0) => {
   const v = Number(x);
   return Number.isFinite(v) ? v : d;

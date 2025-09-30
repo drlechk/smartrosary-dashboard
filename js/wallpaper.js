@@ -3,6 +3,8 @@
 // --- import i18n dictionary (ESM) ---
 import { i18n } from './i18n.js';
 
+const log = (...args) => console.log('[wallpaper]', ...args);
+
 let wpLang = 'en';
 export function setWallpaperLang(code) {
   wpLang = (i18n && i18n[code]) ? code : 'en';
@@ -209,6 +211,7 @@ export function setWallpaperConsent(ok) {
   consent = !!ok;
   _updateMuted();
   _uiEnable(connected && consent);
+  log('setWallpaperConsent', { consent, connected });
   if (connected && consent) _list();
 }
 
@@ -218,6 +221,7 @@ export async function attachWallpaperFS(server) {
   _hideProgress(); // ensure hidden on load
 
   try {
+    log('attachWallpaperFS: acquiring FS service');
     const fss = await server.getPrimaryService(FS_SVC_UUID);
     fsCtrl = await fss.getCharacteristic(FS_CTRL_UUID);
     fsInfo = await fss.getCharacteristic(FS_INFO_UUID);
@@ -235,6 +239,7 @@ export async function attachWallpaperFS(server) {
     connected = true;
     _updateMuted();
     _uiEnable(connected && consent);
+    log('attachWallpaperFS: ready', { consent });
 
 
     if (connected && consent) _list();
@@ -242,6 +247,7 @@ export async function attachWallpaperFS(server) {
     connected = false;
     _updateMuted();
     _uiEnable(false);
+    log('attachWallpaperFS: failed', e);
     throw e;
   }
 }
@@ -274,6 +280,7 @@ ui.fileInput?.addEventListener('change', async (e) => {
   if (!f) return;
 
   // preview only; do not upload yet
+  log('file selected', { name: f.name, type: f.type, size: f.size });
   if (/^image\/(png|jpe?g|webp)$/i.test(f.type) || /\.(png|jpe?g|jpg|webp)$/i.test(f.name)) {
     await _drawToCanvasCover(await createImageBitmap(f));
     staged = { type:'canvas', name:f.name, bytes:null, w:TARGET_W, h:TARGET_H, pixelOffset:4, fromCanvas:true };
@@ -296,6 +303,7 @@ ui.uploadBtn?.addEventListener('click', async () => {
   if (!connected || !consent) { alert(WP().connectFirst || 'Connect and allow on device first.'); return; }
   if (_isFull()) { alert(WP().fullShort || 'Storage full (5/5). Delete one first.'); return; }
 
+  log('upload click', { staged });
   if (staged.fromCanvas) {
     await _uploadFromCanvas(staged.name || 'image.bin');
   } else {
@@ -314,6 +322,7 @@ ui.listBtn?.addEventListener('click', () => _list());
 function _isFull(){ return Array.isArray(files) && files.length >= MAX_IMAGES; }
 
 function _uiEnable(ok) {
+  log('_uiEnable', { ok, connected, consent, staged: !!staged?.type, full: _isFull() });
   if (ui.listBtn)    ui.listBtn.disabled = !ok; // safe
   if (ui.uploadBtn)  ui.uploadBtn.disabled = !ok || !staged.type || _isFull();
   if (ui.conn)       ui.conn.textContent = ok ? 'Connected' : (WP().connectFirst || 'Connect first to enable');
@@ -325,6 +334,7 @@ function _uiEnable(ok) {
 async function _initCanvas() {
   if (viewCtx) return;
 
+  log('_initCanvas');
   // visible
   const dpr = window.devicePixelRatio || 1;
   const cssW = ui.canvas.clientWidth || ui.canvas.width;
@@ -502,6 +512,7 @@ function _canvasToLVGL(cf=4){
 
 // ---------- FS ops ----------
 async function _list() {
+  log('_list', { connected, consent });
   if (!connected || !consent) return;
   // FS_LS_BEGIN path="/" pattern=""
   await fsCtrl.writeValue(new Uint8Array([0x10, 0x01, 0x00, '/'.charCodeAt(0)]));
@@ -705,7 +716,8 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
 // ---------- FS notifications ----------
 function _onFsStat(e){
   const dv = e.target.value;
- // Device may pack multiple bytes; count all 0x01 credits.
+  log('_onFsStat raw', { len: dv.byteLength });
+// Device may pack multiple bytes; count all 0x01 credits.
  let added = 0;
  for (let i = 0; i < dv.byteLength; i++) {
    const code = dv.getUint8(i);
@@ -721,6 +733,7 @@ function _onFsStat(e){
 let listChunks = [];
 function _onFsInfo(e){
   const dv = e.target.value;
+  log('_onFsInfo', { len: dv.byteLength, first: dv.getUint8(0) });
 
   // READ header
   if (dv.byteLength === 10 && dv.getUint8(0) === 0x11) {
@@ -759,7 +772,13 @@ function _onFsInfo(e){
   if (b0 === 0x7B /* '{' */) {
     try {
       const txt = new TextDecoder().decode(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength));
-      _renderList(JSON.parse(txt));
+      log('_onFsInfo plain JSON', txt);
+      const obj = JSON.parse(txt);
+      if (obj && Array.isArray(obj.files)) {
+        _renderList(obj);
+      } else {
+        log('_onFsInfo ignoring JSON without files[]');
+      }
     } catch(e){ console.warn('List parse error', e); }
     return;
   }
@@ -767,6 +786,7 @@ function _onFsInfo(e){
   // Chunked listing
   const tag = b0, last = (tag & 1) === 1;
   if ((tag & 0xFE) === TAG_LIST) {
+    log('_onFsInfo chunked', { tag, last, len: dv.byteLength });
     const chunk = new Uint8Array(dv.buffer, dv.byteOffset+1, dv.byteLength-1);
     listChunks.push(chunk);
     if (last) {
@@ -786,6 +806,7 @@ function _onFsData(e){
   const dv = e.target.value;
   const tag = dv.getUint8(0);
   const last = (tag & 1) === 1;
+  log('_onFsData', { tag, last, len: dv.byteLength, off: readState.off, size: readState.size });
   if ((tag & 0xFE) !== TAG_DATA) return;
 
   const bytes = new Uint8Array(dv.buffer, dv.byteOffset+1, dv.byteLength-1);
