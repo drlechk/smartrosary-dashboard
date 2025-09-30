@@ -1026,8 +1026,8 @@ export function applyHistoryI18n(dict) {
   if (dom.restoreLabel && dict.restoreLabel) dom.restoreLabel.textContent = dict.restoreLabel;
   if (dom.activityTitle && dict.activity) dom.activityTitle.textContent = dict.activity;
   if (dom.bucketLabel && dict.bucket) dom.bucketLabel.textContent = dict.bucket;
-  if (dom.prevBtn && dict.prev) dom.prevBtn.textContent = dict.prev;
-  if (dom.nextBtn && dict.next) dom.nextBtn.textContent = dict.next;
+  //if (dom.prevBtn && dict.prev) dom.prevBtn.textContent = dict.prev;
+  //if (dom.nextBtn && dict.next) dom.nextBtn.textContent = dict.next;
   if (dom.bucketSel && dict.bucketOptions) {
     const opts = dom.bucketSel.options;
     if (opts && opts.length >= 4) {
