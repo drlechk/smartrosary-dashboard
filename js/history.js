@@ -141,7 +141,7 @@ function setControlsEnabled(enabled) {
     if (!el) return;
     el.disabled = !enabled;
   });
-  if (dom.bucketSel && !enabled) dom.bucketSel.value = 'day';
+  if (dom.bucketSel && !enabled) dom.bucketSel.value = 'week';
   setCardMuted(!enabled);
 }
 
