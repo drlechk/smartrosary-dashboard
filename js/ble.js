@@ -8,6 +8,8 @@ export const UUID = {
   INFO_SETTINGS:    'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1002',
   INFO_CTRL:        'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10ff',
   INFO_PARTS:       'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1003',
+  INFO_INTENTIONS:  'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1010',
+  INFO_INTENT_ENTRY:'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1011',
   TOUCH_CHAR:       '12345678-1234-5678-1234-56789abcdea1',
   KEYS_CHAR:        '12345678-1234-5678-1234-56789abcdea2',
   AUTH_INFO:        '8b40f200-78e7-4a6b-b1d3-6b5f3a10a201',
@@ -26,6 +28,8 @@ export class BleClient extends EventTarget {
     this.chSettings = null;
     this.chCtrl = null;
     this.chParts = null;
+    this.chIntentions = null;
+    this.chIntentEntry = null;
     this.statusChar = null;
 
     this.chAuthInfo = null;
@@ -116,6 +120,8 @@ export class BleClient extends EventTarget {
     this.chStats    = await withRetry(() => this.service.getCharacteristic(UUID.INFO_STATS));
     this.chCtrl     = await withRetry(() => this.service.getCharacteristic(UUID.INFO_CTRL));
     try { this.chParts = await withRetry(() => this.service.getCharacteristic(UUID.INFO_PARTS)); } catch { this.chParts = null; }
+    try { this.chIntentions = await withRetry(() => this.service.getCharacteristic(UUID.INFO_INTENTIONS)); } catch { this.chIntentions = null; }
+    try { this.chIntentEntry = await withRetry(() => this.service.getCharacteristic(UUID.INFO_INTENT_ENTRY)); } catch { this.chIntentEntry = null; }
 
     // auth (optional)
     try { this.chAuthInfo = await withRetry(() => this.service.getCharacteristic(UUID.AUTH_INFO)); } catch { this.chAuthInfo = null; }

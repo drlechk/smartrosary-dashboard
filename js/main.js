@@ -9,10 +9,12 @@ import { initRemote } from './remote.js';
 import { i18n } from './i18n.js';
 import { attachWallpaperFS, resetWallpaperFS, setWallpaperConsent } from './wallpaper.js';
 import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetHistoryCard, refreshHistory } from './history.js';
+import { initIntentions } from './intentions.js';
 
 const client = new BleClient();
 
 initHistory();
+const intentions = initIntentions({ client, setStatus: status });
 
 function status(text){ $('status').textContent = text; }
 
@@ -349,6 +351,7 @@ async function handleConnect() {
     status('Requesting device…');
     await client.connect();
 
+    intentions.onConnected();
     setWallpaperConsent(!!client.consentOk);
     setHistoryConsent(!!client.consentOk);
     try {
@@ -377,6 +380,12 @@ async function handleConnect() {
     const statsOk = await refreshUntilValid({ tries: 12, delay: 250 });
     if (!statsOk) {
       await refreshOnce();
+    }
+
+    try {
+      await intentions.refresh({ silent: true });
+    } catch (e) {
+      console.warn('Intentions load skipped:', e);
     }
 
     if (client.consentOk) {
@@ -414,6 +423,7 @@ async function handleConnect() {
     console.error(err);
     status('Error: ' + err.message);
     setHistoryConsent(false);
+    intentions.onDisconnected();
     try { await resetHistoryCard(); } catch {}
   }
 }
@@ -422,6 +432,7 @@ async function handleDisconnect() {
   try { resetWallpaperFS(); } catch {}
   try { await resetHistoryCard(); } catch {}
   await client.disconnect();
+  intentions.onDisconnected();
   const L = i18n[getLang()];
   status(L.statusDisconnected);
   $('refreshBtn').disabled = true;
@@ -451,6 +462,11 @@ function wireControls() {
         await refreshHistory();
       } catch (e) {
         console.warn('History refresh failed:', e);
+      }
+      try {
+        await intentions.refresh({ silent: true });
+      } catch (e) {
+        console.warn('Intentions refresh failed:', e);
       }
     }
   });

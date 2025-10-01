@@ -239,6 +239,39 @@
 </div>
    
 
+      <div class="card intentions-card" id="intentionsCard">
+        <div class="intentions-head">
+          <div class="intentions-copy">
+            <h3 id="intentionsTitle">Intentions Scheduler</h3>
+            <p class="muted" id="intentionsIntro">Review monthly intentions stored on the rosary, adjust start dates and mysteries, then push the schedule back to the device.</p>
+          </div>
+          <div class="intentions-actions">
+            <button id="intentionsLoadBtn" disabled>Load</button>
+            <button id="intentionsSaveBtn" disabled>Save Changes</button>
+          </div>
+        </div>
+        <label class="intentions-auto">
+          <input type="checkbox" id="intentionsAuto" disabled>
+          <span id="intentionsAutoLabel">Enable automatic selection based on start dates</span>
+        </label>
+        <p class="muted intentions-hint" id="intentionsHint">The active intention is the latest entry whose start date is on or before today (stored at 00:00 UTC).</p>
+        <div class="intentions-table-wrap">
+          <table id="intentionsTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Intention</th>
+                <th>Start Date</th>
+                <th>Mystery</th>
+                <th>Part</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div class="muted intentions-empty" id="intentionsEmpty">Connect and load to view intentions stored on the device.</div>
+        </div>
+      </div>
+
       <div class="card">
         <h3 id="rcTitle">Remote control</h3>
         <div class="remote-wrap">
