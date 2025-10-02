@@ -104,6 +104,28 @@ export function applyI18n() {
   setTxt('keysBackupBtn', L.keysBackupBtn);
   setTxt('keysRestoreBtn', L.keysRestoreBtn);
 
+  const IL = L.intentions || {};
+  setTxt('intentionsTitle', IL.title || 'Intentions Scheduler');
+  const intentionsIntro = $('intentionsIntro');
+  if (intentionsIntro && IL.intro) intentionsIntro.textContent = IL.intro;
+  const intentionsLoadBtn = $('intentionsLoadBtn');
+  if (intentionsLoadBtn && IL.loadBtn) intentionsLoadBtn.textContent = IL.loadBtn;
+  const intentionsSaveBtn = $('intentionsSaveBtn');
+  if (intentionsSaveBtn && IL.saveBtn) intentionsSaveBtn.textContent = IL.saveBtn;
+  setTxt('intentionsAutoLabel', IL.autoLabel || '');
+  const intentionsHint = $('intentionsHint');
+  if (intentionsHint && IL.hint) intentionsHint.textContent = IL.hint;
+  const intentionsEmpty = $('intentionsEmpty');
+  if (intentionsEmpty && IL.emptyDisconnected) intentionsEmpty.textContent = IL.emptyDisconnected;
+  const headerCells = document.querySelectorAll('#intentionsTable thead th');
+  if (headerCells.length >= 5 && IL.table) {
+    headerCells[0].textContent = IL.table.index ?? '#';
+    headerCells[1].textContent = IL.table.title ?? headerCells[1].textContent;
+    headerCells[2].textContent = IL.table.start ?? headerCells[2].textContent;
+    headerCells[3].textContent = IL.table.set ?? headerCells[3].textContent;
+    headerCells[4].textContent = IL.table.part ?? headerCells[4].textContent;
+  }
+
   setChartLabels(L);
   renderPillsFromCache();
   setWallpaperLang(lang);

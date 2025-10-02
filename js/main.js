@@ -16,6 +16,15 @@ const client = new BleClient();
 initHistory();
 const intentions = initIntentions({ client, setStatus: status });
 
+const CARD_SELECTOR = '.card';
+function setCardsMuted(muted) {
+  document.querySelectorAll(CARD_SELECTOR).forEach((card) => {
+    card.classList.toggle('card-muted', muted);
+  });
+}
+
+setCardsMuted(true);
+
 function status(text){ $('status').textContent = text; }
 
 function isJsonWhitespace(ch) {
@@ -351,6 +360,7 @@ async function handleConnect() {
   try {
     status('Requesting device…');
     await client.connect();
+    setCardsMuted(false);
 
     intentions.onConnected();
     setWallpaperConsent(!!client.consentOk);
@@ -423,6 +433,7 @@ async function handleConnect() {
   } catch (err) {
     console.error(err);
     status('Error: ' + err.message);
+    setCardsMuted(true);
     setHistoryConsent(false);
     intentions.onDisconnected();
     try { await resetHistoryCard(); } catch {}
@@ -434,6 +445,7 @@ async function handleDisconnect() {
   try { await resetHistoryCard(); } catch {}
   await client.disconnect();
   intentions.onDisconnected();
+  setCardsMuted(true);
   const L = i18n[getLang()];
   status(L.statusDisconnected);
   $('refreshBtn').disabled = true;

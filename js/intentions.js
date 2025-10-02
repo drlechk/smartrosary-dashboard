@@ -1,17 +1,13 @@
 import { $, dec, packKV, le32 } from './utils.js';
+import { i18n } from './i18n.js';
+import { getLang } from './ui.js';
 
 const OP_SET_PREF = 0x50;
 const TYPE_BOOL = 0x01;
 const TYPE_U8 = 0x11;
 const TYPE_U32 = 0x14;
 
-const MYSTERY_OPTIONS = [
-  { value: 0, label: 'None' },
-  { value: 1, label: 'Joyful' },
-  { value: 2, label: 'Luminous' },
-  { value: 3, label: 'Sorrowful' },
-  { value: 4, label: 'Glorious' },
-];
+const DEFAULT_SET_LABELS = ['None', 'Joyful', 'Luminous', 'Sorrowful', 'Glorious', 'Chaplet'];
 
 const ROW_LIMIT = 32;
 
@@ -40,6 +36,22 @@ function dateInputToEpoch(value) {
   return Math.floor(Date.UTC(year, month - 1, day) / 1000);
 }
 
+const IL = () => {
+  const lang = getLang();
+  return (i18n[lang] && i18n[lang].intentions) ? i18n[lang].intentions : i18n.en.intentions;
+};
+
+const getMysteryOptions = () => {
+  const sets = i18n[getLang()]?.sets || DEFAULT_SET_LABELS;
+  return [
+    { value: 0, label: sets[0] || DEFAULT_SET_LABELS[0] },
+    { value: 1, label: sets[1] || DEFAULT_SET_LABELS[1] },
+    { value: 2, label: sets[2] || DEFAULT_SET_LABELS[2] },
+    { value: 3, label: sets[3] || DEFAULT_SET_LABELS[3] },
+    { value: 4, label: sets[4] || DEFAULT_SET_LABELS[4] },
+  ];
+};
+
 function defaultMonthStartEpoch(idx) {
   if (idx >= 12) return 0;
   const now = new Date();
@@ -61,7 +73,7 @@ function safeJsonParse(text) {
   try {
     return JSON.parse(text.trim());
   } catch (err) {
-    throw new Error('Invalid JSON payload');
+    throw new Error(IL().invalidJson);
   }
 }
 
@@ -89,9 +101,10 @@ export function initIntentions({ client, setStatus }) {
   }
 
   function setAvailable(flag, message) {
+    const strings = IL();
     state.available = flag;
     if (!flag) {
-      showEmpty(message || 'Firmware does not expose the intentions service.');
+      showEmpty(message || strings.serviceMissing);
       loadBtn.disabled = true;
       saveBtn.disabled = true;
       autoToggle.disabled = true;
@@ -103,7 +116,7 @@ export function initIntentions({ client, setStatus }) {
       loadBtn.disabled = false;
       saveBtn.disabled = true;
       autoToggle.disabled = true;
-      showEmpty('Load to review intentions stored on the device.');
+      showEmpty(strings.promptLoad);
     }
   }
 
@@ -122,7 +135,7 @@ export function initIntentions({ client, setStatus }) {
 
   function resetTable() {
     if (tbody) tbody.innerHTML = '';
-    showEmpty('Load to review intentions stored on the device.');
+    showEmpty(IL().promptLoad);
   }
 
   function markDirty() {
@@ -137,10 +150,11 @@ export function initIntentions({ client, setStatus }) {
   }
 
   function renderTable() {
+    const strings = IL();
     if (!tbody) return;
     tbody.innerHTML = '';
     if (!state.entries.length) {
-      showEmpty('No intentions found on the device.');
+      showEmpty(strings.emptyList);
       return;
     }
     showTable();
@@ -156,14 +170,14 @@ export function initIntentions({ client, setStatus }) {
       tdTitle.className = 'intentions-title-cell';
       const titleSpan = document.createElement('span');
       titleSpan.className = 'intentions-title';
-      titleSpan.textContent = entry.title || `Intention ${entry.index + 1}`;
+      titleSpan.textContent = entry.title || strings.fallbackTitle(entry.index + 1);
       const descBlock = document.createElement('div');
       descBlock.className = 'intentions-desc';
       const descToggle = document.createElement('button');
       descToggle.type = 'button';
       descToggle.className = 'intentions-desc-toggle';
       descToggle.textContent = '▸';
-      descToggle.setAttribute('aria-label', 'Show description');
+      descToggle.setAttribute('aria-label', strings.descShow);
       const descText = document.createElement('div');
       descText.className = 'intentions-desc-text';
       descText.textContent = entry.desc || '';
@@ -182,10 +196,11 @@ export function initIntentions({ client, setStatus }) {
         descText.setAttribute('aria-hidden', 'true');
         descText.style.maxHeight = '0px';
         descToggle.addEventListener('click', () => {
+          const stringsClick = IL();
           const expanded = descText.classList.toggle('expanded');
           descToggle.textContent = expanded ? '▾' : '▸';
           descToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-          descToggle.setAttribute('aria-label', expanded ? 'Hide description' : 'Show description');
+          descToggle.setAttribute('aria-label', expanded ? stringsClick.descHide : stringsClick.descShow);
           descText.setAttribute('aria-hidden', expanded ? 'false' : 'true');
           descText.style.maxHeight = expanded ? descText.scrollHeight + 'px' : '0px';
         });
@@ -209,7 +224,7 @@ export function initIntentions({ client, setStatus }) {
 
       const tdSet = document.createElement('td');
       const selectSet = document.createElement('select');
-      MYSTERY_OPTIONS.forEach((opt) => {
+      getMysteryOptions().forEach((opt) => {
         const option = document.createElement('option');
         option.value = String(opt.value);
         option.textContent = opt.label;
@@ -250,14 +265,14 @@ export function initIntentions({ client, setStatus }) {
   }
 
   async function readSummary() {
-    if (!client.chIntentions) throw new Error('Intentions summary characteristic missing');
+    if (!client.chIntentions) throw new Error(IL().summaryMissing);
     const value = await client.chIntentions.readValue();
     const text = dec.decode(toUint8(value));
     return safeJsonParse(text);
   }
 
   async function readEntry(index) {
-    if (!client.chIntentEntry) throw new Error('Intentions entry characteristic missing');
+    if (!client.chIntentEntry) throw new Error(IL().entryMissing);
     const buf = new Uint8Array([index & 0xff, (index >> 8) & 0xff]);
     await client.chIntentEntry.writeValue(buf);
     await client.waitReady();
@@ -271,7 +286,8 @@ export function initIntentions({ client, setStatus }) {
     if (state.busy && !ignoreBusy) return false;
     const alreadyBusy = state.busy;
     if (!alreadyBusy) setBusy(true);
-    if (!silent) setStatus('Loading intentions…');
+    const strings = IL();
+    if (!silent) setStatus(strings.statusLoading);
     try {
       const summary = await readSummary();
       state.summary = summary;
@@ -281,7 +297,7 @@ export function initIntentions({ client, setStatus }) {
         resetTable();
         autoToggle.disabled = true;
         clearDirty();
-        const msg = 'No intentions stored on the device. Flash an intentions NVS image first.';
+        const msg = strings.emptySchedule;
         showEmpty(msg);
         if (!silent) setStatus(msg);
         return true;
@@ -295,7 +311,7 @@ export function initIntentions({ client, setStatus }) {
 
       for (let idx = 0; idx < count; idx++) {
         const detail = await readEntry(idx);
-        const fallbackTitle = names[idx] || `Intention ${idx + 1}`;
+        const fallbackTitle = names[idx] || strings.fallbackTitle(idx + 1);
         const scheduleParts = (schedule[idx] || '').split('|');
         const scheduledStart = Number(scheduleParts[0]) || 0;
         const scheduledSet = Number(scheduleParts[1]) || 0;
@@ -323,13 +339,15 @@ export function initIntentions({ client, setStatus }) {
       clearDirty();
 
       if (!silent) {
-        const selected = summary.selected != null ? `Selected intention #${Number(summary.selected) + 1}` : 'Intentions loaded';
+        const selected = summary.selected != null
+          ? strings.statusSelected(Number(summary.selected) + 1)
+          : strings.statusLoaded;
         setStatus(`${selected}.`);
       }
       return true;
     } catch (err) {
       console.error(err);
-      if (!silent) setStatus('Intentions load failed: ' + err.message);
+      if (!silent) setStatus(`${strings.statusLoadFailed}: ${err.message}`);
       return false;
     } finally {
       if (!alreadyBusy) setBusy(false);
@@ -347,7 +365,8 @@ export function initIntentions({ client, setStatus }) {
     if (!state.available || !state.entries.length) return;
     if (state.busy) return;
     setBusy(true);
-    setStatus('Saving intentions schedule…');
+    const strings = IL();
+    setStatus(strings.statusSaving);
     try {
       for (const entry of state.entries) {
         const startEpoch = dateInputToEpoch(entry.controls?.dateInput?.value) || entry.start || 0;
@@ -369,12 +388,12 @@ export function initIntentions({ client, setStatus }) {
       state.summary = state.summary || {};
       state.summary.auto = autoToggle.checked;
       clearDirty();
-      setStatus('Intentions saved. Refreshing…');
+      setStatus(strings.statusSavedRefreshing);
       await refresh({ silent: true, ignoreBusy: true });
-      setStatus('Intentions updated.');
+      setStatus(strings.statusUpdated);
     } catch (err) {
       console.error(err);
-      setStatus('Intentions save failed: ' + err.message);
+      setStatus(`${strings.statusSaveFailed}: ${err.message}`);
     } finally {
       setBusy(false);
     }
@@ -383,7 +402,7 @@ export function initIntentions({ client, setStatus }) {
   function onConnected() {
     const available = !!(client.chIntentions && client.chIntentEntry);
     if (!available) {
-      setAvailable(false, 'Firmware does not expose the intentions editor service.');
+      setAvailable(false, IL().editorMissing);
       return;
     }
     setAvailable(true);
@@ -400,7 +419,7 @@ export function initIntentions({ client, setStatus }) {
     state.dirty = false;
     state.busy = false;
     state.available = false;
-    showEmpty('Connect and load to view intentions stored on the device.');
+    showEmpty(IL().emptyDisconnected);
     loadBtn.disabled = true;
     saveBtn.disabled = true;
     autoToggle.disabled = true;
@@ -411,7 +430,7 @@ export function initIntentions({ client, setStatus }) {
   if (loadBtn) {
     loadBtn.addEventListener('click', () => {
       if (!state.available) return;
-      if (state.dirty && !confirm('Discard unsaved intention edits?')) return;
+      if (state.dirty && !confirm(IL().confirmDiscard)) return;
       refresh();
     });
   }
@@ -431,7 +450,7 @@ export function initIntentions({ client, setStatus }) {
     });
   }
 
-  showEmpty('Connect and load to view intentions stored on the device.');
+  showEmpty(IL().emptyDisconnected);
   loadBtn.disabled = true;
   saveBtn.disabled = true;
   autoToggle.disabled = true;

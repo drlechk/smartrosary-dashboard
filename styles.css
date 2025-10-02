@@ -298,6 +298,7 @@ input[type="range"]::-ms-track {
 .dpad button.center { font-size:calc(var(--btn)*0.28); background:#263241; }
 .dpad button:disabled { opacity:.5; cursor:default; }
 .remote-muted { opacity:.6; filter:grayscale(.1); }
+.card.card-muted { opacity:.6; filter:grayscale(.1); }
 #rcStatus { font-size:12px; color:#95a7ba; }
 
 /* Mobile override: left-align title */
@@ -475,4 +476,3 @@ td.actions .actions-wrap { display: inline-flex; align-items: center; gap: 6px; 
 .intentions-desc-toggle:disabled { cursor:default; opacity:0.4; }
 .intentions-desc-text { font-size:11px; color:#8fa5bf; overflow:hidden; transition:max-height 0.22s ease; white-space:pre-line; padding:0 2px; flex:1 1 100%; }
 .intentions-desc-text.expanded { }
-
