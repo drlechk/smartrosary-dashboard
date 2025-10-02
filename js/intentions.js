@@ -84,6 +84,7 @@ export function initIntentions({ client, setStatus }) {
   const table = $('intentionsTable');
   const tbody = table ? table.querySelector('tbody') : null;
   const emptyState = $('intentionsEmpty');
+  const card = $('intentionsCard');
 
   const state = {
     summary: null,
@@ -103,6 +104,7 @@ export function initIntentions({ client, setStatus }) {
   function setAvailable(flag, message) {
     const strings = IL();
     state.available = flag;
+    if (card) card.classList.toggle('card-muted', !flag);
     if (!flag) {
       showEmpty(message || strings.serviceMissing);
       loadBtn.disabled = true;
@@ -304,6 +306,10 @@ export function initIntentions({ client, setStatus }) {
       }
 
       const count = Math.min(Number(summary.count) || 0, ROW_LIMIT);
+      if (!count) {
+        setAvailable(false, strings.emptySchedule);
+        return true;
+      }
       const names = typeof summary.names === 'string' ? summary.names.split('\n') : [];
       const schedule = typeof summary.entries === 'string' && summary.entries.length
         ? summary.entries.split(',')
@@ -420,6 +426,7 @@ export function initIntentions({ client, setStatus }) {
     state.busy = false;
     state.available = false;
     showEmpty(IL().emptyDisconnected);
+    if (card) card.classList.add('card-muted');
     loadBtn.disabled = true;
     saveBtn.disabled = true;
     autoToggle.disabled = true;
