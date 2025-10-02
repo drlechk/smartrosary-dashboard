@@ -48,6 +48,17 @@ export async function doBackup({ chSettings, chParts, chStats, statusEl, i18nL, 
   for (let i = 0; i <= healers.length; i++) {
     try {
       jsSettings = JSON.parse(rawSettings);
+      const myst = jsSettings?.mystery;
+      if (myst && typeof myst === 'object') {
+        if (Object.prototype.hasOwnProperty.call(myst, 'sel')) {
+          myst.selection = myst.selection ?? myst.sel;
+          delete myst.sel;
+        }
+        if (Object.prototype.hasOwnProperty.call(myst, 'iSel')) {
+          myst.intentionSelected = myst.intentionSelected ?? !!myst.iSel;
+          delete myst.iSel;
+        }
+      }
       break;
     } catch (err) {
       if (i === healers.length) {

@@ -182,6 +182,7 @@ function parseJsonWithFallback(str, context, { dropEntries } = {}) {
     return JSON.parse(trimmed);
   } catch (err) {
     console.warn(`${context} JSON parse failed`, err);
+    console.log(`${context} JSON raw:`, trimmed);
     let working = trimmed;
     let lastErr = err;
 

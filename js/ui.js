@@ -10,7 +10,21 @@ let lastSettings = null;
 
 const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
+function normalizeSettingsStruct(settings) {
+  if (!isPlainObject(settings)) return settings;
+  const myst = settings.mystery;
+  if (isPlainObject(myst)) {
+    if (myst.sel != null && myst.selection == null) myst.selection = myst.sel;
+    if (myst.selection != null) myst.sel = myst.selection;
+
+    if (myst.iSel != null && myst.intentionSelected == null) myst.intentionSelected = !!myst.iSel;
+    if (myst.intentionSelected != null) myst.iSel = !!myst.intentionSelected;
+  }
+  return settings;
+}
+
 function mergeSettings(base, patch) {
+  patch = normalizeSettingsStruct(patch);
   if (!isPlainObject(patch)) return patch ?? base ?? null;
   const target = isPlainObject(base) ? { ...base } : {};
   for (const [key, val] of Object.entries(patch)) {
@@ -18,7 +32,7 @@ function mergeSettings(base, patch) {
       ? mergeSettings(target[key], val)
       : val;
   }
-  return target;
+  return normalizeSettingsStruct(target);
 }
 
 function cacheSettings(patch) {

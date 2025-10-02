@@ -19,7 +19,7 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   const setMap = { None:0, Joyful:1, Luminous:2, Sorrowful:3, Glorious:4, Chaplet:5 };
   const order = ['none','joyful','luminous','sorrowful','glorious'];
 
-  const totalSteps = 13 + 5 + 3 + 2 + 30 + 5 + (5*5) + 8;
+  const totalSteps = 15 + 5 + 3 + 2 + 30 + 5 + (5*5) + 8;
   let step=0; const tick = ()=>onProgress?.(++step, totalSteps);
 
   // PREPASS: compute totalBytes for RESTORE_BEGIN
@@ -31,6 +31,8 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   sumKV("m-preset-en",   0x01, !!(prefs.mystery?.preset));
   sumKV("m-autosave-en", 0x01, !!(prefs.mystery?.autosave));
   sumKV("m-intro-en",    0x01, !!(prefs.mystery?.intro));
+  const mysteryIntentSel = prefs.mystery?.intentionSelected ?? prefs.mystery?.iSel;
+  sumKV("m-intention",   0x01, !!mysteryIntentSel);
   sumKV("i-en",          0x01, !!(prefs.intentions?.enabled));
 
   // prefs ints
@@ -41,6 +43,8 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   sumKV("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);
   sumKV("m-pos",         0x21, prefs.mystery?.pos ?? 0);
   sumKV("m-part",        0x21, prefs.mystery?.part ?? 0);
+  const mysterySelection = prefs.mystery?.selection ?? prefs.mystery?.sel ?? 0;
+  sumKV("m-select",      0x21, mysterySelection);
   sumKV("i-pos",         0x21, prefs.intentions?.pos ?? 0);
 
   // stats scalars
@@ -94,6 +98,7 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   await writePrefKey("m-preset-en",   0x01, !!(prefs.mystery?.preset));          tick();
   await writePrefKey("m-autosave-en", 0x01, !!(prefs.mystery?.autosave));        tick();
   await writePrefKey("m-intro-en",    0x01, !!(prefs.mystery?.intro));           tick();
+  await writePrefKey("m-intention",   0x01, !!mysteryIntentSel);                   tick();
   await writePrefKey("i-en",          0x01, !!(prefs.intentions?.enabled));      tick();
 
   await writePrefKey("disp-bright",   0x21, prefs.display?.brightness ?? 0);     tick();
@@ -103,6 +108,7 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   await writePrefKey("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);     tick();
   await writePrefKey("m-pos",         0x21, prefs.mystery?.pos ?? 0);            tick();
   await writePrefKey("m-part",        0x21, prefs.mystery?.part ?? 0);           tick();
+  await writePrefKey("m-select",      0x21, mysterySelection);                   tick();
   await writePrefKey("i-pos",         0x21, prefs.intentions?.pos ?? 0);         tick();
 
   // STATS
