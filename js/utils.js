@@ -6,9 +6,6 @@ export const dec = new TextDecoder();
 
 export const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-const anchorProbe = (typeof document !== 'undefined') ? document.createElement('a') : null;
-const supportsDownloadAttr = !!(anchorProbe && 'download' in anchorProbe);
-
 const isLikelyIOS = (() => {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
@@ -18,6 +15,9 @@ const isLikelyIOS = (() => {
   // iPadOS reports as MacIntel with touch points > 1
   return platform === 'MacIntel' && touchPoints > 1;
 })();
+
+const anchorProbe = (typeof document !== 'undefined') ? document.createElement('a') : null;
+const supportsDownloadAttr = !!(anchorProbe && 'download' in anchorProbe) && !isLikelyIOS;
 
 function restoreInlineStyles(node, snapshot) {
   Object.entries(snapshot).forEach(([prop, value]) => {
@@ -40,27 +40,23 @@ export function downloadBlob(blob, filename) {
     setTimeout(() => {
       URL.revokeObjectURL(url);
       a.remove();
-    }, 0);
+    }, 1400);
     return true;
   }
 
   try {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== 'string') return;
-      const opened = window.open(result, '_blank');
-      if (!opened) {
-        const tmp = document.createElement('a');
-        tmp.href = result;
-        tmp.target = '_blank';
-        tmp.rel = 'noopener';
-        document.body.appendChild(tmp);
-        tmp.click();
-        tmp.remove();
-      }
-    };
-    reader.readAsDataURL(blob);
+    const url = URL.createObjectURL(blob);
+    const opened = window.open(url, '_blank');
+    if (!opened) {
+      const tmp = document.createElement('a');
+      tmp.href = url;
+      tmp.target = '_blank';
+      tmp.rel = 'noopener';
+      document.body.appendChild(tmp);
+      tmp.click();
+      tmp.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
     return true;
   } catch (err) {
     console.warn('downloadBlob fallback failed', err);
@@ -100,10 +96,12 @@ export function openFilePicker(input) {
       input.style.display = 'block';
       input.style.position = 'absolute';
       input.style.opacity = '0';
-      input.style.pointerEvents = 'none';
+      input.style.pointerEvents = 'auto';
       input.style.width = '1px';
       input.style.height = '1px';
       input.style.zIndex = '-1';
+      input.style.top = '0';
+      input.style.left = '0';
     }
   }
 
@@ -115,7 +113,7 @@ export function openFilePicker(input) {
     return false;
   } finally {
     if (hiddenWorkaround && snapshot) {
-      setTimeout(() => restoreInlineStyles(input, snapshot), 16);
+      setTimeout(() => restoreInlineStyles(input, snapshot), 400);
     }
   }
 }
