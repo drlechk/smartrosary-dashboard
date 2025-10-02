@@ -6,6 +6,147 @@ export const dec = new TextDecoder();
 
 export const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+const anchorProbe = (typeof document !== 'undefined') ? document.createElement('a') : null;
+const supportsDownloadAttr = !!(anchorProbe && 'download' in anchorProbe);
+
+const isLikelyIOS = (() => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const touchPoints = Number(navigator.maxTouchPoints) || 0;
+  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  // iPadOS reports as MacIntel with touch points > 1
+  return platform === 'MacIntel' && touchPoints > 1;
+})();
+
+function restoreInlineStyles(node, snapshot) {
+  Object.entries(snapshot).forEach(([prop, value]) => {
+    node.style[prop] = value;
+  });
+}
+
+export function downloadBlob(blob, filename) {
+  if (!blob) return false;
+  const safeName = filename || 'download.bin';
+
+  if (supportsDownloadAttr) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = safeName;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 0);
+    return true;
+  }
+
+  try {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') return;
+      const opened = window.open(result, '_blank');
+      if (!opened) {
+        const tmp = document.createElement('a');
+        tmp.href = result;
+        tmp.target = '_blank';
+        tmp.rel = 'noopener';
+        document.body.appendChild(tmp);
+        tmp.click();
+        tmp.remove();
+      }
+    };
+    reader.readAsDataURL(blob);
+    return true;
+  } catch (err) {
+    console.warn('downloadBlob fallback failed', err);
+    return false;
+  }
+}
+
+export function openFilePicker(input) {
+  if (!input) return false;
+
+  if (typeof input.showPicker === 'function' && !isLikelyIOS) {
+    try {
+      input.showPicker();
+      return true;
+    } catch (err) {
+      // showPicker not available, fall back to click
+    }
+  }
+
+  let hiddenWorkaround = false;
+  let snapshot = null;
+
+  if (isLikelyIOS && typeof window !== 'undefined' && window.getComputedStyle) {
+    const style = window.getComputedStyle(input);
+    const hidden = style.display === 'none' || style.visibility === 'hidden';
+    if (hidden) {
+      hiddenWorkaround = true;
+      snapshot = {
+        display: input.style.display,
+        position: input.style.position,
+        opacity: input.style.opacity,
+        pointerEvents: input.style.pointerEvents,
+        width: input.style.width,
+        height: input.style.height,
+        zIndex: input.style.zIndex,
+      };
+      input.style.display = 'block';
+      input.style.position = 'absolute';
+      input.style.opacity = '0';
+      input.style.pointerEvents = 'none';
+      input.style.width = '1px';
+      input.style.height = '1px';
+      input.style.zIndex = '-1';
+    }
+  }
+
+  try {
+    input.click();
+    return true;
+  } catch (err) {
+    console.warn('openFilePicker click failed', err);
+    return false;
+  } finally {
+    if (hiddenWorkaround && snapshot) {
+      setTimeout(() => restoreInlineStyles(input, snapshot), 16);
+    }
+  }
+}
+
+export async function loadImageSource(source) {
+  if (!source) throw new Error('No image source provided');
+  const blob = source instanceof Blob ? source : new Blob([source]);
+
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(blob);
+    } catch (err) {
+      console.warn('createImageBitmap failed, falling back to Image()', err);
+    }
+  }
+
+  return await new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    img.src = url;
+  });
+}
+
 export async function withRetry(fn, { tries = 5, base = 120 } = {}) {
   let err;
   for (let i = 0; i < tries; i++) {

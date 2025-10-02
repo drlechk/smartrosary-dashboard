@@ -1,4 +1,4 @@
-import { sleep } from './utils.js';
+import { sleep, downloadBlob } from './utils.js';
 
 // history.js — BLE history explorer card integration
 
@@ -412,11 +412,7 @@ function downloadRawFile() {
     alert('History data not available yet. Please wait for the device to sync.');
     return;
   }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(lastBlob.blob);
-  a.download = lastBlob.name || 'history.bin';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2500);
+  downloadBlob(lastBlob.blob, lastBlob.name || 'history.bin');
 }
 
 function _crc32(bytes) {

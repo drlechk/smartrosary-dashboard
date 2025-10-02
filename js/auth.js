@@ -1,4 +1,4 @@
-import { enc, packKV } from './utils.js';
+import { enc, packKV, downloadBlob } from './utils.js';
 
 // For AUTH_SET strings
 function authSetFrame(key, strVal) {
@@ -40,13 +40,9 @@ export async function backupKeys({ chAuthInfo, statusEl, i18nL }) {
   const js = JSON.parse(new TextDecoder().decode(v));
   if (!js?.id || !js?.pubKey || !js?.privKey) throw new Error('Device did not return full keys.');
 
-  const blob = new Blob([JSON.stringify({ id: js.id, pubKey: js.pubKey, privKey: js.privKey }, null, 2)], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.download = (js.id || 'rosary') + '_keys.json';
-  a.click();
-  URL.revokeObjectURL(url);
+  const payload = { id: js.id, pubKey: js.pubKey, privKey: js.privKey };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, (js.id || 'rosary') + '_keys.json');
 
   statusEl.textContent = i18nL.backupKeysDone || 'Keys downloaded.';
 }

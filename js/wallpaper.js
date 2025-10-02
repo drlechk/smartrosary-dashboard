@@ -2,6 +2,7 @@
 
 // --- import i18n dictionary (ESM) ---
 import { i18n } from './i18n.js';
+import { downloadBlob, openFilePicker, loadImageSource } from './utils.js';
 
 const log = (...args) => console.log('[wallpaper]', ...args);
 
@@ -135,7 +136,7 @@ let lastShownName = null; // normalized "/name.bin" last "show" sent to device
 // staged upload (selected by user but not auto-uploaded)
 let staged = { type:null, name:null, bytes:null, w:0, h:0, pixelOffset:4, fromCanvas:false };
 
-let dlUrl = null;      // for Save .bin after read
+let dlBlob = null;     // for Save .bin after read
 
 // visible view context + offscreen work canvas
 let viewCtx = null;
@@ -357,7 +358,10 @@ async function _writeFs(buf) {
 }
 
 // ---------- UI wiring ----------
-ui.selectBtn?.addEventListener('click', () => ui.fileInput?.click());
+ui.selectBtn?.addEventListener('click', () => {
+  if (!ui.fileInput) return;
+  openFilePicker(ui.fileInput);
+});
 
 ui.fileInput?.addEventListener('change', async (e) => {
 
@@ -376,7 +380,8 @@ ui.fileInput?.addEventListener('change', async (e) => {
   // preview only; do not upload yet
   log('file selected', { name: f.name, type: f.type, size: f.size });
   if (/^image\/(png|jpe?g|webp)$/i.test(f.type) || /\.(png|jpe?g|jpg|webp)$/i.test(f.name)) {
-    await _drawToCanvasCover(await createImageBitmap(f));
+    const imgSource = await loadImageSource(f);
+    await _drawToCanvasCover(imgSource);
     staged = { type:'canvas', name:f.name, bytes:null, w:TARGET_W, h:TARGET_H, pixelOffset:4, fromCanvas:true };
   } else if (/\.(bin|rgb565|565|raw)$/i.test(f.name) || /octet-stream/.test(f.type)) {
     const buf = new Uint8Array(await f.arrayBuffer());
@@ -484,8 +489,11 @@ function _clearPreview() {
 
 async function _drawToCanvasCover(bmp) {
   workCanvas.width = TARGET_W; workCanvas.height = TARGET_H;
-  const s = Math.max(TARGET_W / bmp.width, TARGET_H / bmp.height);
-  const dw = Math.round(bmp.width * s), dh = Math.round(bmp.height * s);
+  const srcW = bmp.width || bmp.naturalWidth || bmp.videoWidth;
+  const srcH = bmp.height || bmp.naturalHeight || bmp.videoHeight;
+  if (!srcW || !srcH) throw new Error('Invalid image dimensions');
+  const s = Math.max(TARGET_W / srcW, TARGET_H / srcH);
+  const dw = Math.round(srcW * s), dh = Math.round(srcH * s);
   const dx = Math.round((TARGET_W - dw)/2), dy = Math.round((TARGET_H - dh)/2);
   workCtx.clearRect(0,0,TARGET_W,TARGET_H);
   workCtx.drawImage(bmp, dx, dy, dw, dh);
@@ -1166,34 +1174,46 @@ async function _renderList(j) {
 
 // ---------- Save buttons after READ ----------
 function _resetUrls() {
-  if (dlUrl) { URL.revokeObjectURL(dlUrl); dlUrl = null; }
+  dlBlob = null;
   if (ui.saveBinBtn) ui.saveBinBtn.style.display = 'none';
   if (ui.savePngBtn) ui.savePngBtn.style.display = 'none';
 }
 function _showSaveButtons(name, bytes) {
   _resetUrls();
   const clean = (name||'image.bin').replace(/^\/+/, '');
-  dlUrl = URL.createObjectURL(new Blob([bytes], { type:'application/octet-stream' }));
+  dlBlob = new Blob([bytes], { type:'application/octet-stream' });
 
   if (ui.saveBinBtn) {
     ui.saveBinBtn.style.display='inline-block';
     ui.saveBinBtn.textContent = WP().saveBin || 'Save .bin';
     ui.saveBinBtn.onclick = () => {
-      const a = document.createElement('a');
-      a.href = dlUrl; a.download = clean; document.body.appendChild(a);
-      a.click(); a.remove();
+      if (dlBlob) downloadBlob(dlBlob, clean);
     };
   }
   if (ui.savePngBtn) {
     ui.savePngBtn.style.display='inline-block';
     ui.savePngBtn.textContent = WP().savePng || 'Save .png';
     ui.savePngBtn.onclick = () => {
-      ui.canvas.toBlob((blob) => {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = clean.replace(/\.bin$/i, '.png');
-        document.body.appendChild(a); a.click(); a.remove();
-      }, 'image/png');
+      const targetName = clean.replace(/\.bin$/i, '.png');
+      if (ui.canvas?.toBlob) {
+        ui.canvas.toBlob((blob) => {
+          if (blob) {
+            downloadBlob(blob, targetName);
+          }
+        }, 'image/png');
+      } else if (ui.canvas) {
+        const dataUrl = ui.canvas.toDataURL('image/png');
+        const opened = window.open(dataUrl, '_blank');
+        if (!opened) {
+          const link = document.createElement('a');
+          link.href = dataUrl;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        }
+      }
     };
   }
 }
@@ -1265,7 +1285,7 @@ ui.presetSelect?.addEventListener('change', async (e) => {
 
     // Emulate the same staging as file input
     if (/^image\/(png|jpe?g|webp)$/i.test(preset.type) || /\.(png|jpe?g|jpg|webp)$/i.test(name)) {
-      const bmp = await createImageBitmap(new Blob([buf], { type: preset.type || 'image/png' }));
+      const bmp = await loadImageSource(new Blob([buf], { type: preset.type || 'image/png' }));
       await _drawToCanvasCover(bmp);
       staged = { type:'canvas', name, bytes:null, w:TARGET_W, h:TARGET_H, pixelOffset:4, fromCanvas:true };
     } else if (/\.(bin|rgb565|565|raw)$/i.test(name) || /octet-stream/.test(preset.type||'')) {

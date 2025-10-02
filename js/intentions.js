@@ -69,9 +69,11 @@ function u8(val) {
 }
 
 function safeJsonParse(text) {
-  if (!text || !text.trim()) return { present: false };
+  if (!text) return { present: false };
+  const cleaned = text.replace(/\u0000/g, '').trim();
+  if (!cleaned) return { present: false };
   try {
-    return JSON.parse(text.trim());
+    return JSON.parse(cleaned);
   } catch (err) {
     throw new Error(IL().invalidJson);
   }

@@ -1,4 +1,4 @@
-import { u8ToStr, sleep } from './utils.js';
+import { u8ToStr, sleep, downloadBlob } from './utils.js';
 
 export async function doBackup({ chSettings, chParts, chStats, statusEl, i18nL, robustRead }) {
   if (!chStats || !chSettings) return;
@@ -119,12 +119,7 @@ export async function doBackup({ chSettings, chParts, chStats, statusEl, i18nL, 
   }
 
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.download = (out.device || 'rosary') + '_backup.json';
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, (out.device || 'rosary') + '_backup.json');
 
   statusEl.textContent = i18nL.backupDone;
 }
