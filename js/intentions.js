@@ -1,4 +1,4 @@
-import { $, dec, packKV, le32, sleep } from './utils.js';
+import { $, dec, packKV, le32 } from './utils.js';
 import { i18n } from './i18n.js';
 import { getLang } from './ui.js';
 
@@ -270,7 +270,7 @@ export function initIntentions({ client, setStatus }) {
 
   async function readSummary() {
     if (!client.chIntentions) throw new Error(IL().summaryMissing);
-    const value = await client.robustRead(client.chIntentions);
+    const value = await client.chIntentions.readValue();
     const text = dec.decode(toUint8(value));
     return safeJsonParse(text);
   }
@@ -280,7 +280,7 @@ export function initIntentions({ client, setStatus }) {
     const buf = new Uint8Array([index & 0xff, (index >> 8) & 0xff]);
     await client.chIntentEntry.writeValue(buf);
     await client.waitReady();
-    const value = await client.robustRead(client.chIntentEntry);
+    const value = await client.chIntentEntry.readValue();
     const text = dec.decode(toUint8(value));
     return safeJsonParse(text);
   }
@@ -339,9 +339,6 @@ export function initIntentions({ client, setStatus }) {
           part: detail.part !== undefined ? detail.part : scheduledPart,
           controls: null,
         });
-
-        // Small pacing delay helps iOS/Bluefy GATT stability
-        await sleep(40);
       }
 
       autoToggle.disabled = !state.entries.length;

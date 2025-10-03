@@ -43,7 +43,7 @@ export class BleClient extends EventTarget {
   }
 
   async connect() {
-    if (!navigator.bluetooth) throw new Error('Web Bluetooth not available. On iOS, use the Bluefy app.');
+    if (!navigator.bluetooth) throw new Error('Web Bluetooth not available');
 
     let dev;
     try {
@@ -65,8 +65,6 @@ export class BleClient extends EventTarget {
     this.device.addEventListener('gattserverdisconnected', () => this._onDisconnected());
 
     this.server = await dev.gatt.connect();
-    // Give iOS/Bluefy a moment to finish service discovery
-    await sleep(250);
     await this._helloAndConsent();
 
     // settle for Android
@@ -78,8 +76,7 @@ export class BleClient extends EventTarget {
     this.statusChar = await withRetry(() => this.service.getCharacteristic(UUID.STATUS));
     await this.statusChar.startNotifications();
     this.statusChar.addEventListener('characteristicvaluechanged', (ev) => {
-      const dv = ev.target.value;
-      const v = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength)[0];
+      const v = new Uint8Array(ev.target.value.buffer)[0];
       if (v === 0x01) this.readyFlag = true;  // READY tick from FW
     });
 
@@ -96,16 +93,15 @@ export class BleClient extends EventTarget {
   }
 
   async _helloAndConsent() {
-    const svc  = await withRetry(() => this.server.getPrimaryService(UUID.OTA_SVC));
-    const ctrl = await withRetry(() => svc.getCharacteristic(UUID.INFO_CTRL));
-    const stat = await withRetry(() => svc.getCharacteristic(UUID.STATUS));
+    const svc  = await this.server.getPrimaryService(UUID.OTA_SVC);
+    const ctrl = await svc.getCharacteristic(UUID.INFO_CTRL);
+    const stat = await svc.getCharacteristic(UUID.STATUS);
 
-    await withRetry(() => stat.startNotifications());
+    await stat.startNotifications();
 
     const ok = await new Promise(async (resolve) => {
       const onStatus = (ev) => {
-        const dv = ev.target.value;
-        const v = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength)[0];
+        const v = new Uint8Array(ev.target.value.buffer)[0];
         if (v === 0xA1) { stat.removeEventListener('characteristicvaluechanged', onStatus); resolve(true); }
         if (v === 0xA0) { stat.removeEventListener('characteristicvaluechanged', onStatus); resolve(false); }
       };
