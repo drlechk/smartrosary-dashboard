@@ -65,6 +65,8 @@ export class BleClient extends EventTarget {
     this.device.addEventListener('gattserverdisconnected', () => this._onDisconnected());
 
     this.server = await dev.gatt.connect();
+    // Give iOS/Bluefy a moment to finish service discovery
+    await sleep(250);
     await this._helloAndConsent();
 
     // settle for Android
@@ -94,11 +96,11 @@ export class BleClient extends EventTarget {
   }
 
   async _helloAndConsent() {
-    const svc  = await this.server.getPrimaryService(UUID.OTA_SVC);
-    const ctrl = await svc.getCharacteristic(UUID.INFO_CTRL);
-    const stat = await svc.getCharacteristic(UUID.STATUS);
+    const svc  = await withRetry(() => this.server.getPrimaryService(UUID.OTA_SVC));
+    const ctrl = await withRetry(() => svc.getCharacteristic(UUID.INFO_CTRL));
+    const stat = await withRetry(() => svc.getCharacteristic(UUID.STATUS));
 
-    await stat.startNotifications();
+    await withRetry(() => stat.startNotifications());
 
     const ok = await new Promise(async (resolve) => {
       const onStatus = (ev) => {
