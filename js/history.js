@@ -694,11 +694,17 @@ function buildDatasetsFixed(mode) {
         if (bin < 0 || bin >= L) continue;
 
         if (r.pk !== pk) continue;
+
+        // scaling factors
+        const weight = (pk === 5) ? 1 : 0.2;
+
         if (pk === 5) {
-          if (r.intent) intent[bin]++; else solid[bin]++;
+          if (r.intent) intent[bin] += weight;
+          else solid[bin] += weight;
         } else {
           if (r.dec !== part) continue;
-          if (r.intent) intent[bin]++; else solid[bin]++;
+          if (r.intent) intent[bin] += weight;
+          else solid[bin] += weight;
         }
       }
 

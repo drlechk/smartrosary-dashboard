@@ -111,14 +111,27 @@ export function updateDonut({ none=0, joyful=0, sorrowful=0, glorious=0, luminou
   donutSets.update();
 }
 
+const PART_WEIGHT = 0.2;
 export function updateParts(setsParts) {
   if (!setsParts || !partsChart) return;
+
+  // order: none, joyful, luminous, sorrowful, glorious
   const order = ['none','joyful','luminous','sorrowful','glorious'];
+
+  // Build data for I..V (datasets) across the 5 sets (x axis),
+  // scaling each mystery part by 0.2
   const dataByPart = [0,1,2,3,4].map(()=>[0,0,0,0,0]);
+
   order.forEach((name, si) => {
     const arr = setsParts[name] || [0,0,0,0,0];
-    for (let p=0;p<5;p++) dataByPart[p][si] = Number(arr[p]||0);
+    for (let p = 0; p < 5; p++) {
+      const raw = Number(arr[p] || 0);
+      dataByPart[p][si] = raw * PART_WEIGHT;   // ← scale here
+    }
   });
-  for (let p=0;p<5;p++) partsChart.data.datasets[p].data = dataByPart[p];
+
+  for (let p = 0; p < 5; p++) {
+    partsChart.data.datasets[p].data = dataByPart[p];
+  }
   partsChart.update();
 }
