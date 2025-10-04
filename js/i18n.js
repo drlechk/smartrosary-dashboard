@@ -105,6 +105,10 @@ export const i18n = {
       legendIntent: "Intention",
       legendRoman: ["I","II","III","IV","V"]
     },
+    calendar: {
+      monthShort: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+      weekDow:    ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']  // Monday-first
+    },
     wp: {
           title: "Wallpaper",
           select: "Select file…",
@@ -266,6 +270,10 @@ export const i18n = {
       legendIntent: "Intencja",
       legendRoman: ["I","II","III","IV","V"]
     },
+    calendar: {
+      monthShort: ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'],
+      weekDow:    ['Pon','Wt','Śr','Czw','Pt','Sob','Nd']     // Monday-first (common PL abbreviations)
+    },    
     wp: {
           title: "Tapeta",
           select: "Wybierz plik…",
@@ -426,6 +434,10 @@ export const i18n = {
       legendSets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
       legendIntent: "Intention",
       legendRoman: ["I","II","III","IV","V"]
+    },
+    calendar: {
+      monthShort: ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],
+      weekDow:    ['Mo','Di','Mi','Do','Fr','Sa','So']        // Monday-first
     },
     wp: {
       title: "Hintergrundbild",

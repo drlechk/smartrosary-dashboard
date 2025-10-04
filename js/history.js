@@ -536,8 +536,11 @@ async function doRestoreFromFile(file) {
   await doList();
 }
 
-const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const WEEK_DOW = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+// Defaults (English); mutable so i18n can override
+const MONTH_SHORT_DEFAULT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const WEEK_DOW_DEFAULT    = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+let MONTH_SHORT = [...MONTH_SHORT_DEFAULT];
+let WEEK_DOW    = [...WEEK_DOW_DEFAULT];
 
 function startOfTodayUTC() {
   const now = new Date();
@@ -1040,6 +1043,20 @@ export function applyHistoryI18n(dict) {
   if (Array.isArray(dict.legendRoman) && dict.legendRoman.length >= 5) {
     legendRoman = dict.legendRoman.slice();
   }
+  // --- NEW: calendar labels override (month + weekday) ---
+  // Accept either dict.calendar.monthShort/weekDow OR dict.monthShort/weekDow
+  const cal = dict.calendar || dict;
+  if (Array.isArray(cal?.monthShort) && cal.monthShort.length === 12) {
+    MONTH_SHORT = cal.monthShort.slice();
+  } else {
+    MONTH_SHORT = [...MONTH_SHORT_DEFAULT];
+  }
+  if (Array.isArray(cal?.weekDow) && cal.weekDow.length === 7) {
+    WEEK_DOW = cal.weekDow.slice();  // Monday-first expected
+  } else {
+    WEEK_DOW = [...WEEK_DOW_DEFAULT];
+  }
+  // ---
   renderLegend();
 }
 
