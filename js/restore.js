@@ -1,4 +1,4 @@
-import { enc, le16, le32, le64Big, packKV, encSize } from './utils.js';
+import { enc, le16, le32, le64Big, packKV, encSize, writeGatt } from './utils.js';
 
 const OP_SET_PREF = 0x50;
 const OP_SET_STAT = 0x53;
@@ -90,7 +90,7 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   begin[0] = OP_REST_BEGIN;
   begin.set(le16(totalSteps), 1);
   begin.set(le32(totalBytes), 3);
-  await chCtrl.writeValue(begin);
+  await writeGatt(chCtrl, begin);
   try { await waitReady(); } catch { /* if pacing not started yet, continue */ }
 
   // PREFS
@@ -149,6 +149,6 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   await writeStatKey("cSum", 0x18, BigInt(durObj.totalChapletMs ?? 0));                    tick();
   await writeStatKey("cCnt", 0x14, (stAll.totals?.chaplets ?? durObj.chapletCount ?? 0));  tick();
 
-  await chCtrl.writeValue(new Uint8Array([OP_REST_DONE]));
+  await writeGatt(chCtrl, new Uint8Array([OP_REST_DONE]));
   await waitReady();
 }

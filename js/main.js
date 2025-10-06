@@ -1,4 +1,4 @@
-import { $, u8ToStr, sleep, packKV, le32 } from './utils.js';
+import { $, u8ToStr, sleep, packKV, le32, writeGatt } from './utils.js';
 import { BleClient } from './ble.js';
 import { initCharts } from './charts.js';
 import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly } from './ui.js';
@@ -331,7 +331,7 @@ async function writePrefKey(key, type, value){
     default: throw new Error('bad type');
   }
   const payload = packKV(0x50, type, key, valBytes);
-  await client.chCtrl.writeValue(payload);
+  await writeGatt(client.chCtrl, payload);
   await client.waitReady();
 }
 async function writeStatKey(key, type, value){
@@ -351,7 +351,7 @@ async function writeStatKey(key, type, value){
     default: throw new Error('bad type');
   }
   const payload = packKV(0x53, type, key, valBytes);
-  await client.chCtrl.writeValue(payload);
+  await writeGatt(client.chCtrl, payload);
   await client.waitReady();
 }
 
@@ -489,7 +489,7 @@ function wireControls() {
     try{
       if (!client.chCtrl) return;
       if (!confirm(L.confirmReset)) return;
-      await client.chCtrl.writeValue(new Uint8Array([0x01]));
+      await writeGatt(client.chCtrl, new Uint8Array([0x01]));
       await client.waitReady();
       setTimeout(refreshOnce, 300);
       status(L.statusResetReq);

@@ -1,4 +1,4 @@
-import { withRetry, readWithRetry, sleep } from './utils.js';
+import { withRetry, readWithRetry, sleep, writeGatt } from './utils.js';
 
 // UUIDs (unchanged; must match firmware)
 export const UUID = {
@@ -106,7 +106,7 @@ export class BleClient extends EventTarget {
         if (v === 0xA0) { stat.removeEventListener('characteristicvaluechanged', onStatus); resolve(false); }
       };
       stat.addEventListener('characteristicvaluechanged', onStatus);
-      await ctrl.writeValue(Uint8Array.from([0x41])); // HELLO_WEB
+      await writeGatt(ctrl, Uint8Array.from([0x41])); // HELLO_WEB (use WithResponse on iOS)
       setTimeout(()=>resolve(false), 25000);
     });
 

@@ -2,7 +2,7 @@
 
 // --- import i18n dictionary (ESM) ---
 import { i18n } from './i18n.js';
-import { downloadBlob, openFilePicker, loadImageSource } from './utils.js';
+import { downloadBlob, openFilePicker, loadImageSource, writeGatt } from './utils.js';
 
 const log = (...args) => console.log('[wallpaper]', ...args);
 
@@ -345,12 +345,12 @@ async function _ensureFsService() {
 async function _writeFs(buf) {
   await _ensureFsService();
   try {
-    await fsCtrl.writeValue(buf);
+    await writeGatt(fsCtrl, buf);
   } catch (err) {
     if (_isInvalidCharError(err)) {
       connected = false;
       await _rebindFsService();
-      await fsCtrl.writeValue(buf);
+      await writeGatt(fsCtrl, buf);
       return;
     }
     throw err;
@@ -721,10 +721,13 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
     }
 
     // --- Chunk sizing (BLE 517 MTU typical, but cap to CHUNK_MAX) ---
-    const mtu = 517;
-    let payload  = (mtu >= 23) ? (mtu - 3) : 20;  // ATT header
-    let baseChunk = payload - 1 /*tag*/ - 4 /*CRC*/;
-    let dynChunk  = Math.min(CHUNK_MAX, Math.max(CHUNK_MIN, baseChunk));
+    // --- Chunk sizing (be conservative on iOS) ---
+    const isiOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const mtuAssumed = isiOS ? 185 : 247;                // iOS often ~185; others 185–247+
+    const attCap     = Math.max(20, mtuAssumed - 3);     // ATT payload capacity
+    const maxData    = Math.max(0, attCap - 1 - 4);      // minus opcode + CRC → MTU - 8 (e.g., 177 on iOS)
+
+    let dynChunk = Math.min(CHUNK_MAX, Math.max(CHUNK_MIN, maxData)); // start safely (≤177 on iOS)
 
     // --- Progress UI / overlay ---
     _showProgress(sz, WP().uploading || 'Uploading…');
@@ -768,7 +771,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
       }
       fsCredits--;
 
-      const n     = Math.min(dynChunk, sz - off);
+      const n = Math.min(dynChunk, maxData, sz - off);
       const slice = bytes.subarray(off, off + n);
       const c     = _crc32(slice);
 
@@ -782,16 +785,22 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
 
       // write with small retry
       let wrote = false, tries = 0;
-      while (!wrote && tries < 3) {
+      while (!wrote && tries < 4) {
         try {
           await _writeFs(pkt);
           wrote = true;
         } catch (err) {
-          tries++;
-          await _sleep(20);
-          if (tries >= 3) throw err;
+          const msg = String(err?.message || '').toLowerCase();
+          if (msg.includes('insufficient') || msg.includes('cbatterrordomain')) {
+            dynChunk = Math.max(CHUNK_MIN, (dynChunk / 2) | 0);
+            await _sleep(30);
+            tries++;
+            continue;
+          }
+          throw err;
         }
       }
+      if (!wrote) throw new Error('BLE write failed repeatedly');
 
       _throwIfFsError();
 
@@ -881,19 +890,36 @@ function _throwIfFsError() {
 
 function _onFsStat(e){
   const dv = e.target.value;
- // Device may pack multiple bytes; count all 0x01 credits.
- let added = 0;
- for (let i = 0; i < dv.byteLength; i++) {
-   const code = dv.getUint8(i);
-   if (code === 0x01) {
-     fsCredits++;
-     added++;
-   } else if (code === 0x00) {
-     if (!busy.uploading && !busy.reading) _hideProgress();
-   }
- }
- if (added) lastCreditTs = performance.now();
+  if (!dv || dv.byteLength < 1) return;
+
+  // Most firmwares send just 1 byte; some send (code + uint32 aux)
+  let pos = 0;
+  while (pos < dv.byteLength) {
+    const code = dv.getUint8(pos);
+    let step = 1;
+
+    if (dv.byteLength - pos >= 5) {
+      // Heuristic: if there are 4 more bytes, assume they’re aux (little-endian)
+      // You can read it if needed: const aux = dv.getUint32(pos+1, true);
+      step = 5;
+    }
+
+    if (code === 0x01) {
+      fsCredits++;
+      lastCreditTs = performance.now();
+    } else if (code === 0x00) {
+      if (!busy.uploading && !busy.reading) _hideProgress();
+    } else if (code >= 0x80) {
+      // error from device
+      _recordFsError(code, 0);
+    }
+
+    pos += step;
+    // If the packet didn’t actually include aux, avoid skipping real next code
+    if (step === 5 && (dv.byteLength % 5 !== 0)) pos = dv.byteLength; // fail-safe
+  }
 }
+
 let listChunks = [];
 function _onFsInfo(e){
   const dv = e.target.value;

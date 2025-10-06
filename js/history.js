@@ -1,4 +1,4 @@
-import { sleep, downloadBlob } from './utils.js';
+import { sleep, downloadBlob, writeGatt } from './utils.js';
 
 // history.js — BLE history explorer card integration
 
@@ -251,7 +251,7 @@ async function writeCtrl(value, label = 'cmd') {
   if (!chCtrl) throw new Error('CTRL unavailable');
   for (let attempt = 0; attempt < RETRY_MAX; attempt++) {
     try {
-      await chCtrl.writeValue(value);
+      await writeGatt(chCtrl, value);
       return;
     } catch (err) {
       if (isGattBusy(err) && attempt < RETRY_MAX - 1) {

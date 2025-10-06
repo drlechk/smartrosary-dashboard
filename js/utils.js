@@ -160,6 +160,25 @@ export async function readWithRetry(ch, tries = 5) {
   return withRetry(() => ch.readValue(), { tries, base: 150 });
 }
 
+// Cross-browser BLE write: prefer WithResponse (needed on iOS/Bluefy),
+// fall back to legacy writeValue or WithoutResponse when necessary.
+export async function writeGatt(ch, data, { preferResponse = true } = {}) {
+  if (!ch) throw new Error('writeGatt: missing characteristic');
+  // Bluefy/iOS: writeValueWithResponse is required for WRITE-only chars
+  if (typeof ch.writeValueWithResponse === 'function') {
+    return ch.writeValueWithResponse(data);
+  }
+  // Legacy Chrome API
+  if (typeof ch.writeValue === 'function') {
+    return ch.writeValue(data);
+  }
+  // Some chars only support WRITE_NR; allow caller to opt-in if needed
+  if (!preferResponse && typeof ch.writeValueWithoutResponse === 'function') {
+    return ch.writeValueWithoutResponse(data);
+  }
+  throw new Error('BLE characteristic does not support writes in this browser');
+}
+
 export const u8ToStr = (u8) => {
   try {
     return dec.decode(u8);
