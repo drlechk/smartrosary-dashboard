@@ -1,4 +1,4 @@
-import { enc, packKV, downloadBlob, writeGatt } from './utils.js';
+import { enc, packKV, downloadBlob } from './utils.js';
 
 // For AUTH_SET strings
 function authSetFrame(key, strVal) {
@@ -26,7 +26,7 @@ export async function requestKeysConsent({ chCtrl, statusChar, mode='export' }) 
     statusChar.addEventListener('characteristicvaluechanged', onStatus);
 
     const modeByte = (mode === 'restore') ? 0x02 : 0x01; // 0x01 export, 0x02 restore
-    await writeGatt(chCtrl, Uint8Array.from([0x64, modeByte])); // KEYS_HELLO
+    await chCtrl.writeValue(Uint8Array.from([0x64, modeByte])); // KEYS_HELLO
     setTimeout(()=>resolve(false), 25000);
   });
   if (!res) throw new Error('On-device key consent denied or timed out.');
@@ -50,14 +50,14 @@ export async function backupKeys({ chAuthInfo, statusEl, i18nL }) {
 export async function restoreKeys({ chAuthCtrl, statusEl, waitReady, id, pubKey, privKey, i18nL }) {
   statusEl.textContent = (i18nL.restoreKeysStart || 'Restoring keys…');
 
-  await writeGatt(chAuthCtrl, Uint8Array.from([0x60]));  // AUTH_BEGIN
+  await chAuthCtrl.writeValue(Uint8Array.from([0x60]));  // AUTH_BEGIN
   await waitReady();
 
-  await writeGatt(chAuthCtrl, authSetFrame('id', id));         await waitReady();
-  await writeGatt(chAuthCtrl, authSetFrame('pubKey', pubKey)); await waitReady();
-  await writeGatt(chAuthCtrl, authSetFrame('privKey', privKey)); await waitReady();
+  await chAuthCtrl.writeValue(authSetFrame('id', id));         await waitReady();
+  await chAuthCtrl.writeValue(authSetFrame('pubKey', pubKey)); await waitReady();
+  await chAuthCtrl.writeValue(authSetFrame('privKey', privKey)); await waitReady();
 
-  await writeGatt(chAuthCtrl, Uint8Array.from([0x62])); // AUTH_COMMIT
+  await chAuthCtrl.writeValue(Uint8Array.from([0x62])); // AUTH_COMMIT
   await waitReady();
 
   statusEl.textContent = (i18nL.restoreKeysDone || 'Keys restored.');

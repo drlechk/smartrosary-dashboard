@@ -1,4 +1,4 @@
-import { $, dec, packKV, le32, writeGatt } from './utils.js';
+import { $, dec, packKV, le32 } from './utils.js';
 import { i18n } from './i18n.js';
 import { getLang } from './ui.js';
 
@@ -278,7 +278,7 @@ export function initIntentions({ client, setStatus }) {
   async function readEntry(index) {
     if (!client.chIntentEntry) throw new Error(IL().entryMissing);
     const buf = new Uint8Array([index & 0xff, (index >> 8) & 0xff]);
-    await writeGatt(client.chIntentEntry, buf);
+    await client.chIntentEntry.writeValue(buf);
     await client.waitReady();
     const value = await client.chIntentEntry.readValue();
     const text = dec.decode(toUint8(value));
@@ -365,7 +365,7 @@ export function initIntentions({ client, setStatus }) {
   async function writePref(key, type, valueBytes) {
     if (!client.chCtrl) throw new Error('Control characteristic missing');
     const payload = packKV(OP_SET_PREF, type, key, valueBytes);
-    await writeGatt(client.chCtrl, payload);
+    await client.chCtrl.writeValue(payload);
     await client.waitReady();
   }
 
