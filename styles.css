@@ -9,15 +9,31 @@
     padding:18px 16px; text-align:center; border-bottom:1px solid #18212b; background:#0e141b;
   }
   h1 { margin:0; font-size:20px; font-weight:700; letter-spacing:.2px; }
-  .toolbar-wrap { display:flex; justify-content:center; }
-
+  .toolbar-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: #0b0f14;
+    border-bottom: 1px solid #18212b;
+  }
 
   .toolbar {
-  display: flex;
-  padding:12px;
-  justify-content: center;   /* center horizontally */
-  gap: 10px;                 /* spacing between buttons */
-}
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .toolbar-left { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .toolbar-right { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .toolbar-status { color:#95a7ba; font-size:11px; text-align:center; }
+  .toolbar-top { display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
+  .toolbar-bottom { display:flex; gap:6px; align-items:center; justify-content:center; flex-direction:column; flex-wrap:nowrap; width:100%; }
+  .global-progress { display:flex; align-items:center; gap:8px; min-width:220px; }
+  .global-progress progress { width:200px; height:10px; margin:0; }
 
   button, select {
     border:0; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer;
@@ -31,7 +47,7 @@
   #disconnectBtn  { background:#b91c1c; color:#fff; }
   #resetBtn       { background:#9c27b0; color:#fff; }
   #langSelect     { background:#0f1720; border:1px solid #1f2b3a; }
-  #status { text-align:center; color:#95a7ba; font-size:13px; padding-bottom:8px; }
+  #status { text-align:center; color:#95a7ba; font-size:11px; padding-bottom:0; }
 .wrap {
   max-width: 1400px;  /* or 1400px if you want even wider */
   margin: 0 auto;

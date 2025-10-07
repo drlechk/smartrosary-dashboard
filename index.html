@@ -22,13 +22,19 @@
 
   <div class="toolbar-wrap">
     <div class="toolbar">
-      <button id="connectBtn">Connect</button>
-      <button id="refreshBtn" disabled>Refresh</button>
-      <button id="disconnectBtn" disabled>Disconnect</button>
+      <div class="toolbar-top">
+        <button id="connectBtn">Connect</button>
+        <button id="refreshBtn" disabled>Refresh</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+      </div>
+      <div class="toolbar-bottom">
+        <div class="global-progress">
+          <progress id="globalProg" max="100" value="0" hidden></progress>
+        </div>
+        <div id="status" class="toolbar-status">Not connected.</div>
+      </div>
     </div>
   </div>
-
-  <div id="status">Not connected.</div>
 
   <section class="wrap">
     <div class="grid">
@@ -54,8 +60,7 @@
           <input type="file" id="restoreFile" accept="application/json" style="display:none">
           <button id="restoreBtn" disabled>Restore</button>
           <button id="resetBtn" disabled>Reset Statistics</button>
-          <progress id="restoreProg" max="100" value="0" hidden></progress>
-        </div>
+                  </div>
       </div>
 
       <div class="card">
@@ -232,11 +237,6 @@
 
 
 
-  <!-- Progress -->
-<div class="wp-progress">
-  <progress id="wpProg" max="100" value="0"></progress>
-  <div id="wpProgText" class="muted"></div>
-</div>
 </div>
    
 

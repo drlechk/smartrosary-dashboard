@@ -1,4 +1,4 @@
-import { $, u8ToStr, sleep, packKV, le32 } from './utils.js';
+import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
 import { BleClient } from './ble.js';
 import { initCharts } from './charts.js';
 import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly } from './ui.js';
@@ -25,7 +25,10 @@ function setCardsMuted(muted) {
 
 setCardsMuted(true);
 
-function status(text){ $('status').textContent = text; }
+function status(text){
+  $('status').textContent = text;
+  try { setGlobalStatus(text); } catch {}
+}
 
 function isJsonWhitespace(ch) {
   return ch === ' ' || ch === '\n' || ch === '\r' || ch === '\t';
@@ -358,19 +361,33 @@ async function writeStatKey(key, type, value){
 async function handleConnect() {
   const L = i18n[getLang()];
   try {
+    // --- Global progress for connect sequence ---
+    const STEPS = 9; let step = 0;
+    const tick = (label) => { try { globalProgressSet(Math.floor(++step*100/STEPS)); } catch {} if (label) status(label); };
+    try { globalProgressStart('Connecting…', 100); } catch {}
+
+    // 1) Request device and connect
     status('Requesting device…');
     await client.connect();
-    setCardsMuted(false);
+    tick('Device connected');
 
+    // 2) Prepare UI and consent-dependent flags
+    setCardsMuted(false);
     intentions.onConnected();
     setWallpaperConsent(!!client.consentOk);
     setHistoryConsent(!!client.consentOk);
+    tick('Preparing UI…');
+
+    // 3) Bind Wallpaper FS service (optional)
     try {
+      status('Binding wallpaper service…');
       await attachWallpaperFS(client.server);
     } catch (e) {
       console.warn('WallpaperFS attach skipped:', e);
     }
+    tick('Wallpaper ready');
 
+    // 4) Enable controls
     $('refreshBtn').disabled = false;
     $('resetBtn').disabled = false;
     $('backupBtn').disabled = false;
@@ -378,37 +395,40 @@ async function handleConnect() {
     $('disconnectBtn').disabled = true;
     $('slDispBright').disabled = false;
     $('slWallBright').disabled = false;
+    tick('Enabling controls…');
 
-    // key mgmt buttons depend on auth chars
-    //$('keysBackupBtn').disabled  = !(client.consentOk && client.chAuthCtrl && client.chAuthInfo);
-    //$('keysRestoreBtn').disabled = !(client.consentOk && client.chAuthCtrl && client.chAuthInfo);
-
-    // remote availability UI
+    // 5) Remote availability indicators
     remoteAPI.onRemoteAvailability({ touch: !!client.touchChar, keys: !!client.keysChar });
+    tick('Remote ready');
 
-    status(L.statusConnected);
-
+    // 6) Read device info (settings/stats)
+    status('Reading device info…');
     const statsOk = await refreshUntilValid({ tries: 12, delay: 250 });
-    if (!statsOk) {
-      await refreshOnce();
-    }
+    if (!statsOk) { await refreshOnce(); }
+    tick('Device info loaded');
 
+    // 7) Load intentions
     try {
+      status('Loading intentions…');
       await intentions.refresh({ silent: true });
     } catch (e) {
       console.warn('Intentions load skipped:', e);
     }
+    tick('Intentions ready');
 
+    // 8) Attach History FS if consent
     if (client.consentOk) {
       try {
+        status('Loading history…');
         await attachHistoryFS(client.server);
         await refreshHistory();
       } catch (e) {
         console.warn('History attach skipped:', e);
       }
     }
+    tick('History ready');
 
-    // Live updates for settings
+    // 9) Subscribe to settings live updates
     if (client.chSettings) {
       await client.chSettings.startNotifications();
       client.chSettings.addEventListener('characteristicvaluechanged', (ev) => {
@@ -416,19 +436,17 @@ async function handleConnect() {
           const u8 = new Uint8Array(ev.target.value.buffer, ev.target.value.byteOffset, ev.target.value.byteLength);
           const textPayload = new TextDecoder().decode(u8).split('\0')[0];
           const js = parseJsonWithFallback(textPayload, 'Settings-notif', { dropEntries: true });
-          updateSettingsOnly(js);               // only tweak settings UI
-          // leave charts/KPIs untouched
-
-        } catch (e) {
-          console.warn('settings notif parse failed', e);
-        }
+          updateSettingsOnly(js);
+        } catch (e) { console.warn('settings notif parse failed', e); }
       });
     }
+    tick(L.statusConnected);
 
     $('disconnectBtn').disabled = false;
     $('swHaptic').disabled = false;
     $('swPreset').disabled = false;
     $('swAutosave').disabled = false;
+    try { globalProgressDone(600); } catch {}
 
   } catch (err) {
     console.error(err);
@@ -437,6 +455,7 @@ async function handleConnect() {
     setHistoryConsent(false);
     intentions.onDisconnected();
     try { await resetHistoryCard(); } catch {}
+    try { globalProgressDone(400); } catch {}
   }
 }
 
@@ -520,11 +539,16 @@ function wireControls() {
     const file = e.target.files[0];
     if (!file) return;
     const L = i18n[getLang()];
-    const prog = $('restoreProg'); prog.hidden = false; prog.value = 0;
+    const prog = $('restoreProg'); if (prog) { prog.hidden = false; prog.value = 0; }
+    try { globalProgressStart('Restoring…', 100); } catch {}
     try {
       const js = JSON.parse(await file.text());
       status(L.restoreStart);
-      const onProgress = (step,total)=>{ prog.value = Math.floor(step*100/total); };
+      const onProgress = (step,total)=>{
+        const pct = Math.floor(step*100/total);
+        if (prog) prog.value = pct;
+        try { globalProgressSet(pct, 'Restoring…'); } catch {}
+      };
       await restoreFromJson(js, {
         chCtrl: client.chCtrl,
         waitReady: (...a)=>client.waitReady(...a),
@@ -534,11 +558,13 @@ function wireControls() {
       });
       await refreshUntilValid({ tries: 12, delay: 250 });
       status(L.restoreDone);
+      try { globalProgressDone(800); } catch {}
     } catch (err) {
       console.error(err);
       status('Restore failed: ' + err.message);
     } finally {
-      setTimeout(()=>{ prog.hidden = true; }, 600);
+      if (prog) setTimeout(()=>{ prog.hidden = true; }, 600);
+      try { globalProgressDone(600); } catch {}
       e.target.value = '';
     }
   });

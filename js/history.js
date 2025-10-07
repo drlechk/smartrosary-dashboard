@@ -1,4 +1,4 @@
-import { sleep, downloadBlob } from './utils.js';
+import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
 
 // history.js — BLE history explorer card integration
 
@@ -156,12 +156,14 @@ function resetProgress() {
     dom.downloadProgress.style.display = 'none';
     dom.downloadProgress.textContent = '';
   }
+  try { globalProgressDone(400); } catch {}
 }
 
 function showProgress() {
   if (!dom.downloadProgress) return;
   if (!downloadActive) {
     dom.downloadProgress.style.display = 'none';
+    try { globalProgressDone(400); } catch {}
     return;
   }
   dom.downloadProgress.style.display = 'inline-flex';
@@ -169,8 +171,10 @@ function showProgress() {
   if (downloadTotal > 0) {
     const pct = Math.min(100, Math.floor((soFar * 100) / downloadTotal));
     dom.downloadProgress.textContent = `Downloading ${soFar}/${downloadTotal} B (${pct}%)`;
+    try { globalProgressStart('Downloading…', 100); globalProgressSet(pct, 'Downloading…'); } catch {}
   } else {
     dom.downloadProgress.textContent = `Downloading ${soFar} B`;
+    try { globalProgressStart('Downloading…', 100); } catch {}
   }
 }
 
@@ -196,17 +200,20 @@ function resetUploadProgress() {
     dom.uploadProg.style.display = 'none';
     dom.uploadProg.textContent = '';
   }
+  try { globalProgressDone(400); } catch {}
 }
 
 function showUploadProgress() {
   if (!dom.uploadProg) return;
   if (!uploading) {
     dom.uploadProg.style.display = 'none';
+    try { globalProgressDone(400); } catch {}
     return;
   }
   dom.uploadProg.style.display = 'inline-flex';
   const pct = upTotal ? Math.min(100, Math.floor((upSent * 100) / upTotal)) : 0;
   dom.uploadProg.textContent = `Uploading ${upSent}/${upTotal} B (${pct}%)`;
+   try { globalProgressStart('Uploading…', 100); globalProgressSet(pct, 'Uploading…'); } catch {}
 }
 
 function resetList() {

@@ -2,7 +2,7 @@
 
 // --- import i18n dictionary (ESM) ---
 import { i18n } from './i18n.js';
-import { downloadBlob, openFilePicker, loadImageSource } from './utils.js';
+import { downloadBlob, openFilePicker, loadImageSource, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
 
 const log = (...args) => console.log('[wallpaper]', ...args);
 
@@ -184,6 +184,7 @@ function _hideProgress() {
     if (ui.progText) ui.progText.textContent = '';
     const wrap = document.querySelector('#wpCard .wp-progress');
     if (wrap) wrap.style.display = 'none';
+    try { globalProgressDone(400); } catch {}
 }
 
 function _showProgress(max, label) {
@@ -195,6 +196,7 @@ function _showProgress(max, label) {
 
   const wrap = document.querySelector('#wpCard .wp-progress');
   if (wrap) wrap.style.display = 'flex';   // flex column per CSS
+  try { globalProgressStart(label || 'Working…', 100); } catch {}
 }
 
 // ---------- Muted handling ----------
@@ -800,6 +802,10 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
       lastProgressTs = performance.now();
 
       if (ui.prog) ui.prog.value = off;
+      try {
+        const pct = Math.floor((off * 100) / sz);
+        globalProgressSet(pct, WP().uploading || 'Uploading…');
+      } catch {}
       if (ui.progText) {
         const doneKiB  = off / 1024;
         const totalKiB = sz  / 1024;
@@ -825,6 +831,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
     _blit();
     _fadeBadge(h, _blit);
     _hideProgress();
+    try { globalProgressDone(600); } catch {}
 
     // show on device and refresh list
     await _sleep(120);
@@ -917,6 +924,7 @@ function _onFsInfo(e){
 
     _blit();
     _showProgress(readState.size, WP().receiving || 'Receiving…');
+    try { globalProgressStart(WP().receiving || 'Receiving…', 100); } catch {}
 
     // draw 0% overlay
     const redrawBase0 = () => {
@@ -979,6 +987,10 @@ function _onFsData(e){
   readState.off += bytes.length;
 
   if (ui.prog) ui.prog.value = readState.off;
+  try {
+    const pct = Math.floor((readState.off * 100) / (readState.size || 1));
+    globalProgressSet(pct, WP().receiving || 'Receiving…');
+  } catch {}
   if (ui.progText) {
     const doneKiB = readState.off/1024, totalKiB = readState.size/1024;
     ui.progText.textContent = (WP().kib ? WP().kib(doneKiB, totalKiB) : `${doneKiB.toFixed(1)} KiB / ${totalKiB.toFixed(1)} KiB`);
@@ -1019,6 +1031,7 @@ function _onFsData(e){
 
     busy.reading = false;
     _hideProgress();
+    try { globalProgressDone(600); } catch {}
   }
 }
 

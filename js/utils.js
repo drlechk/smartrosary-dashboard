@@ -219,3 +219,43 @@ export function encSize(type, value) {
     default: throw new Error('encSize: bad type');
   }
 }
+
+// --- Global UI helpers (status + progress) ---
+export function setGlobalStatus(text) {
+  try {
+    const el = document.getElementById('status');
+    if (el && typeof text === 'string') el.textContent = text;
+  } catch {}
+}
+
+export function globalProgressStart(label, max = 100) {
+  try {
+    const bar = document.getElementById('globalProg');
+    if (bar) {
+      bar.max = Number(max) || 100;
+      bar.value = 0;
+      bar.hidden = false;
+    }
+  } catch {}
+}
+
+export function globalProgressSet(value, label) {
+  try {
+    const bar = document.getElementById('globalProg');
+    if (bar && typeof value === 'number') {
+      const v = Math.max(0, Math.min(Number(bar.max) || 100, Math.floor(value)));
+      bar.value = v;
+      bar.hidden = false;
+    }
+  } catch {}
+}
+
+export function globalProgressDone(delayMs = 600) {
+  try {
+    const bar = document.getElementById('globalProg');
+    if (bar) {
+      const hide = () => { bar.hidden = true; };
+      if (delayMs > 0) setTimeout(hide, delayMs); else hide();
+    }
+  } catch {}
+}
