@@ -228,34 +228,58 @@ export function setGlobalStatus(text) {
   } catch {}
 }
 
+// Internal debounce state for global progress visibility
+const __gProg = {
+  hideTimer: null,
+  lastUpdate: 0,
+};
+
 export function globalProgressStart(label, max = 100) {
   try {
-    const bar = document.getElementById('globalProg');
-    if (bar) {
-      bar.max = Number(max) || 100;
-      bar.value = 0;
-      bar.hidden = false;
+    const el = document.getElementById('globalProg');
+    if (el) {
+      const m = Number(max) || 100;
+      el.dataset.max = String(m);
+      let fill = el.querySelector('.bar');
+      if (!fill) { fill = document.createElement('div'); fill.className = 'bar'; el.appendChild(fill); }
+      el.hidden = false;
+      el.classList.remove('idle');
     }
+    // mark as recently updated and cancel any pending hide
+    __gProg.lastUpdate = Date.now();
+    if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
   } catch {}
 }
 
 export function globalProgressSet(value, label) {
   try {
-    const bar = document.getElementById('globalProg');
-    if (bar && typeof value === 'number') {
-      const v = Math.max(0, Math.min(Number(bar.max) || 100, Math.floor(value)));
-      bar.value = v;
-      bar.hidden = false;
+    const el = document.getElementById('globalProg');
+    if (el && typeof value === 'number') {
+      const max = Number(el.dataset?.max) || 100;
+      const pct = Math.max(0, Math.min(100, Math.floor((value / max) * 100)));
+      let fill = el.querySelector('.bar');
+      if (!fill) { fill = document.createElement('div'); fill.className = 'bar'; el.appendChild(fill); }
+      fill.style.width = pct + '%';
+      el.hidden = false;
+      el.classList.remove('idle');
     }
+    // bump last update and cancel any pending hide to prevent flicker
+    __gProg.lastUpdate = Date.now();
+    if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
   } catch {}
 }
 
 export function globalProgressDone(delayMs = 600) {
   try {
-    const bar = document.getElementById('globalProg');
-    if (bar) {
-      const hide = () => { bar.hidden = true; };
-      if (delayMs > 0) setTimeout(hide, delayMs); else hide();
-    }
+    const el = document.getElementById('globalProg');
+    if (!el) return;
+    // Idle state: keep visible at 100% with subdued style
+    let fill = el.querySelector('.bar');
+    if (!fill) { fill = document.createElement('div'); fill.className = 'bar'; el.appendChild(fill); }
+    fill.style.width = '100%';
+    el.hidden = false;
+    el.classList.add('idle');
+    __gProg.lastUpdate = Date.now();
+    if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
   } catch {}
 }

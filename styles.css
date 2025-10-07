@@ -14,7 +14,6 @@
     top: 0;
     z-index: 1000;
     background: #0b0f14;
-    border-bottom: 1px solid #18212b;
   }
 
   .toolbar {
@@ -32,8 +31,26 @@
   .toolbar-status { color:#95a7ba; font-size:11px; text-align:center; }
   .toolbar-top { display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; }
   .toolbar-bottom { display:flex; gap:6px; align-items:center; justify-content:center; flex-direction:column; flex-wrap:nowrap; width:100%; }
-  .global-progress { display:flex; align-items:center; gap:8px; min-width:220px; }
-  .global-progress progress { width:200px; height:10px; margin:0; }
+  .global-progress { display:none; }
+
+  /* Full-width progress at toolbar bottom edge (custom div) */
+  .toolbar-progress {
+    display: block;
+    width: 100%;
+    height: 6px;
+    margin: 0;
+    background: #0d131c;
+    position: relative;
+  }
+  .toolbar-progress .bar {
+    position: absolute;
+    left: 0; top: 0;
+    height: 100%;
+    width: 0%;
+    background: #03a9f4;
+    transition: width .15s ease;
+  }
+  .toolbar-progress.idle .bar { opacity: .45; }
 
   button, select {
     border:0; border-radius:10px; padding:10px 14px; font-weight:600; cursor:pointer;

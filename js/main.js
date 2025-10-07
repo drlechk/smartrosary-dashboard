@@ -367,25 +367,25 @@ async function handleConnect() {
     try { globalProgressStart('Connecting…', 100); } catch {}
 
     // 1) Request device and connect
-    status('Requesting device…');
+    status(L.statusRequestingDevice || 'Requesting device…');
     await client.connect();
-    tick('Device connected');
+    tick(L.statusDeviceConnected || 'Device connected');
 
     // 2) Prepare UI and consent-dependent flags
     setCardsMuted(false);
     intentions.onConnected();
     setWallpaperConsent(!!client.consentOk);
     setHistoryConsent(!!client.consentOk);
-    tick('Preparing UI…');
+    tick(L.statusPreparingUi || 'Preparing UI…');
 
     // 3) Bind Wallpaper FS service (optional)
     try {
-      status('Binding wallpaper service…');
+      status(L.statusBindingWallpaper || 'Binding wallpaper service…');
       await attachWallpaperFS(client.server);
     } catch (e) {
       console.warn('WallpaperFS attach skipped:', e);
     }
-    tick('Wallpaper ready');
+    tick(L.statusWallpaperReady || 'Wallpaper ready');
 
     // 4) Enable controls
     $('refreshBtn').disabled = false;
@@ -395,38 +395,38 @@ async function handleConnect() {
     $('disconnectBtn').disabled = true;
     $('slDispBright').disabled = false;
     $('slWallBright').disabled = false;
-    tick('Enabling controls…');
+    tick(L.statusEnablingControls || 'Enabling controls…');
 
     // 5) Remote availability indicators
     remoteAPI.onRemoteAvailability({ touch: !!client.touchChar, keys: !!client.keysChar });
-    tick('Remote ready');
+    tick(L.statusRemoteReady || 'Remote ready');
 
     // 6) Read device info (settings/stats)
-    status('Reading device info…');
+    status(L.statusReadingInfo || 'Reading device info…');
     const statsOk = await refreshUntilValid({ tries: 12, delay: 250 });
     if (!statsOk) { await refreshOnce(); }
-    tick('Device info loaded');
+    tick(L.statusInfoLoaded || 'Device info loaded');
 
     // 7) Load intentions
     try {
-      status('Loading intentions…');
+      status(L.statusLoadingIntentions || 'Loading intentions…');
       await intentions.refresh({ silent: true });
     } catch (e) {
       console.warn('Intentions load skipped:', e);
     }
-    tick('Intentions ready');
+    tick(L.statusIntentionsReady || 'Intentions ready');
 
     // 8) Attach History FS if consent
     if (client.consentOk) {
       try {
-        status('Loading history…');
+        status(L.statusLoadingHistory || 'Loading history…');
         await attachHistoryFS(client.server);
         await refreshHistory();
       } catch (e) {
         console.warn('History attach skipped:', e);
       }
     }
-    tick('History ready');
+    tick(L.statusHistoryReady || 'History ready');
 
     // 9) Subscribe to settings live updates
     if (client.chSettings) {
