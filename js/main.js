@@ -1,7 +1,7 @@
 import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
 import { BleClient } from './ble.js';
 import { initCharts } from './charts.js';
-import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly } from './ui.js';
+import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText } from './ui.js';
 import { doBackup } from './backup.js';
 import { restoreFromJson } from './restore.js';
 import { requestKeysConsent, backupKeys, restoreKeys } from './auth.js';
@@ -26,7 +26,7 @@ function setCardsMuted(muted) {
 setCardsMuted(true);
 
 function status(text){
-  $('status').textContent = text;
+  try { setStatusText(text); } catch { $('status').textContent = text; }
   try { setGlobalStatus(text); } catch {}
 }
 
@@ -301,7 +301,7 @@ async function refreshOnce() {
     if (jsParts) console.debug('Parts JSON', jsParts);
 
     updateFromJson({ jsStats, jsSettings, jsParts });
-    status(L.statusUpdated);
+    try { setStatusKey('statusUpdated', L.statusUpdated); } catch { status(L.statusUpdated); }
     return true;
   } catch (e) {
     console.error(e);
@@ -363,29 +363,29 @@ async function handleConnect() {
   try {
     // --- Global progress for connect sequence ---
     const STEPS = 9; let step = 0;
-    const tick = (label) => { try { globalProgressSet(Math.floor(++step*100/STEPS)); } catch {} if (label) status(label); };
+    const bump = () => { try { globalProgressSet(Math.floor(++step*100/STEPS)); } catch {} };
     try { globalProgressStart('Connecting…', 100); } catch {}
 
     // 1) Request device and connect
-    status(L.statusRequestingDevice || 'Requesting device…');
+    setStatusKey('statusRequestingDevice', 'Requesting device…');
     await client.connect();
-    tick(L.statusDeviceConnected || 'Device connected');
+    setStatusKey('statusDeviceConnected', 'Device connected'); bump();
 
     // 2) Prepare UI and consent-dependent flags
     setCardsMuted(false);
     intentions.onConnected();
     setWallpaperConsent(!!client.consentOk);
     setHistoryConsent(!!client.consentOk);
-    tick(L.statusPreparingUi || 'Preparing UI…');
+    setStatusKey('statusPreparingUi', 'Preparing UI…'); bump();
 
     // 3) Bind Wallpaper FS service (optional)
     try {
-      status(L.statusBindingWallpaper || 'Binding wallpaper service…');
+      setStatusKey('statusBindingWallpaper', 'Binding wallpaper service…');
       await attachWallpaperFS(client.server);
     } catch (e) {
       console.warn('WallpaperFS attach skipped:', e);
     }
-    tick(L.statusWallpaperReady || 'Wallpaper ready');
+    setStatusKey('statusWallpaperReady', 'Wallpaper ready'); bump();
 
     // 4) Enable controls
     $('refreshBtn').disabled = false;
@@ -395,38 +395,38 @@ async function handleConnect() {
     $('disconnectBtn').disabled = true;
     $('slDispBright').disabled = false;
     $('slWallBright').disabled = false;
-    tick(L.statusEnablingControls || 'Enabling controls…');
+    setStatusKey('statusEnablingControls', 'Enabling controls…'); bump();
 
     // 5) Remote availability indicators
     remoteAPI.onRemoteAvailability({ touch: !!client.touchChar, keys: !!client.keysChar });
-    tick(L.statusRemoteReady || 'Remote ready');
+    setStatusKey('statusRemoteReady', 'Remote ready'); bump();
 
     // 6) Read device info (settings/stats)
-    status(L.statusReadingInfo || 'Reading device info…');
+    setStatusKey('statusReadingInfo', 'Reading device info…');
     const statsOk = await refreshUntilValid({ tries: 12, delay: 250 });
     if (!statsOk) { await refreshOnce(); }
-    tick(L.statusInfoLoaded || 'Device info loaded');
+    setStatusKey('statusInfoLoaded', 'Device info loaded'); bump();
 
     // 7) Load intentions
     try {
-      status(L.statusLoadingIntentions || 'Loading intentions…');
+      setStatusKey('statusLoadingIntentions', 'Loading intentions…');
       await intentions.refresh({ silent: true });
     } catch (e) {
       console.warn('Intentions load skipped:', e);
     }
-    tick(L.statusIntentionsReady || 'Intentions ready');
+    setStatusKey('statusIntentionsReady', 'Intentions ready'); bump();
 
     // 8) Attach History FS if consent
     if (client.consentOk) {
       try {
-        status(L.statusLoadingHistory || 'Loading history…');
+        setStatusKey('statusLoadingHistory', 'Loading history…');
         await attachHistoryFS(client.server);
         await refreshHistory();
       } catch (e) {
         console.warn('History attach skipped:', e);
       }
     }
-    tick(L.statusHistoryReady || 'History ready');
+    setStatusKey('statusHistoryReady', 'History ready'); bump();
 
     // 9) Subscribe to settings live updates
     if (client.chSettings) {
@@ -440,7 +440,7 @@ async function handleConnect() {
         } catch (e) { console.warn('settings notif parse failed', e); }
       });
     }
-    tick(L.statusConnected);
+    setStatusKey('statusReady', (L.statusReady || L.statusUpdated || 'Ready.')); bump();
 
     $('disconnectBtn').disabled = false;
     $('swHaptic').disabled = false;
@@ -466,7 +466,7 @@ async function handleDisconnect() {
   intentions.onDisconnected();
   setCardsMuted(true);
   const L = i18n[getLang()];
-  status(L.statusDisconnected);
+  try { setStatusKey('statusDisconnected', L.statusDisconnected); } catch { status(L.statusDisconnected); }
   $('refreshBtn').disabled = true;
   $('resetBtn').disabled   = true;
   $('disconnectBtn').disabled = true;
@@ -511,7 +511,7 @@ function wireControls() {
       await client.chCtrl.writeValue(new Uint8Array([0x01]));
       await client.waitReady();
       setTimeout(refreshOnce, 300);
-      status(L.statusResetReq);
+      try { setStatusKey('statusResetReq', L.statusResetReq); } catch { status(L.statusResetReq); }
     } catch(err){
       console.error(err);
       status('Reset failed: ' + err.message);
@@ -557,7 +557,7 @@ function wireControls() {
         onProgress
       });
       await refreshUntilValid({ tries: 12, delay: 250 });
-      status(L.restoreDone);
+      try { setStatusKey('statusUpdated', L.restoreDone); } catch { status(L.restoreDone); }
       try { globalProgressDone(800); } catch {}
     } catch (err) {
       console.error(err);

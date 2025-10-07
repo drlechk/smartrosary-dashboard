@@ -7,6 +7,7 @@ import { i18n } from './i18n.js';
 let lang = 'pl';
 let lastStats = null;
 let lastSettings = null;
+let lastStatusKey = null; // i18n key of last status (if set via key)
 
 const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
@@ -44,6 +45,18 @@ function cacheSettings(patch) {
 export function getLang() { return lang; }
 export function setLang(v){ lang = v; applyI18n(); }
 
+// Status helpers so status can re-localize on language change
+export function setStatusKey(key, fallback) {
+  lastStatusKey = key || null;
+  const L = i18n[lang] || i18n.en;
+  const msg = (key && L[key]) ? L[key] : (fallback ?? key ?? '');
+  const el = $('status'); if (el) el.textContent = msg;
+}
+export function setStatusText(text) {
+  lastStatusKey = null;
+  const el = $('status'); if (el) el.textContent = text ?? '';
+}
+
 export function applyI18n() {
   const L = i18n[lang] || i18n.en;
   const setTxt = (id, value) => { const el = $(id); if (el) el.textContent = value; };
@@ -55,7 +68,19 @@ export function applyI18n() {
   setTxt('disconnectBtn', L.disconnect);
   setTxt('backupBtn', L.backup);
   setTxt('restoreBtn', L.restore);
-  setTxt('status', L.statusNot);
+  // Update status: if we have a tracked last key, re-localize it.
+  // Otherwise, if status is empty or shows a default from another language, set localized default.
+  const statusEl = $('status');
+  if (lastStatusKey && (i18n[lang]?.[lastStatusKey] != null)) {
+    statusEl.textContent = i18n[lang][lastStatusKey];
+  } else if (statusEl) {
+    const current = (statusEl.textContent || '').trim();
+    const defaults = [i18n.en.statusNot, i18n.pl.statusNot, i18n.de.statusNot].filter(Boolean);
+    if (!current || defaults.includes(current)) {
+      statusEl.textContent = L.statusNot;
+      lastStatusKey = 'statusNot';
+    }
+  }
 
   setTxt('overviewTitle', L.overview);
   setTxt('lblBeads', L.beads);
@@ -223,7 +248,8 @@ export function updateFromJson({ jsStats, jsSettings, jsParts }) {
 
   applySettingsUi(mergedSettings);
   renderPillsFromCache();
-  $('status').textContent = (i18n[lang].statusUpdated);
+  // Record status key for localization and update immediately
+  setStatusKey?.('statusUpdated', i18n[lang].statusUpdated);
 }
 
 export function wireLangSelector(onChange) {

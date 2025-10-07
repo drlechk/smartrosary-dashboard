@@ -19,6 +19,7 @@ export const i18n = {
     errWB: "Web Bluetooth not supported in this browser.",
     confirmReset: "Reset all statistics on the device? This cannot be undone.",
     statusConnected: "Connected. Reading…",
+    statusReady: "Ready.",
     // Detailed connect flow statuses
     statusRequestingDevice: "Requesting device…",
     statusDeviceConnected:  "Device connected",
@@ -198,6 +199,7 @@ export const i18n = {
     errWB: "Przeglądarka nie obsługuje Web Bluetooth.",
     confirmReset: "Zresetować wszystkie statystyki na urządzeniu? Tej operacji nie można cofnąć.",
     statusConnected: "Połączono. Wczytywanie…",
+    statusReady: "Gotowe.",
     // Szczegółowe statusy łączenia
     statusRequestingDevice: "Wybieranie urządzenia…",
     statusDeviceConnected:  "Urządzenie połączone",
@@ -363,6 +365,7 @@ export const i18n = {
     connect: "Verbinden", refresh: "Aktualisieren", reset: "Statistiken zurücksetzen", disconnect: "Trennen",
     backup: "Herunterladen", restore: "Wiederherstellen",
     statusNot: "Nicht verbunden.",
+    statusReady: "Bereit.",
     // Detaillierte Verbindungsstatus
     statusRequestingDevice: "Gerät wird angefordert…",
     statusDeviceConnected:  "Gerät verbunden",
