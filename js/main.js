@@ -1,4 +1,4 @@
-import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
+import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateStart, progAggregateSet, progAggregateEnter, progAggregateLeave, progAggregateDone } from './utils.js';
 import { BleClient } from './ble.js';
 import { initCharts } from './charts.js';
 import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText } from './ui.js';
@@ -361,22 +361,32 @@ async function writeStatKey(key, type, value){
 async function handleConnect() {
   const L = i18n[getLang()];
   try {
-    // --- Global progress for connect sequence ---
-    const STEPS = 9; let step = 0;
-    const bump = () => { try { globalProgressSet(Math.floor(++step*100/STEPS)); } catch {} };
-    try { globalProgressStart('Connecting…', 100); } catch {}
+    // --- Overall progress across connection + sync steps ---
+    // Plan weights sum to ~100; adjust as needed.
+    const PLAN = [
+      { id: 'connect',    weight: 35 },
+      { id: 'wallpaper',  weight: 10 },
+      { id: 'info',       weight: 20 },
+      { id: 'intentions', weight: 10 },
+      { id: 'history',    weight: 25 },
+    ];
+    try { globalProgressStart('Syncing…', 100); } catch {}
+    progAggregateStart(PLAN);
+    let connectStep = 0;
+    const CONNECT_STEPS = 5;
+    const bumpConnect = () => progAggregateSet('connect', Math.floor(++connectStep * 100 / CONNECT_STEPS));
 
     // 1) Request device and connect
     setStatusKey('statusRequestingDevice', 'Requesting device…');
     await client.connect();
-    setStatusKey('statusDeviceConnected', 'Device connected'); bump();
+    setStatusKey('statusDeviceConnected', 'Device connected'); bumpConnect();
 
     // 2) Prepare UI and consent-dependent flags
     setCardsMuted(false);
     intentions.onConnected();
     setWallpaperConsent(!!client.consentOk);
     setHistoryConsent(!!client.consentOk);
-    setStatusKey('statusPreparingUi', 'Preparing UI…'); bump();
+    setStatusKey('statusPreparingUi', 'Preparing UI…'); bumpConnect();
 
     // 3) Bind Wallpaper FS service (optional)
     try {
@@ -385,7 +395,9 @@ async function handleConnect() {
     } catch (e) {
       console.warn('WallpaperFS attach skipped:', e);
     }
-    setStatusKey('statusWallpaperReady', 'Wallpaper ready'); bump();
+    setStatusKey('statusWallpaperReady', 'Wallpaper ready');
+    progAggregateSet('wallpaper', 100);
+    bumpConnect();
 
     // 4) Enable controls
     $('refreshBtn').disabled = false;
@@ -395,17 +407,18 @@ async function handleConnect() {
     $('disconnectBtn').disabled = true;
     $('slDispBright').disabled = false;
     $('slWallBright').disabled = false;
-    setStatusKey('statusEnablingControls', 'Enabling controls…'); bump();
+    setStatusKey('statusEnablingControls', 'Enabling controls…'); bumpConnect();
 
     // 5) Remote availability indicators
     remoteAPI.onRemoteAvailability({ touch: !!client.touchChar, keys: !!client.keysChar });
-    setStatusKey('statusRemoteReady', 'Remote ready'); bump();
+    setStatusKey('statusRemoteReady', 'Remote ready'); bumpConnect();
 
     // 6) Read device info (settings/stats)
     setStatusKey('statusReadingInfo', 'Reading device info…');
     const statsOk = await refreshUntilValid({ tries: 12, delay: 250 });
     if (!statsOk) { await refreshOnce(); }
-    setStatusKey('statusInfoLoaded', 'Device info loaded'); bump();
+    setStatusKey('statusInfoLoaded', 'Device info loaded');
+    progAggregateSet('info', 100);
 
     // 7) Load intentions
     try {
@@ -414,19 +427,27 @@ async function handleConnect() {
     } catch (e) {
       console.warn('Intentions load skipped:', e);
     }
-    setStatusKey('statusIntentionsReady', 'Intentions ready'); bump();
+    setStatusKey('statusIntentionsReady', 'Intentions ready');
+    progAggregateSet('intentions', 100);
 
     // 8) Attach History FS if consent
     if (client.consentOk) {
       try {
         setStatusKey('statusLoadingHistory', 'Loading history…');
+        // Map history module's own progress into the overall bar segment
+        progAggregateEnter('history');
         await attachHistoryFS(client.server);
         await refreshHistory();
+        progAggregateLeave('history');
       } catch (e) {
         console.warn('History attach skipped:', e);
+        // Consider history segment completed when skipped due to consent/other reasons
+        progAggregateSet('history', 100);
       }
     }
-    setStatusKey('statusHistoryReady', 'History ready'); bump();
+    setStatusKey('statusHistoryReady', 'History ready');
+    // If consent not granted, mark as complete so the overall bar can finish
+    if (!client.consentOk) progAggregateSet('history', 100);
 
     // 9) Subscribe to settings live updates
     if (client.chSettings) {
@@ -440,13 +461,14 @@ async function handleConnect() {
         } catch (e) { console.warn('settings notif parse failed', e); }
       });
     }
-    setStatusKey('statusReady', (L.statusReady || L.statusUpdated || 'Ready.')); bump();
+    setStatusKey('statusReady', (L.statusReady || L.statusUpdated || 'Ready.'));
+    progAggregateSet('connect', 100);
 
     $('disconnectBtn').disabled = false;
     $('swHaptic').disabled = false;
     $('swPreset').disabled = false;
     $('swAutosave').disabled = false;
-    try { globalProgressDone(600); } catch {}
+    progAggregateDone();
 
   } catch (err) {
     console.error(err);

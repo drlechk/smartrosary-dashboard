@@ -230,8 +230,9 @@ export function setGlobalStatus(text) {
 
 // Internal debounce state for global progress visibility
 const __gProg = {
-  hideTimer: null,
-  lastUpdate: 0,
+  hideTimer: null,      // timer used to schedule a deferred "done" (idle at 100%)
+  lastUpdate: 0,        // timestamp of the last Set/Start call
+  lockUntil: 0,         // do not apply "done" until after this time (ms since epoch)
 };
 
 export function globalProgressStart(label, max = 100) {
@@ -246,13 +247,22 @@ export function globalProgressStart(label, max = 100) {
       el.classList.remove('idle');
     }
     // mark as recently updated and cancel any pending hide
-    __gProg.lastUpdate = Date.now();
+    const now = Date.now();
+    __gProg.lastUpdate = now;
+    __gProg.lockUntil = now + 300; // brief lock so a concurrent Done cannot override immediately
     if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
   } catch {}
 }
 
 export function globalProgressSet(value, label) {
   try {
+    // If aggregation is active and a delegate is set, route this update
+    // to the aggregator instead of directly manipulating the bar.
+    if (__gAgg.active && __gAgg.delegateId) {
+      const pct = Math.max(0, Math.min(100, Math.floor(Number(value) || 0)));
+      __gAgg.setSegment(__gAgg.delegateId, pct);
+      return;
+    }
     const el = document.getElementById('globalProg');
     if (el && typeof value === 'number') {
       const max = Number(el.dataset?.max) || 100;
@@ -264,22 +274,141 @@ export function globalProgressSet(value, label) {
       el.classList.remove('idle');
     }
     // bump last update and cancel any pending hide to prevent flicker
-    __gProg.lastUpdate = Date.now();
+    const now = Date.now();
+    __gProg.lastUpdate = now;
+    __gProg.lockUntil = now + 350; // extend lock a bit with every progress tick
     if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
   } catch {}
 }
 
 export function globalProgressDone(delayMs = 600) {
   try {
+    // If aggregation is active and a delegate is set, treat this as segment completion
+    // rather than finishing the whole bar.
+    if (__gAgg.active && __gAgg.delegateId) {
+      __gAgg.setSegment(__gAgg.delegateId, 100);
+      return;
+    }
     const el = document.getElementById('globalProg');
     if (!el) return;
-    // Idle state: keep visible at 100% with subdued style
-    let fill = el.querySelector('.bar');
-    if (!fill) { fill = document.createElement('div'); fill.className = 'bar'; el.appendChild(fill); }
-    fill.style.width = '100%';
-    el.hidden = false;
-    el.classList.add('idle');
-    __gProg.lastUpdate = Date.now();
+
+    // Defer applying the final 100% state until
+    // there has been a quiet period (no Set calls) to avoid bouncing
+    const applyDone = () => {
+      const now = Date.now();
+      if (now < __gProg.lockUntil) {
+        // still receiving updates; try again shortly
+        __gProg.hideTimer = setTimeout(applyDone, 120);
+        return;
+      }
+      let fill = el.querySelector('.bar');
+      if (!fill) { fill = document.createElement('div'); fill.className = 'bar'; el.appendChild(fill); }
+      fill.style.width = '100%';
+      el.hidden = false;
+      el.classList.add('idle');
+      __gProg.lastUpdate = now;
+      if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
+    };
+
     if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
+    __gProg.hideTimer = setTimeout(applyDone, Math.max(0, Number(delayMs) || 0));
   } catch {}
 }
+
+// ---------------- Progress Aggregator ----------------
+
+// Allows multiple services/tasks to contribute to a single global bar.
+// Each segment provides 0..100% which is weighted into an overall percent.
+const __gAgg = {
+  active: false,
+  delegateId: null,
+  totalWeight: 0,
+  segments: new Map(), // id -> { weight, pct }
+  order: [],
+  // Ensure the bar exists and return { el, fill }
+  _ensureBar() {
+    const el = document.getElementById('globalProg');
+    if (!el) return { el: null, fill: null };
+    let fill = el.querySelector('.bar');
+    if (!fill) { fill = document.createElement('div'); fill.className = 'bar'; el.appendChild(fill); }
+    el.hidden = false;
+    el.classList.remove('idle');
+    return { el, fill };
+  },
+  _apply() {
+    const { el, fill } = this._ensureBar();
+    if (!el || !fill) return;
+    // compute weighted percent
+    if (!this.totalWeight) return;
+    let acc = 0;
+    for (const [id, seg] of this.segments) {
+      const pct = Math.max(0, Math.min(100, Number(seg.pct) || 0));
+      acc += (seg.weight * pct) / 100;
+    }
+    const overall = Math.max(0, Math.min(100, Math.floor((acc * 100) / this.totalWeight)));
+    fill.style.width = overall + '%';
+    // keep progress visible and non-idle while active
+    el.hidden = false;
+    el.classList.remove('idle');
+    const now = Date.now();
+    __gProg.lastUpdate = now;
+    __gProg.lockUntil = now + 350;
+    if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
+  },
+  start(plan) {
+    this.active = true;
+    this.delegateId = null;
+    this.totalWeight = 0;
+    this.segments.clear();
+    this.order = [];
+    for (const seg of plan || []) {
+      if (!seg || !seg.id) continue;
+      const w = Number(seg.weight) || 0;
+      this.totalWeight += w;
+      this.segments.set(seg.id, { weight: w, pct: 0 });
+      this.order.push(seg.id);
+    }
+    // show bar at 0%
+    const { el, fill } = this._ensureBar();
+    if (el && fill) {
+      fill.style.width = '0%';
+      el.dataset.max = '100';
+    }
+    const now = Date.now();
+    __gProg.lastUpdate = now;
+    __gProg.lockUntil = now + 300;
+  },
+  setSegment(id, pct) {
+    if (!this.active) return;
+    const seg = this.segments.get(id);
+    if (!seg) return;
+    seg.pct = Math.max(0, Math.min(100, Number(pct) || 0));
+    this._apply();
+  },
+  enter(id) {
+    if (!this.active) return;
+    if (!this.segments.has(id)) return;
+    this.delegateId = id;
+    // nudge apply to make sure bar is visible
+    this._apply();
+  },
+  leave(id) {
+    if (this.delegateId === id) this.delegateId = null;
+  },
+  done() {
+    // mark everything complete
+    if (this.active) {
+      for (const [id, seg] of this.segments) seg.pct = 100;
+      this._apply();
+    }
+    this.active = false;
+    this.delegateId = null;
+    try { globalProgressDone(600); } catch {}
+  },
+};
+
+export function progAggregateStart(plan) { __gAgg.start(plan); }
+export function progAggregateSet(id, pct) { __gAgg.setSegment(id, pct); }
+export function progAggregateEnter(id) { __gAgg.enter(id); }
+export function progAggregateLeave(id) { __gAgg.leave(id); }
+export function progAggregateDone() { __gAgg.done(); }
