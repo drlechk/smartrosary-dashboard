@@ -7,7 +7,7 @@ const TYPE_BOOL = 0x01;
 const TYPE_U8 = 0x11;
 const TYPE_U32 = 0x14;
 
-const DEFAULT_SET_LABELS = ['None', 'Joyful', 'Luminous', 'Sorrowful', 'Glorious', 'Chaplet'];
+const DEFAULT_SET_LABELS = ['None', 'Joyful', 'Sorrowful', 'Glorious', 'Luminous', 'Chaplet'];
 
 const ROW_LIMIT = 32;
 
@@ -43,13 +43,17 @@ const IL = () => {
 
 const getMysteryOptions = () => {
   const sets = i18n[getLang()]?.sets || DEFAULT_SET_LABELS;
-  return [
-    { value: 0, label: sets[0] || DEFAULT_SET_LABELS[0] },
-    { value: 1, label: sets[1] || DEFAULT_SET_LABELS[1] },
-    { value: 2, label: sets[2] || DEFAULT_SET_LABELS[2] },
-    { value: 3, label: sets[3] || DEFAULT_SET_LABELS[3] },
-    { value: 4, label: sets[4] || DEFAULT_SET_LABELS[4] },
+  const order = [
+    { idx: 0, value: 0 }, // None
+    { idx: 1, value: 1 }, // Joyful
+    { idx: 4, value: 2 }, // Luminous
+    { idx: 2, value: 3 }, // Sorrowful
+    { idx: 3, value: 4 }, // Glorious
   ];
+  return order.map(({ idx, value }) => ({
+    value,
+    label: sets[idx] || DEFAULT_SET_LABELS[idx],
+  }));
 };
 
 function defaultMonthStartEpoch(idx) {
