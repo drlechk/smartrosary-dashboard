@@ -1,7 +1,7 @@
 import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateStart, progAggregateSet, progAggregateEnter, progAggregateLeave, progAggregateDone } from './utils.js';
 import { BleClient } from './ble.js';
 import { initCharts } from './charts.js';
-import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText } from './ui.js';
+import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText, initThemeToggle } from './ui.js';
 import { doBackup } from './backup.js';
 import { restoreFromJson } from './restore.js';
 import { requestKeysConsent, backupKeys, restoreKeys } from './auth.js';
@@ -692,6 +692,7 @@ const remoteAPI = (function(){
 
 // Boot
 (function init(){
+  initThemeToggle();
   initCharts();
   setLang('pl'); // default
   applyI18n();

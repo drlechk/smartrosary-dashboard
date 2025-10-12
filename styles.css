@@ -90,9 +90,9 @@
     background:#101722; border:1px solid #172231; border-radius:14px; padding:16px;
     box-shadow:0 6px 24px rgba(0,0,0,.25);
   }
-  .card h3 { margin:0 0 12px; font-size:16px; font-weight:700; color:#cfe4ff; }
-  .kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
-  .kpi { background:#0d131c; border:1px solid #172231; border-radius:12px; padding:10px 12px; }
+.card h3 { margin:0 0 12px; font-size:16px; font-weight:700; color:#cfe4ff; }
+.kpis { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.kpi { background:#0d131c; border:1px solid #172231; border-radius:12px; padding:10px 12px; }
   .kpi .label { color:#9fb3c8; font-size:12px; }
   .kpi .value { font-size:18px; font-weight:800; margin-top:2px; line-height:1.1; }
   .pill {
@@ -115,6 +115,11 @@
 .card .chart + .chart { margin-top: 20px; }
 .card h3 + h3 { margin-top: 24px; }
 .card h3 + .chart { margin-top: 12px; }
+.card-stats { display:flex; flex-direction:column; gap:12px; min-height:520px; }
+.card-stats h3 { margin:0; }
+.card-stats .card-separator { margin:0; }
+.card-stats .chart { flex:1 1 0; min-height:220px; height:auto; display:flex; }
+.card-stats .chart canvas { flex:1; width:100% !important; height:100% !important; }
   .card .card-separator {
   width: 100%;
   height: 1px;
@@ -157,8 +162,10 @@ progress::-moz-progress-bar {
 }
 
 .header-with-lang { position: relative; display: flex; justify-content: center; align-items: center; padding: 16px 12px; }
-.header-with-lang h1 { margin: 0; font-size: 1.2em; line-height: 1.2; text-align: center; }
-#langSelect { position: absolute; right: 12px; font-size: 1em; padding: 4px 6px; }
+.header-with-lang h1 { margin: 0; font-size: 1.2em; line-height: 1.2; text-align: center; color:#eaf0f6; }
+.header-controls { position:absolute; right:12px; top:50%; transform:translateY(-50%); display:flex; gap:8px; align-items:center; }
+#themeToggle { padding:8px 14px; border-radius:10px; border:1px solid #263244; background:#1f2937; color:#eaf0f6; font-weight:600; cursor:pointer; }
+#langSelect { font-size: 1em; padding: 6px 10px; }
 .settings-list { display:grid; gap:14px; }
 .setting { 
   display:flex; align-items:center; justify-content:space-between;
@@ -393,7 +400,7 @@ input[type="range"]::-ms-track {
   display: block;
   width: min(92vw, 320px);
   height: auto;
-  background: #000;
+  background: #2f3642;
   border: 3px solid #6b7280;   /* gray border */
   border-radius: 50%;
   clip-path: circle(50% at 50% 50%);
@@ -423,7 +430,7 @@ input[type="range"]::-ms-track {
 /* Files table */
 #wpFilesPanel table.files { table-layout: fixed; max-width: 100%; width: 100%; }
 table.files { width: 100%; border-collapse: collapse; font-size: 12px; }
-table.files th, table.files td { padding: 6px 8px; border-bottom: 1px solid #1f2a44; }
+table.files th, table.files td { padding: 8px 10px; border-bottom: 1px solid #1f2a44; }
 
 table.files th {
   font-weight: 600;
@@ -435,7 +442,7 @@ table.files th {
 /* Name column narrower with ellipsis */
 table.files th.name,
 table.files td.name {
-  width: 55%;                      /* was wider */
+  width: 38%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -459,8 +466,8 @@ table.files td.actions {
 
 /* Action buttons */
 td.actions .actions-wrap { display: inline-flex; align-items: center; gap: 6px; }
-.icon-btn { background: none; border: 0; padding: 4px; margin: 0; color: #8ab4ff; cursor: pointer; border-radius: 8px; }
-.icon-btn:hover { color: #fff; background: rgba(255,255,255,.04); }
+.icon-btn { background: none; border: 1px solid #1d3551; padding: 4px; margin: 0; color: #8ab4ff; cursor: pointer; border-radius: 8px; transition: background .15s ease, color .15s ease, border-color .15s ease; }
+.icon-btn:hover { color: #fff; background: rgba(255,255,255,.08); border-color:#2a4c6d; }
 
 /* Material Symbols */
 .material-symbols-outlined {
@@ -493,8 +500,21 @@ td.actions .actions-wrap { display: inline-flex; align-items: center; gap: 6px; 
 .intentions-table-wrap { border:1px solid #1a2733; border-radius:12px; overflow:hidden; background:#0d131c; }
 .intentions-table-wrap table { width:100%; border-collapse:collapse; min-width:380px; }
 .intentions-table-wrap thead { background:#142033; }
+.intentions-table-wrap thead tr { border-bottom:1px solid #182334; }
 .intentions-table-wrap th { padding:12px 10px; font-size:10px; text-transform:uppercase; letter-spacing:0.4px; color:#a9bdd3; text-align:left; }
-.intentions-table-wrap td { padding:6px; border-top:1px solid #182334; font-size:10px; vertical-align:top; }
+.intentions-table-wrap tbody tr { position:relative; }
+.intentions-table-wrap td { padding:6px; border-top:none; font-size:10px; vertical-align:top; }
+.intentions-table-wrap tbody tr::after {
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:1px;
+  background:#182334;
+  pointer-events:none;
+}
+.intentions-table-wrap tbody tr:last-child::after { display:none; }
 .intentions-table-wrap tbody tr:nth-child(even) { background:rgba(255,255,255,0.02); }
 .intentions-table-wrap tbody tr:hover { background:rgba(66,153,225,0.08); }
 .intentions-table-wrap td:nth-child(1), .intentions-table-wrap th:nth-child(1) { width:36px; text-align:center; }
@@ -519,3 +539,160 @@ td.actions .actions-wrap { display: inline-flex; align-items: center; gap: 6px; 
 .intentions-desc-toggle:disabled { cursor:default; opacity:0.4; }
 .intentions-desc-text { font-size:11px; color:#8fa5bf; overflow:hidden; transition:max-height 0.22s ease; white-space:pre-line; padding:0 2px; flex:1 1 100%; }
 .intentions-desc-text.expanded { }
+
+/* --- Light theme overrides --- */
+body.theme-light {
+  color-scheme: light;
+  background: linear-gradient(180deg, #f2f7ff 0%, #dfeaff 55%, #cfe0ff 100%);
+  color:#0f172a;
+}
+body.theme-light header,
+body.theme-light .toolbar-wrap {
+  background:#e6f1ff;
+  border-color:#c3d7ff;
+}
+body.theme-light .header-with-lang h1 { color:#1e3a8a; }
+body.theme-light #themeToggle {
+  background:#ffffff;
+  color:#0f172a;
+  border:1px solid #d1d5db;
+}
+body.theme-light #themeToggle:hover { background:#f1f5f9; }
+body.theme-light #langSelect {
+  background:#ffffff;
+  color:#0f172a;
+  border:1px solid #d1d5db;
+}
+body.theme-light .toolbar-status { color:#1d4ed8; }
+body.theme-light button,
+body.theme-light select {
+  background:#ffffff;
+  color:#0f172a;
+  border:1px solid #d1d5db;
+}
+body.theme-light #refreshBtn { color:#ffffff; }
+body.theme-light button:disabled,
+body.theme-light select:disabled {
+  background:#f3f4f6;
+  color:#9ca3af;
+}
+body.theme-light .card {
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+  box-shadow:0 10px 28px rgba(15,23,42,0.08);
+}
+body.theme-light .card h3 { color:#0f172a; }
+body.theme-light .kpi {
+  background:#f3f4f6;
+  border:1px solid #e5e7eb;
+}
+body.theme-light .kpi .label { color:#64748b; }
+body.theme-light .kpi .value { color:#0f172a; }
+body.theme-light .pill,
+body.theme-light .badge {
+  background:#f3f4f6;
+  border:1px solid #e5e7eb;
+  color:#0f172a;
+}
+body.theme-light .badge.muted { background:#eef2f7; color:#64748b; }
+body.theme-light .muted,
+body.theme-light .smallnote { color:#64748b; }
+body.theme-light #status { color:#334155; }
+body.theme-light .settings-list .setting {
+  background:#f9fafb;
+  border:1px solid #e5e7eb;
+}
+body.theme-light .setting .title { color:#0f172a; }
+body.theme-light .setting .desc { color:#64748b; }
+body.theme-light .intentions-table-wrap {
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+}
+body.theme-light .intentions-table-wrap thead {
+  background:#e9f2ff;
+}
+body.theme-light .intentions-table-wrap thead tr { border-bottom:1px solid #e5e7eb; }
+body.theme-light .intentions-table-wrap th {
+  color:#0f172a;
+}
+body.theme-light .intentions-table-wrap td {
+  color:#1f2937;
+}
+body.theme-light .intentions-table-wrap tbody tr::after { background:#e5e7eb; }
+body.theme-light .intentions-table-wrap tbody tr:nth-child(even) {
+  background:#f8fbff;
+}
+body.theme-light .intentions-table-wrap tbody tr:hover {
+  background:#e3f0ff;
+}
+body.theme-light .intentions-table-wrap input[type="date"],
+body.theme-light .intentions-table-wrap select {
+  background:#ffffff;
+  color:#0f172a;
+  border:1px solid #d1d5db;
+}
+body.theme-light .intentions-title { color:#0f172a; }
+body.theme-light #intentionsAutoLabel { color:#0f172a; }
+body.theme-light input[type="range"] {
+  background:#eef2f7;
+  border-color:#d1d5db;
+}
+body.theme-light progress {
+  background:#eef2f7;
+  border-color:#d1d5db;
+}
+body.theme-light progress::-webkit-progress-bar {
+  background:#eef2f7;
+}
+body.theme-light .toolbar-progress {
+  background:#dbeafe;
+}
+body.theme-light .history-panel {
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+}
+body.theme-light .history-file-list .history-file { border-bottom:1px solid #e5e7eb; }
+body.theme-light .history-sep { background:#e5e7eb; }
+body.theme-light .history-legend,
+body.theme-light .history-chart-controls,
+body.theme-light .history-card .badge,
+body.theme-light .history-card select,
+body.theme-light .history-card button {
+  color:#0f172a;
+}
+body.theme-light .legend-color { border-color:#94a3b8; }
+body.theme-light .icon-btn { border-color:#d1d5db; color:#2563eb; }
+body.theme-light .icon-btn:hover { background:#edf2ff; color:#1d4ed8; border-color:#c0d4ff; }
+#histBucketLabel { font-size:12px; }
+.history-legend .legend-item { font-size:12px; }
+body.theme-light .history-card button.danger {
+  background:#fee2e2;
+  border:1px solid #fecaca;
+  color:#991b1b;
+}
+body.theme-light table.files th,
+body.theme-light table.files td {
+  border-bottom:1px solid #e5e7eb;
+}
+body.theme-light table.files th { color:#0f172a; }
+body.theme-light .canvas-shell,
+body.theme-light .wp-canvas-shell { background:#f3f4f6; }
+body.theme-light #lvgl_canvas {
+  background:#f9fafb;
+  border-color:#94a3b8;
+}
+body.theme-light #wpCanvas {
+  background:#2f3642;
+  border-color:#d1d5db;
+}
+body.theme-light .dpad button {
+  background:#f3f4f6;
+  border:1px solid #d1d5db;
+  color:#0f172a;
+  box-shadow:none;
+}
+body.theme-light .dpad button.center { background:#e5e7eb; }
+body.theme-light .badge.pill { background:#f1f5f9; }
+body.theme-light .pill { color:#0f172a; }
+body.theme-light .wp-header h3 { color:#0f172a; }
+body.theme-light #wpCard.wp-muted { opacity:0.55; }

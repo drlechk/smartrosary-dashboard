@@ -1,7 +1,7 @@
 import { $, u8ToStr, safeNum } from './utils.js';
-import { setChartLabels, updateAverages, updateDonut, updateParts } from './charts.js';
+import { setChartLabels, updateAverages, updateDonut, updateParts, applyChartTheme } from './charts.js';
 import { applyWallpaperI18n, setWallpaperLang } from './wallpaper.js';
-import { applyHistoryI18n } from './history.js';
+import { applyHistoryI18n, applyHistoryTheme } from './history.js';
 import { i18n } from './i18n.js';
 
 let lang = 'pl';
@@ -156,6 +156,45 @@ export function applyI18n() {
   setWallpaperLang(lang);
   applyWallpaperI18n();
   applyHistoryI18n({ ...L.history, calendar: L.calendar });
+}
+
+export function initThemeToggle() {
+  const btn = $('themeToggle');
+  if (!btn) return;
+
+  const THEME_KEY = 'dashboard-theme';
+  const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+
+  const readStoredTheme = () => {
+    try {
+      const stored = localStorage.getItem(THEME_KEY);
+      return stored === 'light' || stored === 'dark' ? stored : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const writeStoredTheme = (value) => {
+    try { localStorage.setItem(THEME_KEY, value); } catch {}
+  };
+
+  const applyTheme = (mode) => {
+    document.body.classList.toggle('theme-light', mode === 'light');
+    btn.textContent = mode === 'light' ? 'Dark' : 'Light';
+    btn.title = mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+    btn.setAttribute('aria-pressed', String(mode === 'light'));
+    try { applyChartTheme(mode); } catch {}
+    try { applyHistoryTheme(mode); } catch {}
+  };
+
+  let theme = readStoredTheme() ?? (prefersLight ? 'light' : 'light');
+  applyTheme(theme);
+
+  btn.addEventListener('click', () => {
+    theme = theme === 'light' ? 'dark' : 'light';
+    applyTheme(theme);
+    writeStoredTheme(theme);
+  });
 }
 
 function fmtMs(ms){

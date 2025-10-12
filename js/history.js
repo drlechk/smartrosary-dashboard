@@ -33,6 +33,31 @@ let legendSets = [...FALLBACK_LEGEND_SETS];
 let legendIntentLabel = 'Intention';
 let legendRoman = [...FALLBACK_LEGEND_ROMAN];
 
+const HISTORY_THEMES = {
+  dark: {
+    axisGrid: '#1a2733',
+    axisTick: '#cfe4ff',
+    legendText: '#cfe4ff',
+    legendBorder: '#333',
+    legendIntentBorder: '#2e2e2e',
+  },
+  light: {
+    axisGrid: '#d4deeb',
+    axisTick: '#1f2937',
+    legendText: '#0f172a',
+    legendBorder: '#94a3b8',
+    legendIntentBorder: '#94a3b8',
+  },
+};
+
+function resolveHistoryPalette(mode) {
+  if (mode === 'light') return HISTORY_THEMES.light;
+  if (mode === 'dark') return HISTORY_THEMES.dark;
+  return document.body.classList.contains('theme-light') ? HISTORY_THEMES.light : HISTORY_THEMES.dark;
+}
+
+let historyPalette = resolveHistoryPalette();
+
 const hiddenRestoreInput = (() => {
   const input = document.createElement('input');
   input.type = 'file';
@@ -759,13 +784,15 @@ function renderChart() {
 
   if (dom.periodLabel) dom.periodLabel.textContent = periodText(bucket);
 
+  historyPalette = resolveHistoryPalette();
+
   const options = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { type: 'category', stacked: true, ticks: { color: '#cfe4ff', autoSkip: false, maxRotation: 45, minRotation: 45, font: { size: 10 } }, grid: { color: '#1a2733' } },
-      y: { stacked: true, beginAtZero: true, ticks: { color: '#cfe4ff', precision: 0, font: { size: 10 } }, grid: { color: '#1a2733' } }
+      x: { type: 'category', stacked: true, ticks: { color: historyPalette.axisTick, autoSkip: false, maxRotation: 45, minRotation: 45, font: { size: 10 } }, grid: { color: historyPalette.axisGrid } },
+      y: { stacked: true, beginAtZero: true, ticks: { color: historyPalette.axisTick, precision: 0, font: { size: 10 } }, grid: { color: historyPalette.axisGrid } }
     },
     animations: { y: { from: 0, duration: 700, easing: 'easeOutCubic' } }
   };
@@ -776,6 +803,21 @@ function renderChart() {
   } else {
     histChart.data.labels = labels;
     histChart.data.datasets = datasets;
+    if (histChart.options?.scales) {
+      const { scales } = histChart.options;
+      if (scales.x) {
+        if (!scales.x.ticks) scales.x.ticks = {};
+        scales.x.ticks.color = historyPalette.axisTick;
+        if (!scales.x.grid) scales.x.grid = {};
+        scales.x.grid.color = historyPalette.axisGrid;
+      }
+      if (scales.y) {
+        if (!scales.y.ticks) scales.y.ticks = {};
+        scales.y.ticks.color = historyPalette.axisTick;
+        if (!scales.y.grid) scales.y.grid = {};
+        scales.y.grid.color = historyPalette.axisGrid;
+      }
+    }
     histChart.update();
     log('renderChart: chart updated');
   }
@@ -784,9 +826,11 @@ function renderChart() {
 function makeLegendItem(color, label, hatched = false) {
   const item = document.createElement('div');
   item.className = 'legend-item';
+  item.style.color = historyPalette.legendText;
   const box = document.createElement('span');
   box.className = 'legend-color';
   box.style.setProperty('--legend-base', color);
+  box.style.borderColor = hatched ? historyPalette.legendIntentBorder : historyPalette.legendBorder;
   if (hatched) {
     box.classList.add('hatched');
   } else {
@@ -803,6 +847,8 @@ function renderLegend() {
   if (!dom.legendRow1 || !dom.legendRow2) return;
   dom.legendRow1.innerHTML = '';
   dom.legendRow2.innerHTML = '';
+
+  historyPalette = resolveHistoryPalette();
 
   const sets = legendSets.length >= 6 ? legendSets : FALLBACK_LEGEND_SETS;
   const romans = legendRoman.length >= 5 ? legendRoman : FALLBACK_LEGEND_ROMAN;
@@ -826,6 +872,22 @@ function renderLegend() {
 
   top.forEach((el) => dom.legendRow1.appendChild(el));
   bottom.forEach((el) => dom.legendRow2.appendChild(el));
+  applyPaletteToLegendRows();
+}
+
+function applyPaletteToLegendRows() {
+  const updateRow = (row) => {
+    if (!row) return;
+    row.querySelectorAll('.legend-item').forEach((item) => {
+      item.style.color = historyPalette.legendText;
+      item.querySelectorAll('.legend-color').forEach((box) => {
+        const isHatched = box.classList.contains('hatched');
+        box.style.borderColor = isHatched ? historyPalette.legendIntentBorder : historyPalette.legendBorder;
+      });
+    });
+  };
+  updateRow(dom.legendRow1);
+  updateRow(dom.legendRow2);
 }
 
 function parseHistory(bytes) {
@@ -1132,6 +1194,29 @@ export async function attachHistoryFS(server) {
     chCtrl = chInfo = chData = chStat = null;
     throw e;
   }
+}
+
+export function applyHistoryTheme(mode) {
+  historyPalette = resolveHistoryPalette(mode);
+
+  if (histChart?.options?.scales) {
+    const { scales } = histChart.options;
+    if (scales.x) {
+      if (!scales.x.ticks) scales.x.ticks = {};
+      scales.x.ticks.color = historyPalette.axisTick;
+      if (!scales.x.grid) scales.x.grid = {};
+      scales.x.grid.color = historyPalette.axisGrid;
+    }
+    if (scales.y) {
+      if (!scales.y.ticks) scales.y.ticks = {};
+      scales.y.ticks.color = historyPalette.axisTick;
+      if (!scales.y.grid) scales.y.grid = {};
+      scales.y.grid.color = historyPalette.axisGrid;
+    }
+    histChart.update('none');
+  }
+
+  applyPaletteToLegendRows();
 }
 
 export async function resetHistory() {

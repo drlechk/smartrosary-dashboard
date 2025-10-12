@@ -2,6 +2,27 @@ import { $, safeNum } from './utils.js';
 
 let barWindow, donutSets, partsChart;
 
+const THEME_PALETTES = {
+  dark: {
+    axisTick: '#cfe4ff',
+    axisGrid: '#1a2733',
+    legendLabel: '#eaf0f6',
+    donutBorder: '#0b0f14',
+  },
+  light: {
+    axisTick: '#1f2937',
+    axisGrid: '#d4deeb',
+    legendLabel: '#0f172a',
+    donutBorder: '#ffffff',
+  },
+};
+
+function currentThemePalette(mode) {
+  if (mode === 'light') return THEME_PALETTES.light;
+  if (mode === 'dark') return THEME_PALETTES.dark;
+  return document.body.classList.contains('theme-light') ? THEME_PALETTES.light : THEME_PALETTES.dark;
+}
+
 export function initCharts() {
   const ctxBarEl   = $('barWindow');
   const ctxDonutEl = $('donutSets');
@@ -43,7 +64,7 @@ export function initCharts() {
       datasets: [{
         data: [0,0,0,0,0,0],
         backgroundColor:['#808080','#3399ff','#cc0000','#00cc00','#ffcc00','#8B4513'],
-        borderColor:'#0b0f14', borderWidth:2
+        borderWidth:0
       }]
     },
     options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ color:'#eaf0f6' } } }, cutout:'60%' }
@@ -77,6 +98,40 @@ export function initCharts() {
       }
     }
   });
+
+  applyChartTheme();
+}
+
+export function applyChartTheme(mode) {
+  const palette = currentThemePalette(mode);
+
+  const updateScales = (chart) => {
+    if (!chart?.options?.scales) return;
+    const { scales } = chart.options;
+    for (const axisKey of Object.keys(scales)) {
+      const axis = scales[axisKey];
+      if (axis.grid) axis.grid.color = palette.axisGrid;
+      if (axis.ticks) axis.ticks.color = palette.axisTick;
+    }
+  };
+
+  if (barWindow) {
+    updateScales(barWindow);
+    barWindow.update('none');
+  }
+  if (partsChart) {
+    updateScales(partsChart);
+    if (partsChart.options?.plugins?.legend?.labels) {
+      partsChart.options.plugins.legend.labels.color = palette.legendLabel;
+    }
+    partsChart.update('none');
+  }
+  if (donutSets) {
+    if (donutSets.options?.plugins?.legend?.labels) {
+      donutSets.options.plugins.legend.labels.color = palette.legendLabel;
+    }
+    donutSets.update('none');
+  }
 }
 
 export function setChartLabels(L) {

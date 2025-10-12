@@ -5,6 +5,7 @@ import { i18n } from './i18n.js';
 import { downloadBlob, openFilePicker, loadImageSource, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
 
 const log = (...args) => console.log('[wallpaper]', ...args);
+const CANVAS_BG = '#2f3642';
 
 let wpLang = 'en';
 export function setWallpaperLang(code) {
@@ -455,11 +456,23 @@ async function _initCanvas() {
   viewCtx = ui.canvas.getContext('2d', { alpha:false });
   viewCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
   viewCtx.imageSmoothingEnabled = true;
+  try {
+    viewCtx.save();
+    viewCtx.fillStyle = CANVAS_BG;
+    viewCtx.fillRect(0,0,ui.canvas.clientWidth, ui.canvas.clientHeight);
+    viewCtx.restore();
+  } catch {}
 
   // work
   workCanvas = document.createElement('canvas');
   workCanvas.width = TARGET_W; workCanvas.height = TARGET_H;
   workCtx = workCanvas.getContext('2d', { alpha:false, willReadFrequently:true });
+  try {
+    workCtx.save();
+    workCtx.fillStyle = CANVAS_BG;
+    workCtx.fillRect(0,0,workCanvas.width, workCanvas.height);
+    workCtx.restore();
+  } catch {}
 
   window.addEventListener('resize', () => {
     const dpr2 = window.devicePixelRatio || 1;
@@ -470,13 +483,26 @@ async function _initCanvas() {
     viewCtx = ui.canvas.getContext('2d', { alpha:false });
     viewCtx.setTransform(dpr2, 0, 0, dpr2, 0, 0);
     viewCtx.imageSmoothingEnabled = true;
+    try {
+      viewCtx.save();
+      viewCtx.fillStyle = CANVAS_BG;
+      viewCtx.fillRect(0,0,ui.canvas.clientWidth, ui.canvas.clientHeight);
+      viewCtx.restore();
+    } catch {}
     _blit();
   });
 }
 
 function _blit() {
   if (!viewCtx) return;
-  viewCtx.clearRect(0,0,ui.canvas.clientWidth, ui.canvas.clientHeight);
+  try {
+    viewCtx.save();
+    viewCtx.fillStyle = CANVAS_BG;
+    viewCtx.fillRect(0,0,ui.canvas.clientWidth, ui.canvas.clientHeight);
+    viewCtx.restore();
+  } catch {
+    viewCtx.clearRect(0,0,ui.canvas.clientWidth, ui.canvas.clientHeight);
+  }
   viewCtx.drawImage(
     workCanvas, 0,0, workCanvas.width, workCanvas.height,
     0,0, ui.canvas.clientWidth, ui.canvas.clientHeight
@@ -485,7 +511,10 @@ function _blit() {
 
 function _clearPreview() {
   if (!workCtx) return;
-  workCtx.clearRect(0,0,workCanvas.width, workCanvas.height);
+  workCtx.save();
+  workCtx.fillStyle = CANVAS_BG;
+  workCtx.fillRect(0,0,workCanvas.width, workCanvas.height);
+  workCtx.restore();
   _blit();
 }
 
@@ -497,7 +526,10 @@ async function _drawToCanvasCover(bmp) {
   const s = Math.max(TARGET_W / srcW, TARGET_H / srcH);
   const dw = Math.round(srcW * s), dh = Math.round(srcH * s);
   const dx = Math.round((TARGET_W - dw)/2), dy = Math.round((TARGET_H - dh)/2);
-  workCtx.clearRect(0,0,TARGET_W,TARGET_H);
+  workCtx.save();
+  workCtx.fillStyle = CANVAS_BG;
+  workCtx.fillRect(0,0,TARGET_W,TARGET_H);
+  workCtx.restore();
   workCtx.drawImage(bmp, dx, dy, dw, dh);
   _blit();
   try { bmp.close(); } catch {}
