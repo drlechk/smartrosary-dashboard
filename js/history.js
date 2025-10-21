@@ -1146,10 +1146,10 @@ export async function attachHistoryFS(server) {
   try {
     log('attachHistoryFS: acquiring history service');
     const svc = await server.getPrimaryService(FS_SVC_UUID);
-    chCtrl = await svc.getCharacteristic(FS_CTRL_UUID);
-    chInfo = await svc.getCharacteristic(FS_INFO_UUID);
-    chData = await svc.getCharacteristic(FS_DATA_UUID);
-    chStat = await svc.getCharacteristic(FS_STAT_UUID);
+    chCtrl = await svc.getCharacteristic(FS_CTRL_UUID); log('attachHistoryFS: CTRL ready');
+    chInfo = await svc.getCharacteristic(FS_INFO_UUID); log('attachHistoryFS: INFO ready');
+    chData = await svc.getCharacteristic(FS_DATA_UUID); log('attachHistoryFS: DATA ready');
+    chStat = await svc.getCharacteristic(FS_STAT_UUID); log('attachHistoryFS: STAT ready');
 
     infoListener = (ev) => onInfo(ev);
     dataListener = (ev) => onData(ev);
@@ -1158,6 +1158,7 @@ export async function attachHistoryFS(server) {
     await chInfo.startNotifications();
     await chData.startNotifications();
     await chStat.startNotifications();
+    log('attachHistoryFS: notifications started');
 
     chInfo.addEventListener('characteristicvaluechanged', infoListener);
     chData.addEventListener('characteristicvaluechanged', dataListener);

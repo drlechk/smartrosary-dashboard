@@ -226,15 +226,17 @@ export async function attachWallpaperFS(server) {
   _hideProgress(); // ensure hidden on load
 
   try {
+    log('attachWallpaperFS: acquiring filesystem service');
     const fss = await server.getPrimaryService(FS_SVC_UUID);
-    fsCtrl = await fss.getCharacteristic(FS_CTRL_UUID);
-    fsInfo = await fss.getCharacteristic(FS_INFO_UUID);
-    fsData = await fss.getCharacteristic(FS_DATA_UUID);
-    fsStat = await fss.getCharacteristic(FS_STAT_UUID);
+    fsCtrl = await fss.getCharacteristic(FS_CTRL_UUID); log('attachWallpaperFS: CTRL ready');
+    fsInfo = await fss.getCharacteristic(FS_INFO_UUID); log('attachWallpaperFS: INFO ready');
+    fsData = await fss.getCharacteristic(FS_DATA_UUID); log('attachWallpaperFS: DATA ready');
+    fsStat = await fss.getCharacteristic(FS_STAT_UUID); log('attachWallpaperFS: STAT ready');
 
     await fsInfo.startNotifications();
     await fsData.startNotifications();
     await fsStat.startNotifications();
+    log('attachWallpaperFS: notifications started');
 
     fsInfo.addEventListener('characteristicvaluechanged', _onFsInfo);
     fsData.addEventListener('characteristicvaluechanged', _onFsData);

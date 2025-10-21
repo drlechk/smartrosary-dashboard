@@ -302,6 +302,29 @@
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/patternomaly@1.3.2/dist/patternomaly.min.js"></script>
+
+  <!-- Debug log stub (define early so modules can log into it) -->
+  <script>
+    (function(){
+      if (!window.__dbgBuffer) window.__dbgBuffer = [];
+      if (!window.__dbg) {
+        window.__dbg = function(msg){ try { window.__dbgBuffer.push(String(msg)); } catch(_){} };
+      }
+      try {
+        const fmt = (args) => Array.from(args).map((arg) => {
+          if (typeof arg === 'string') return arg;
+          try { return JSON.stringify(arg); } catch { return String(arg); }
+        }).join(' ');
+        const _log = console.log.bind(console);
+        const _warn = console.warn.bind(console);
+        const _err = console.error.bind(console);
+        console.log = function(){ try { window.__dbg(fmt(arguments)); } catch(_){}; _log.apply(console, arguments); };
+        console.warn = function(){ try { window.__dbg('[warn] ' + fmt(arguments)); } catch(_){}; _warn.apply(console, arguments); };
+        console.error = function(){ try { window.__dbg('[error] ' + fmt(arguments)); } catch(_){}; _err.apply(console, arguments); };
+      } catch(_){}
+    })();
+  </script>
+
   <!-- Your modules -->
   <script type="module" src="./js/main.js"></script>
  <script src="https://lib.arvancloud.ir/nosleep/0.9.0/NoSleep.min.js"></script>
@@ -350,5 +373,80 @@
     requestWakeLock();
   }
 </script>
+
+<!-- Debug log panel -->
+<div id="debugPanel" style="position:fixed;left:0;right:0;bottom:0;max-height:36vh;background:#111827;color:#d1fae5;font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;border-top:1px solid #374151;box-shadow:0 -4px 12px rgba(0,0,0,0.35);display:none;z-index:9999;">
+  <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid #374151;">
+    <strong style="font-weight:600;color:#a7f3d0;">Debug Log</strong>
+    <button id="dbgCopyBtn" class="pill">Copy</button>
+    <button id="dbgHideBtn" class="pill" style="margin-left:auto;">Hide</button>
+    <button id="dbgClearBtn" class="pill">Clear</button>
+  </div>
+  <pre id="debugOut" style="margin:0;padding:8px;white-space:pre-wrap;overflow:auto;max-height:28vh;"></pre>
+</div>
+<button id="dbgShowBtn" class="pill" style="position:fixed;right:10px;bottom:10px;z-index:9999;">Debug</button>
+<script>
+  (function(){
+    const panel = document.getElementById('debugPanel');
+    const out = document.getElementById('debugOut');
+    const showBtn = document.getElementById('dbgShowBtn');
+    const hideBtn = document.getElementById('dbgHideBtn');
+    const clrBtn = document.getElementById('dbgClearBtn');
+    const copyBtn = document.getElementById('dbgCopyBtn');
+    function timestamp(){
+      try { return new Date().toISOString().split('T')[1].replace('Z',''); }
+      catch { return ''; }
+    }
+    function append(msg){
+      if (!out) return;
+      out.textContent += `[${timestamp()}] ${msg}\n`;
+      out.scrollTop = out.scrollHeight;
+    }
+    const buffered = Array.isArray(window.__dbgBuffer) ? window.__dbgBuffer.slice() : [];
+    window.__dbg = function(msg){ try { append(String(msg)); } catch(_){} };
+    if (buffered.length) {
+      buffered.forEach((line) => append(line));
+      try { window.__dbgBuffer.length = 0; } catch(_){}
+    }
+    showBtn?.addEventListener('click', () => {
+      panel.style.display = 'block';
+      showBtn.style.display = 'none';
+    });
+    hideBtn?.addEventListener('click', () => {
+      panel.style.display = 'none';
+      showBtn.style.display = 'inline-block';
+    });
+    clrBtn?.addEventListener('click', () => { if (out) out.textContent = ''; });
+    copyBtn?.addEventListener('click', async () => {
+      const text = out?.textContent || '';
+      const fallbackCopy = () => {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.top = '-1000px';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          return ok;
+        } catch { return false; }
+      };
+      let ok = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          ok = true;
+        }
+      } catch {}
+      if (!ok) ok = fallbackCopy();
+      const prev = copyBtn.textContent;
+      copyBtn.textContent = ok ? 'Copied' : 'Copy failed';
+      setTimeout(() => { copyBtn.textContent = prev; }, 1200);
+    });
+  })();
+</script>
+
 </body>
 </html>

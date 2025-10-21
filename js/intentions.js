@@ -2,6 +2,10 @@ import { $, dec, packKV, le32 } from './utils.js';
 import { i18n } from './i18n.js';
 import { getLang } from './ui.js';
 
+const log = (...args) => {
+  try { console.log('[intentions]', ...args); } catch {}
+};
+
 const OP_SET_PREF = 0x50;
 const TYPE_BOOL = 0x01;
 const TYPE_U8 = 0x11;
@@ -101,6 +105,7 @@ export function initIntentions({ client, setStatus }) {
   };
 
   function setBusy(flag) {
+    log('setBusy', flag);
     state.busy = flag;
     loadBtn.disabled = !state.available || flag;
     saveBtn.disabled = flag || !state.entries.length || !state.available || !state.dirty;
@@ -108,6 +113,7 @@ export function initIntentions({ client, setStatus }) {
   }
 
   function setAvailable(flag, message) {
+    log('setAvailable', { available: flag, message });
     const strings = IL();
     state.available = flag;
     if (card) card.classList.toggle('card-muted', !flag);
@@ -274,19 +280,25 @@ export function initIntentions({ client, setStatus }) {
 
   async function readSummary() {
     if (!client.chIntentions) throw new Error(IL().summaryMissing);
+    log('readSummary: request');
     const value = await client.chIntentions.readValue();
     const text = dec.decode(toUint8(value));
-    return safeJsonParse(text);
+    const parsed = safeJsonParse(text);
+    log('readSummary: response', parsed);
+    return parsed;
   }
 
   async function readEntry(index) {
     if (!client.chIntentEntry) throw new Error(IL().entryMissing);
+    log('readEntry: request', index);
     const buf = new Uint8Array([index & 0xff, (index >> 8) & 0xff]);
     await client.chIntentEntry.writeValue(buf);
     await client.waitReady();
     const value = await client.chIntentEntry.readValue();
     const text = dec.decode(toUint8(value));
-    return safeJsonParse(text);
+    const parsed = safeJsonParse(text);
+    log('readEntry: response', { index, parsed });
+    return parsed;
   }
 
   async function refresh({ silent = false, ignoreBusy = false } = {}) {
@@ -296,6 +308,7 @@ export function initIntentions({ client, setStatus }) {
     if (!alreadyBusy) setBusy(true);
     const strings = IL();
     if (!silent) setStatus(strings.statusLoading);
+    log('refresh: begin', { silent, ignoreBusy });
     try {
       const summary = await readSummary();
       state.summary = summary;
@@ -312,6 +325,7 @@ export function initIntentions({ client, setStatus }) {
       }
 
       const count = Math.min(Number(summary.count) || 0, ROW_LIMIT);
+      log('refresh: summary', { count, auto: summary.auto, selected: summary.selected });
       if (!count) {
         setAvailable(false, strings.emptySchedule);
         return true;
@@ -356,13 +370,16 @@ export function initIntentions({ client, setStatus }) {
           : strings.statusLoaded;
         setStatus(`${selected}.`);
       }
+      log('refresh: completed', { entries: state.entries.length });
       return true;
     } catch (err) {
       console.error(err);
+      log('refresh: error', err?.message || err);
       if (!silent) setStatus(`${strings.statusLoadFailed}: ${err.message}`);
       return false;
     } finally {
       if (!alreadyBusy) setBusy(false);
+      log('refresh: end');
     }
   }
 
@@ -379,6 +396,7 @@ export function initIntentions({ client, setStatus }) {
     setBusy(true);
     const strings = IL();
     setStatus(strings.statusSaving);
+    log('save: begin', { entries: state.entries.length });
     try {
       for (const entry of state.entries) {
         const startEpoch = dateInputToEpoch(entry.controls?.dateInput?.value) || entry.start || 0;
@@ -403,15 +421,19 @@ export function initIntentions({ client, setStatus }) {
       setStatus(strings.statusSavedRefreshing);
       await refresh({ silent: true, ignoreBusy: true });
       setStatus(strings.statusUpdated);
+      log('save: completed');
     } catch (err) {
       console.error(err);
+      log('save: error', err?.message || err);
       setStatus(`${strings.statusSaveFailed}: ${err.message}`);
     } finally {
       setBusy(false);
+      log('save: end');
     }
   }
 
   function onConnected() {
+    log('onConnected');
     const available = !!(client.chIntentions && client.chIntentEntry);
     if (!available) {
       setAvailable(false, IL().editorMissing);
@@ -426,6 +448,7 @@ export function initIntentions({ client, setStatus }) {
   }
 
   function onDisconnected() {
+    log('onDisconnected');
     state.summary = null;
     state.entries = [];
     state.dirty = false;

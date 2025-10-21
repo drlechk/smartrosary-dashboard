@@ -249,13 +249,13 @@ async function refreshOnce() {
     await sleep(200);
 
     const vSettings = await client.robustRead(client.chSettings);
-    console.debug('Settings read bytes', vSettings?.byteLength ?? (vSettings?.buffer?.byteLength));
+    console.log('[stats] settings characteristic length', vSettings?.byteLength ?? (vSettings?.buffer?.byteLength));
 
     let vPartsMaybe = null;
     if (client.chParts) {
       try {
         vPartsMaybe = await client.robustRead(client.chParts);
-        console.debug('Parts read bytes', vPartsMaybe?.byteLength ?? (vPartsMaybe?.buffer?.byteLength));
+        console.log('[stats] parts characteristic length', vPartsMaybe?.byteLength ?? (vPartsMaybe?.buffer?.byteLength));
       } catch (errParts) {
         console.warn('Parts characteristic read skipped:', errParts);
       }
@@ -263,7 +263,7 @@ async function refreshOnce() {
 
     await sleep(80);
     const vStats = await client.robustRead(client.chStats);
-    console.debug('Stats read bytes', vStats?.byteLength ?? (vStats?.buffer?.byteLength));
+    console.log('[stats] stats characteristic length', vStats?.byteLength ?? (vStats?.buffer?.byteLength));
 
     const rawSettings = u8ToStr(vSettings);
     const rawStats    = u8ToStr(vStats);
@@ -296,9 +296,9 @@ async function refreshOnce() {
       catch (parseErr) { console.warn('Parts JSON failed after recovery', parseErr); jsParts = null; }
     }
 
-    console.debug('Settings JSON', jsSettings);
-    console.debug('Stats JSON', jsStats);
-    if (jsParts) console.debug('Parts JSON', jsParts);
+    console.log('[stats] settings parsed keys', Object.keys(jsSettings || {}));
+    console.log('[stats] stats parsed keys', Object.keys(jsStats || {}));
+    if (jsParts) console.log('[stats] parts parsed keys', Object.keys(jsParts || {}));
 
     updateFromJson({ jsStats, jsSettings, jsParts });
     try { setStatusKey('statusUpdated', L.statusUpdated); } catch { status(L.statusUpdated); }
