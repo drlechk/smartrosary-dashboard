@@ -1,0 +1,32 @@
+{
+  "name": "SmartRosary Dashboard (Static HTML+JS)",
+  "build": { "dockerfile": "Dockerfile" },
+
+  // 1) Mount the *remote* folder explicitly into /site
+  "workspaceFolder": "/site",
+  "workspaceMount": "source=/home/lech/smartrosary-dashboard,target=/site,type=bind,consistency=cached",
+
+  // 2) Use non-root user that exists in node:alpine
+  "remoteUser": "node",
+
+  // 3) Publish port to the host so you can reach 192.168.3.205:9999
+  "runArgs": ["-p", "9999:9999", "--name", "smartrosary-dashboard-dev"],
+
+  // (Optional) VS Code port forwarding UI
+  "forwardPorts": [9999],
+  "portsAttributes": { "9999": { "label": "SmartRosary Dashboard" } },
+
+  "postCreateCommand": "true",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  },
+  "overrideCommand": false,
+  "shutdownAction": "stopContainer",
+  "postStopCommand": "docker rm -f smartrosary-dashboard-dev || true"
+}
+
