@@ -32,6 +32,8 @@ const FALLBACK_LEGEND_ROMAN = ['I','II','III','IV','V'];
 let legendSets = [...FALLBACK_LEGEND_SETS];
 let legendIntentLabel = 'Intention';
 let legendRoman = [...FALLBACK_LEGEND_ROMAN];
+let historyStrings = null;
+let lastSummary = null;
 
 const HISTORY_THEMES = {
   dark: {
@@ -147,6 +149,59 @@ function enqueue(task) {
 
 function log(...args) {
   console.log('[history]', ...args);
+}
+
+function fallbackParseSummary({ nrec, decades, chaplets, intentions }) {
+  return `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`;
+}
+
+function updateParseSummaryDisplay() {
+  if (!dom.parseSummary) return;
+  if (!lastSummary) {
+    dom.parseSummary.textContent = '';
+    return;
+  }
+  const summary = lastSummary;
+  const strings = historyStrings;
+  if (strings?.parseSummary) {
+    try {
+      const text = strings.parseSummary(summary);
+      if (typeof text === 'string') {
+        dom.parseSummary.textContent = text;
+        return;
+      }
+    } catch (err) {
+      console.warn('parseSummary i18n error', err);
+    }
+  }
+  dom.parseSummary.textContent = fallbackParseSummary(summary);
+}
+
+function periodTextFallback(bucket) {
+  const txt = periodText(bucket);
+  if (txt && typeof txt === 'string') return txt;
+  switch (bucket) {
+    case 'week': return 'This week';
+    case 'month': return 'This month';
+    case 'year': return 'This year';
+    default: return 'Today';
+  }
+}
+
+function updatePeriodLabelDisplay(bucket = dom.bucketSel?.value || 'day') {
+  if (!dom.periodLabel) return;
+  const strings = historyStrings;
+  const fallback = periodTextFallback(bucket);
+  if (strings?.periodLabel) {
+    try {
+      const text = strings.periodLabel(bucket);
+      dom.periodLabel.textContent = typeof text === 'string' ? text : fallback;
+      return;
+    } catch (err) {
+      console.warn('periodLabel i18n error', err);
+    }
+  }
+  dom.periodLabel.textContent = fallback;
 }
 
 function setCardMuted(muted) {
@@ -782,8 +837,6 @@ function renderChart() {
   const ctx = dom.chartCanvas.getContext('2d');
   if (!ctx) return;
 
-  if (dom.periodLabel) dom.periodLabel.textContent = periodText(bucket);
-
   historyPalette = resolveHistoryPalette();
 
   const options = {
@@ -796,6 +849,8 @@ function renderChart() {
     },
     animations: { y: { from: 0, duration: 700, easing: 'easeOutCubic' } }
   };
+
+  updatePeriodLabelDisplay(bucket);
 
   if (!histChart) {
     log('renderChart: creating chart instance');
@@ -922,9 +977,8 @@ function parseHistory(bytes) {
     gRows.push({ date: d, pk, dec, intent });
   }
 
-  if (dom.parseSummary) {
-    dom.parseSummary.textContent = `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`;
-  }
+  lastSummary = { nrec, decades, chaplets, intentions };
+  updateParseSummaryDisplay();
 
   log('parseHistory:', { nrec, decades, chaplets, intentions, bucket: dom.bucketSel?.value });
 
@@ -1090,7 +1144,8 @@ function bootDefaults() {
   resetList();
   resetProgress();
   resetUploadProgress();
-  if (dom.parseSummary) dom.parseSummary.textContent = '';
+  lastSummary = null;
+  updateParseSummaryDisplay();
   if (dom.fsInfo) dom.fsInfo.textContent = '';
   if (dom.bucketSel) dom.bucketSel.value = 'day';
   periodAnchor = startOfTodayUTC();
@@ -1114,6 +1169,7 @@ export function initHistory() {
 
 export function applyHistoryI18n(dict) {
   if (!dict) return;
+  historyStrings = dict;
   if (dom.title && dict.title) dom.title.textContent = dict.title;
   if (dom.downloadBtn && dict.downloadRaw) dom.downloadBtn.textContent = dict.downloadRaw;
   if (dom.restoreBtn && dict.uploadRestore) dom.restoreBtn.textContent = dict.uploadRestore;
@@ -1152,6 +1208,8 @@ export function applyHistoryI18n(dict) {
     WEEK_DOW = [...WEEK_DOW_DEFAULT];
   }
   // ---
+  updatePeriodLabelDisplay();
+  updateParseSummaryDisplay();
   renderLegend();
 }
 

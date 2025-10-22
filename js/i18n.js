@@ -119,7 +119,12 @@ export const i18n = {
       notConnected: "– not connected –",
       legendSets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
       legendIntent: "Intention",
-      legendRoman: ["I","II","III","IV","V"]
+      legendRoman: ["I","II","III","IV","V"],
+      parseSummary: ({ nrec, decades, chaplets, intentions }) => `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`,
+      periodLabel: (bucket) => {
+        const map = { day: "Today", week: "This week", month: "This month", year: "This year" };
+        return map[bucket] || map.day;
+      }
     },
     calendar: {
       monthShort: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
@@ -300,7 +305,12 @@ export const i18n = {
       notConnected: "– brak połączenia –",
       legendSets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronka"],
       legendIntent: "Intencja",
-      legendRoman: ["I","II","III","IV","V"]
+      legendRoman: ["I","II","III","IV","V"],
+      parseSummary: ({ nrec, decades, chaplets, intentions }) => `${nrec} zapisów — dziesiątki:${decades} koronki:${chaplets} intencje:${intentions}`,
+      periodLabel: (bucket) => {
+        const map = { day: "Dziś", week: "Ten tydzień", month: "Ten miesiąc", year: "Ten rok" };
+        return map[bucket] || map.day;
+      }
     },
     calendar: {
       monthShort: ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'],
@@ -481,7 +491,12 @@ export const i18n = {
       notConnected: "– nicht verbunden –",
       legendSets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
       legendIntent: "Intention",
-      legendRoman: ["I","II","III","IV","V"]
+      legendRoman: ["I","II","III","IV","V"],
+      parseSummary: ({ nrec, decades, chaplets, intentions }) => `${nrec} Einträge — Gesätzchen:${decades} Koronen:${chaplets} Intentionen:${intentions}`,
+      periodLabel: (bucket) => {
+        const map = { day: "Heute", week: "Diese Woche", month: "Dieser Monat", year: "Dieses Jahr" };
+        return map[bucket] || map.day;
+      }
     },
     calendar: {
       monthShort: ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],
