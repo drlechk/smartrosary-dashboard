@@ -234,22 +234,23 @@ export async function attachWallpaperFS(server) {
     fsStat = await fss.getCharacteristic(FS_STAT_UUID); log('attachWallpaperFS: STAT ready');
 
     const safeStart = async (char, name) => {
-      try {
-        await char.startNotifications();
-        log(`attachWallpaperFS: ${name} notifications started`);
-        return true;
-      } catch (err) {
-        console.warn(`[wallpaper] ${name} startNotifications failed`, err?.message || err);
-        return false;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          await char.startNotifications();
+          log(`attachWallpaperFS: ${name} notifications started${attempt ? ' (retry)' : ''}`);
+          await _sleep(120);
+          return;
+        } catch (err) {
+          console.warn(`[wallpaper] ${name} startNotifications attempt ${attempt + 1} failed`, err?.message || err);
+          if (attempt === 1) throw err;
+          await _sleep(180);
+        }
       }
     };
 
-    const infoNotifies = await safeStart(fsInfo, 'INFO');
-    const dataNotifies = await safeStart(fsData, 'DATA');
-    const statNotifies = await safeStart(fsStat, 'STAT');
-    if (!infoNotifies || !dataNotifies || !statNotifies) {
-      log('attachWallpaperFS: proceeding despite notification errors');
-    }
+    await safeStart(fsInfo, 'INFO');
+    await safeStart(fsData, 'DATA');
+    await safeStart(fsStat, 'STAT');
 
     fsInfo.addEventListener('characteristicvaluechanged', _onFsInfo);
     fsData.addEventListener('characteristicvaluechanged', _onFsData);
@@ -316,13 +317,17 @@ async function _rebindFsService() {
     const stat = await svc.getCharacteristic(FS_STAT_UUID);
 
     const safeStart = async (char, name) => {
-      try {
-        await char.startNotifications();
-        log(`_rebindFsService: ${name} notifications started`);
-        return true;
-      } catch (err) {
-        console.warn(`[wallpaper] rebind ${name} startNotifications failed`, err?.message || err);
-        return false;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          await char.startNotifications();
+          log(`_rebindFsService: ${name} notifications started${attempt ? ' (retry)' : ''}`);
+          await _sleep(120);
+          return;
+        } catch (err) {
+          console.warn(`[wallpaper] rebind ${name} startNotifications attempt ${attempt + 1} failed`, err?.message || err);
+          if (attempt === 1) throw err;
+          await _sleep(180);
+        }
       }
     };
 

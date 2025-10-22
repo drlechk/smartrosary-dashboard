@@ -165,6 +165,7 @@ const state = {
 
   function renderTable() {
     const strings = IL();
+    const tableLabels = strings.table || {};
     if (!tbody) return;
     tbody.innerHTML = '';
     if (!state.entries.length) {
@@ -177,55 +178,80 @@ const state = {
       const tr = document.createElement('tr');
 
       const tdIndex = document.createElement('td');
-      tdIndex.textContent = String(entry.index + 1);
+      tdIndex.dataset.label = tableLabels.index ?? '#';
+      const indexWrap = document.createElement('div');
+      indexWrap.className = 'intentions-index-wrap';
+      const indexNumber = document.createElement('span');
+      indexNumber.className = 'intentions-index';
+      indexNumber.textContent = String(entry.index + 1);
+      indexWrap.appendChild(indexNumber);
+      tdIndex.appendChild(indexWrap);
       tr.appendChild(tdIndex);
 
       const tdTitle = document.createElement('td');
       tdTitle.className = 'intentions-title-cell';
+      tdTitle.dataset.label = tableLabels.title ?? 'Intention';
+
+      const titleWrap = document.createElement('div');
+      titleWrap.className = 'intentions-title-wrap';
+
       const titleSpan = document.createElement('span');
       titleSpan.className = 'intentions-title';
-      titleSpan.textContent = entry.title || strings.fallbackTitle(entry.index + 1);
-      const descBlock = document.createElement('div');
-      descBlock.className = 'intentions-desc';
-      const descToggle = document.createElement('button');
-      descToggle.type = 'button';
-      descToggle.className = 'intentions-desc-toggle';
-      descToggle.textContent = '▸';
-      descToggle.setAttribute('aria-label', strings.descShow);
-      const descText = document.createElement('div');
-      descText.className = 'intentions-desc-text';
-      descText.textContent = entry.desc || '';
-      const descId = `intent-desc-${entry.index}`;
-      descText.id = descId;
-      descToggle.setAttribute('aria-controls', descId);
-      if (!descText.textContent.trim()) {
-        descToggle.disabled = true;
-        descToggle.classList.add('muted');
-        descToggle.textContent = '—';
-        descToggle.removeAttribute('aria-label');
-        descToggle.removeAttribute('aria-controls');
-        descText.style.display = 'none';
-      } else {
+      const titleText = entry.title || strings.fallbackTitle(entry.index + 1);
+      titleSpan.textContent = titleText;
+      titleSpan.title = titleText;
+      titleWrap.appendChild(titleSpan);
+
+      const rawDesc = (entry.desc || '').trim();
+      let descRow = null;
+      let descToggle = null;
+
+      if (rawDesc.length) {
+        const descId = `intent-desc-${entry.index}`;
+        descToggle = document.createElement('button');
+        descToggle.type = 'button';
+        descToggle.className = 'intentions-desc-toggle';
+        descToggle.textContent = '▸';
+        descToggle.setAttribute('aria-label', strings.descShow);
+        descToggle.setAttribute('aria-controls', descId);
         descToggle.setAttribute('aria-expanded', 'false');
+
+        const descCell = document.createElement('td');
+        descCell.colSpan = 5;
+        descCell.className = 'intentions-desc-cell';
+
+        const descText = document.createElement('div');
+        descText.className = 'intentions-desc-text';
+        descText.id = descId;
+        descText.textContent = rawDesc;
         descText.setAttribute('aria-hidden', 'true');
-        descText.style.maxHeight = '0px';
+
+        descCell.appendChild(descText);
+        descRow = document.createElement('tr');
+        descRow.className = 'intentions-desc-row';
+        descRow.hidden = true;
+        descRow.appendChild(descCell);
+
         descToggle.addEventListener('click', () => {
           const stringsClick = IL();
-          const expanded = descText.classList.toggle('expanded');
-          descToggle.textContent = expanded ? '▾' : '▸';
-          descToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-          descToggle.setAttribute('aria-label', expanded ? stringsClick.descHide : stringsClick.descShow);
-          descText.setAttribute('aria-hidden', expanded ? 'false' : 'true');
-          descText.style.maxHeight = expanded ? descText.scrollHeight + 'px' : '0px';
+          const expanded = descToggle.getAttribute('aria-expanded') === 'true';
+          const nextState = !expanded;
+          descToggle.textContent = nextState ? '▾' : '▸';
+          descToggle.setAttribute('aria-expanded', String(nextState));
+          descToggle.setAttribute('aria-label', nextState ? stringsClick.descHide : stringsClick.descShow);
+          descText.setAttribute('aria-hidden', String(!nextState));
+          descRow.hidden = !nextState;
+          descRow.classList.toggle('open', nextState);
         });
+
+        indexWrap.appendChild(descToggle);
       }
-      descBlock.appendChild(descToggle);
-      descBlock.appendChild(descText);
-      tdTitle.appendChild(titleSpan);
-      tdTitle.appendChild(descBlock);
+
+      tdTitle.appendChild(titleWrap);
       tr.appendChild(tdTitle);
 
       const tdDate = document.createElement('td');
+      tdDate.dataset.label = tableLabels.start ?? 'Start Date';
       const inputDate = document.createElement('input');
       inputDate.type = 'date';
       inputDate.value = epochToDateInput(entry.start);
@@ -237,6 +263,7 @@ const state = {
       tr.appendChild(tdDate);
 
       const tdSet = document.createElement('td');
+      tdSet.dataset.label = tableLabels.set ?? 'Mystery';
       const selectSet = document.createElement('select');
       getMysteryOptions().forEach((opt) => {
         const option = document.createElement('option');
@@ -253,6 +280,7 @@ const state = {
       tr.appendChild(tdSet);
 
       const tdPart = document.createElement('td');
+      tdPart.dataset.label = tableLabels.part ?? 'Part';
       const selectPart = document.createElement('select');
       const blank = document.createElement('option');
       blank.value = '0';
@@ -275,6 +303,9 @@ const state = {
       entry.controls = { dateInput: inputDate, setSelect: selectSet, partSelect: selectPart };
 
       tbody.appendChild(tr);
+      if (descRow) {
+        tbody.appendChild(descRow);
+      }
     });
   }
 

@@ -1180,22 +1180,25 @@ export async function attachHistoryFS(server) {
     statListener = (ev) => onStat(ev);
 
     const safeStart = async (char, name) => {
-      try {
-        await char.startNotifications();
-        log(`attachHistoryFS: ${name} notifications started`);
-        return true;
-      } catch (err) {
-        console.warn(`[history] ${name} startNotifications failed`, err?.message || err);
-        return false;
+      const attempts = 2;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          await char.startNotifications();
+          log(`attachHistoryFS: ${name} notifications started${i ? ' (retry)' : ''}`);
+          await sleep(120);
+          return;
+        } catch (err) {
+          const msg = err?.message || err;
+          console.warn(`[history] ${name} startNotifications attempt ${i + 1} failed`, msg);
+          if (i === attempts - 1) throw err;
+          await sleep(180);
+        }
       }
     };
 
-    const infoNotifies = await safeStart(chInfo, 'INFO');
-    const dataNotifies = await safeStart(chData, 'DATA');
-    const statNotifies = await safeStart(chStat, 'STAT');
-    if (!infoNotifies || !dataNotifies || !statNotifies) {
-      log('attachHistoryFS: one or more notifications unavailable; proceeding with manual reads');
-    }
+    await safeStart(chInfo, 'INFO');
+    await safeStart(chData, 'DATA');
+    await safeStart(chStat, 'STAT');
 
     chInfo.addEventListener('characteristicvaluechanged', infoListener);
     chData.addEventListener('characteristicvaluechanged', dataListener);
