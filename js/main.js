@@ -25,8 +25,26 @@ function setCardsMuted(muted) {
 
 setCardsMuted(true);
 
-function status(text){
-  try { setStatusText(text); } catch { $('status').textContent = text; }
+function status(value){
+  let resolver = null;
+  let text = '';
+  if (typeof value === 'function') {
+    resolver = value;
+    try {
+      const result = value();
+      text = result != null ? String(result) : '';
+    } catch (err) {
+      console.warn('Status resolver failed', err);
+      resolver = null;
+      text = '';
+    }
+  } else if (value && typeof value === 'object' && typeof value.text === 'string') {
+    text = value.text;
+    if (typeof value.resolver === 'function') resolver = value.resolver;
+  } else if (value != null) {
+    text = String(value);
+  }
+  try { setStatusText(text, resolver); } catch { $('status').textContent = text; }
   try { setGlobalStatus(text); } catch {}
 }
 
@@ -286,7 +304,10 @@ async function refreshOnce() {
 
     // Firmware may signal consent requirement in-band
     if (jsSettings?.requireConsent || jsStats?.requireConsent) {
-      status('Awaiting on-device consent…');
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        return Ln.statusAwaitingConsent || 'Awaiting on-device consent…';
+      });
       console.warn('Device reports consent required for info reads.');
       return false;
     }
@@ -301,11 +322,21 @@ async function refreshOnce() {
     if (jsParts) console.log('[stats] parts parsed keys', Object.keys(jsParts || {}));
 
     updateFromJson({ jsStats, jsSettings, jsParts });
-    try { setStatusKey('statusUpdated', L.statusUpdated); } catch { status(L.statusUpdated); }
+    try { setStatusKey('statusUpdated', L?.statusUpdated); } catch {
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        return Ln.statusUpdated || 'Ready.';
+      });
+    }
     return true;
   } catch (e) {
     console.error(e);
-    status('Read failed: ' + e.message);
+    const errMsg = e?.message || String(e);
+    status(() => {
+      const Ln = i18n[getLang()] || i18n.en;
+      const formatter = Ln.statusReadFailed || ((msg) => `Read failed: ${msg}`);
+      return formatter(errMsg);
+    });
     return false;
   }
 }
@@ -480,7 +511,12 @@ async function handleConnect() {
 
   } catch (err) {
     console.error(err);
-    status('Error: ' + err.message);
+    const errMsg = err?.message || String(err);
+    status(() => {
+      const Ln = i18n[getLang()] || i18n.en;
+      const formatter = Ln.statusGenericError || ((msg) => `Error: ${msg}`);
+      return formatter(errMsg);
+    });
     setCardsMuted(true);
     setHistoryConsent(false);
     intentions.onDisconnected();
@@ -496,7 +532,12 @@ async function handleDisconnect() {
   intentions.onDisconnected();
   setCardsMuted(true);
   const L = i18n[getLang()];
-  try { setStatusKey('statusDisconnected', L.statusDisconnected); } catch { status(L.statusDisconnected); }
+  try { setStatusKey('statusDisconnected', L?.statusDisconnected); } catch {
+    status(() => {
+      const Ln = i18n[getLang()] || i18n.en;
+      return Ln.statusDisconnected || 'Disconnected.';
+    });
+  }
   $('refreshBtn').disabled = true;
   $('resetBtn').disabled   = true;
   $('disconnectBtn').disabled = true;
@@ -541,10 +582,20 @@ function wireControls() {
       await client.chCtrl.writeValue(new Uint8Array([0x01]));
       await client.waitReady();
       setTimeout(refreshOnce, 300);
-      try { setStatusKey('statusResetReq', L.statusResetReq); } catch { status(L.statusResetReq); }
+      try { setStatusKey('statusResetReq', L?.statusResetReq); } catch {
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          return Ln.statusResetReq || 'Reset requested…';
+        });
+      }
     } catch(err){
       console.error(err);
-      status('Reset failed: ' + err.message);
+      const errMsg = err?.message || String(err);
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        const formatter = Ln.statusResetFailed || ((msg) => `Reset failed: ${msg}`);
+        return formatter(errMsg);
+      });
     }
   });
 
@@ -560,7 +611,12 @@ function wireControls() {
       });
     } catch (e) {
       console.error(e);
-      status('Backup failed: ' + e.message);
+      const errMsg = e?.message || String(e);
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        const formatter = Ln.statusBackupFailed || ((msg) => `Backup failed: ${msg}`);
+        return formatter(errMsg);
+      });
     }
   });
 
@@ -570,14 +626,23 @@ function wireControls() {
     if (!file) return;
     const L = i18n[getLang()];
     const prog = $('restoreProg'); if (prog) { prog.hidden = false; prog.value = 0; }
-    try { globalProgressStart('Restoring…', 100); } catch {}
+    try {
+      const Ln = i18n[getLang()] || i18n.en;
+      globalProgressStart(Ln.restoreStart || 'Restoring…', 100);
+    } catch {}
     try {
       const js = JSON.parse(await file.text());
-      status(L.restoreStart);
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        return Ln.restoreStart || 'Restoring…';
+      });
       const onProgress = (step,total)=>{
         const pct = Math.floor(step*100/total);
         if (prog) prog.value = pct;
-        try { globalProgressSet(pct, 'Restoring…'); } catch {}
+        try {
+          const Ln = i18n[getLang()] || i18n.en;
+          globalProgressSet(pct, Ln.restoreStart || 'Restoring…');
+        } catch {}
       };
       await restoreFromJson(js, {
         chCtrl: client.chCtrl,
@@ -587,11 +652,21 @@ function wireControls() {
         onProgress
       });
       await refreshUntilValid({ tries: 12, delay: 250 });
-      try { setStatusKey('statusUpdated', L.restoreDone); } catch { status(L.restoreDone); }
+      try { setStatusKey('statusUpdated', L?.restoreDone); } catch {
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          return Ln.restoreDone || 'Restore complete.';
+        });
+      }
       try { globalProgressDone(800); } catch {}
     } catch (err) {
       console.error(err);
-      status('Restore failed: ' + err.message);
+      const errMsg = err?.message || String(err);
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        const formatter = Ln.statusRestoreFailed || ((msg) => `Restore failed: ${msg}`);
+        return formatter(errMsg);
+      });
     } finally {
       if (prog) setTimeout(()=>{ prog.hidden = true; }, 600);
       try { globalProgressDone(600); } catch {}
@@ -605,23 +680,56 @@ function wireControls() {
     try {
       $('swAutosave').disabled = e.target.checked;
       await writePrefKey("m-preset-en", 0x01, e.target.checked ? 1 : 0);
-      status(i18n[getLang()].settingsSaved || i18n[getLang()].statusUpdated);
-    } catch (err) { console.error(err); status('Write failed: ' + err.message); }
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        return Ln.settingsSaved || Ln.statusUpdated || 'Settings updated.';
+      });
+    } catch (err) {
+      console.error(err);
+      const errMsg = err?.message || String(err);
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        const formatter = Ln.statusWriteFailed || ((msg) => `Write failed: ${msg}`);
+        return formatter(errMsg);
+      });
+    }
   });
   $('swAutosave').addEventListener('change', async (e) => {
     if (updatingFromDevice) return;
     try {
       $('swPreset').disabled = e.target.checked;
       await writePrefKey("m-autosave-en", 0x01, e.target.checked ? 1 : 0);
-      status(i18n[getLang()].settingsSaved || i18n[getLang()].statusUpdated);
-    } catch (err) { console.error(err); status('Write failed: ' + err.message); }
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        return Ln.settingsSaved || Ln.statusUpdated || 'Settings updated.';
+      });
+    } catch (err) {
+      console.error(err);
+      const errMsg = err?.message || String(err);
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        const formatter = Ln.statusWriteFailed || ((msg) => `Write failed: ${msg}`);
+        return formatter(errMsg);
+      });
+    }
   });
   $('swHaptic').addEventListener('change', async (e) => {
     if (updatingFromDevice) return;
     try {
       await writePrefKey("haptic-en", 0x01, e.target.checked ? 1 : 0);
-      status(i18n[getLang()].settingsSaved || i18n[getLang()].statusUpdated);
-    } catch (err) { console.error(err); status('Write failed: ' + err.message); }
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        return Ln.settingsSaved || Ln.statusUpdated || 'Settings updated.';
+      });
+    } catch (err) {
+      console.error(err);
+      const errMsg = err?.message || String(err);
+      status(() => {
+        const Ln = i18n[getLang()] || i18n.en;
+        const formatter = Ln.statusWriteFailed || ((msg) => `Write failed: ${msg}`);
+        return formatter(errMsg);
+      });
+    }
   });
 
   let brDebounce = null;
@@ -633,8 +741,19 @@ function wireControls() {
     brDebounce = setTimeout(async () => {
       try {
         await writePrefKey("disp-bright", 0x21, val);
-        status(i18n[getLang()].settingsSaved || i18n[getLang()].statusUpdated);
-      } catch (err) { console.error(err); status('Write failed: ' + err.message); }
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          return Ln.settingsSaved || Ln.statusUpdated || 'Settings updated.';
+        });
+      } catch (err) {
+        console.error(err);
+        const errMsg = err?.message || String(err);
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          const formatter = Ln.statusWriteFailed || ((msg) => `Write failed: ${msg}`);
+          return formatter(errMsg);
+        });
+      }
     }, 140);
   });
 
@@ -647,8 +766,19 @@ function wireControls() {
     wbDebounce = setTimeout(async () => {
       try {
         await writePrefKey("wall-bright", 0x21, val);
-        status(i18n[getLang()].settingsSaved || i18n[getLang()].statusUpdated);
-      } catch (err) { console.error(err); status('Write failed: ' + err.message); }
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          return Ln.settingsSaved || Ln.statusUpdated || 'Settings updated.';
+        });
+      } catch (err) {
+        console.error(err);
+        const errMsg = err?.message || String(err);
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          const formatter = Ln.statusWriteFailed || ((msg) => `Write failed: ${msg}`);
+          return formatter(errMsg);
+        });
+      }
     }, 140);
   });
 
@@ -663,7 +793,12 @@ function wireControls() {
         await backupKeys({ chAuthInfo: client.chAuthInfo, statusEl: $('status'), i18nL: i18n[getLang()] });
       } catch (e) {
         console.error(e);
-        status('Keys backup failed: ' + e.message);
+        const errMsg = e?.message || String(e);
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          const formatter = Ln.statusKeysBackupFailed || ((msg) => `Keys backup failed: ${msg}`);
+          return formatter(errMsg);
+        });
       }
     });
 
@@ -679,7 +814,12 @@ function wireControls() {
         await restoreKeys({ chAuthCtrl: client.chAuthCtrl, statusEl: $('status'), waitReady: (...a)=>client.waitReady(...a), id, pubKey:pub, privKey:priv, i18nL: i18n[getLang()] });
       } catch (e2) {
         console.error(e2);
-        status('Keys restore cancelled: ' + e2.message);
+        const errMsg = e2?.message || String(e2);
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          const formatter = Ln.statusKeysRestoreCancelled || ((msg) => `Keys restore cancelled: ${msg}`);
+          return formatter(errMsg);
+        });
       } finally {
         e.target.value = '';
       }

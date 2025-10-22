@@ -338,7 +338,7 @@ const state = {
     const alreadyBusy = state.busy;
     if (!alreadyBusy) setBusy(true);
     const strings = IL();
-    if (!silent) setStatus(strings.statusLoading);
+    if (!silent) setStatus(() => IL().statusLoading);
     log('refresh: begin', { silent, ignoreBusy });
     try {
       const summary = await readSummary();
@@ -346,16 +346,17 @@ const state = {
       state.entries = [];
 
       if (summary.requireConsent) {
+        const consentDefault = 'Allow the dashboard on the device, then press “Load” again.';
         const consentMsg =
           strings.consentRequired ||
-          'Allow the dashboard on the device, then press “Load” again.';
+          consentDefault;
         state.entries = [];
         renderTable();
         clearDirty();
         showEmpty(consentMsg);
         autoToggle.disabled = true;
         log('refresh: requireConsent flag from device');
-        setStatus(consentMsg);
+        setStatus(() => IL().consentRequired || consentDefault);
         return false;
       }
 
@@ -365,7 +366,7 @@ const state = {
         clearDirty();
         const msg = strings.emptySchedule;
         showEmpty(msg);
-        if (!silent) setStatus(msg);
+        if (!silent) setStatus(() => IL().emptySchedule);
         return true;
       }
 
@@ -410,17 +411,26 @@ const state = {
       clearDirty();
 
       if (!silent) {
-        const selected = summary.selected != null
-          ? strings.statusSelected(Number(summary.selected) + 1)
-          : strings.statusLoaded;
-        setStatus(`${selected}.`);
+        const selectedIndex = summary.selected != null ? Number(summary.selected) + 1 : null;
+        setStatus(() => {
+          const s = IL();
+          const base = selectedIndex != null ? s.statusSelected(selectedIndex) : s.statusLoaded;
+          return `${base}.`;
+        });
       }
       log('refresh: completed', { entries: state.entries.length });
       return true;
     } catch (err) {
       console.error(err);
       log('refresh: error', err?.message || err);
-      if (!silent) setStatus(`${strings.statusLoadFailed}: ${err.message}`);
+      if (!silent) {
+        const errMsg = err?.message || String(err);
+        setStatus(() => {
+          const s = IL();
+          const base = s.statusLoadFailed || 'Intentions load failed';
+          return `${base}: ${errMsg}`;
+        });
+      }
       return false;
     } finally {
       if (!alreadyBusy) setBusy(false);
@@ -440,7 +450,7 @@ const state = {
     if (state.busy) return;
     setBusy(true);
     const strings = IL();
-    setStatus(strings.statusSaving);
+    setStatus(() => IL().statusSaving);
     log('save: begin', { entries: state.entries.length });
     try {
       for (const entry of state.entries) {
@@ -463,14 +473,19 @@ const state = {
       state.summary = state.summary || {};
       state.summary.auto = autoToggle.checked;
       clearDirty();
-      setStatus(strings.statusSavedRefreshing);
+      setStatus(() => IL().statusSavedRefreshing);
       await refresh({ silent: true, ignoreBusy: true });
-      setStatus(strings.statusUpdated);
+      setStatus(() => IL().statusUpdated);
       log('save: completed');
     } catch (err) {
       console.error(err);
       log('save: error', err?.message || err);
-      setStatus(`${strings.statusSaveFailed}: ${err.message}`);
+      const errMsg = err?.message || String(err);
+      setStatus(() => {
+        const s = IL();
+        const base = s.statusSaveFailed || 'Intentions save failed';
+        return `${base}: ${errMsg}`;
+      });
     } finally {
       setBusy(false);
       log('save: end');

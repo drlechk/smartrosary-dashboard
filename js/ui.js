@@ -8,6 +8,7 @@ let lang = 'pl';
 let lastStats = null;
 let lastSettings = null;
 let lastStatusKey = null; // i18n key of last status (if set via key)
+let lastStatusResolver = null;
 
 const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
@@ -48,12 +49,14 @@ export function setLang(v){ lang = v; applyI18n(); }
 // Status helpers so status can re-localize on language change
 export function setStatusKey(key, fallback) {
   lastStatusKey = key || null;
+  lastStatusResolver = null;
   const L = i18n[lang] || i18n.en;
   const msg = (key && L[key]) ? L[key] : (fallback ?? key ?? '');
   const el = $('status'); if (el) el.textContent = msg;
 }
-export function setStatusText(text) {
+export function setStatusText(text, resolver) {
   lastStatusKey = null;
+  lastStatusResolver = typeof resolver === 'function' ? resolver : null;
   const el = $('status'); if (el) el.textContent = text ?? '';
 }
 
@@ -71,7 +74,15 @@ export function applyI18n() {
   // Update status: if we have a tracked last key, re-localize it.
   // Otherwise, if status is empty or shows a default from another language, set localized default.
   const statusEl = $('status');
-  if (lastStatusKey && (i18n[lang]?.[lastStatusKey] != null)) {
+  if (statusEl && lastStatusResolver) {
+    try {
+      statusEl.textContent = lastStatusResolver() ?? '';
+    } catch {
+      statusEl.textContent = '';
+      lastStatusResolver = null;
+    }
+  }
+  if (!lastStatusResolver && lastStatusKey && (i18n[lang]?.[lastStatusKey] != null)) {
     statusEl.textContent = i18n[lang][lastStatusKey];
   } else if (statusEl) {
     const current = (statusEl.textContent || '').trim();
@@ -79,6 +90,7 @@ export function applyI18n() {
     if (!current || defaults.includes(current)) {
       statusEl.textContent = L.statusNot;
       lastStatusKey = 'statusNot';
+      lastStatusResolver = null;
     }
   }
 
