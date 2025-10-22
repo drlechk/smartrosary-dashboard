@@ -206,10 +206,9 @@ function _updateMuted(){
   if (!card) return;
   const muted = !(connected && consent);
   card.classList.toggle('wp-muted', muted);
-  if (!muted) {
-    card.style.opacity = '1';
-    card.style.filter = 'none';
-  }
+  card.classList.toggle('card-muted', muted);
+  card.style.removeProperty('opacity');
+  card.style.removeProperty('filter');
 }
 
 // ---------- Public hooks (ES module) ----------
