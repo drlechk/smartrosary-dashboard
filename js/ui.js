@@ -155,7 +155,7 @@ export function applyI18n() {
   renderPillsFromCache();
   setWallpaperLang(lang);
   applyWallpaperI18n();
-  applyHistoryI18n({ ...L.history, calendar: L.calendar });
+  applyHistoryI18n({ ...L.history, calendar: L.calendar, lang });
 }
 
 export function initThemeToggle() {

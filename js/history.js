@@ -135,6 +135,11 @@ const shades = {
   chaplet:'#8B4513'
 };
 const PK_NAME = ['NONE','JOYFUL','LUMINOUS','SORROWFUL','GLORIOUS','DIVINE_MERCY'];
+const PK_NAME_INTL = {
+  en: ['None','Joyful','Luminous','Sorrowful','Glorious','Chaplet'],
+  pl: ['Brak','Radosne','Tajemnice Światła','Bolesne','Chwalebne','Koronka'],
+  de: ['Keins','Freudenreicher','Lichtreicher','Schmerzhafter','Glorreicher','Korone']
+};
 
 let gRows = [];
 let histChart = null;
@@ -175,6 +180,32 @@ function updateParseSummaryDisplay() {
     }
   }
   dom.parseSummary.textContent = fallbackParseSummary(summary);
+}
+
+const PK_LABEL_CACHE = new Map();
+
+function lookupPkLabel(pk) {
+  const key = `${historyStrings?.lang || 'fallback'}:${pk}`;
+  if (PK_LABEL_CACHE.has(key)) return PK_LABEL_CACHE.get(key);
+
+  let label = null;
+  const strings = historyStrings;
+  if (strings?.legendSets && Array.isArray(strings.legendSets) && strings.legendSets[pk]) {
+    label = strings.legendSets[pk];
+  } else {
+    const lang = strings?.lang;
+    if (lang && PK_NAME_INTL[lang] && PK_NAME_INTL[lang][pk]) {
+      label = PK_NAME_INTL[lang][pk];
+    }
+  }
+  if (!label) label = PK_NAME[pk] || `PK${pk}`;
+
+  PK_LABEL_CACHE.set(key, label);
+  return label;
+}
+
+function clearPkLabelCache() {
+  PK_LABEL_CACHE.clear();
 }
 
 function periodTextFallback(bucket) {
@@ -801,7 +832,7 @@ function buildDatasetsFixed(mode) {
         : base;
 
       datasets.push({
-        label: `${PK_NAME[pk] || ('PK' + pk)}${pk === 5 ? '' : (' ' + part)}`,
+        label: `${lookupPkLabel(pk)}${pk === 5 ? '' : (' ' + part)}`,
         data: solid,
         backgroundColor: base,
         borderWidth: 0,
@@ -810,7 +841,7 @@ function buildDatasetsFixed(mode) {
         meta: { pk, part, isIntent: false, baseColor: base }
       });
       datasets.push({
-        label: `${PK_NAME[pk] || ('PK' + pk)}${pk === 5 ? '' : (' ' + part)} (intent)`,
+        label: `${lookupPkLabel(pk)}${pk === 5 ? '' : (' ' + part)} (${legendIntentLabel})`,
         data: intent,
         backgroundColor: stripe,
         borderWidth: 0,
@@ -1169,7 +1200,8 @@ export function initHistory() {
 
 export function applyHistoryI18n(dict) {
   if (!dict) return;
-  historyStrings = dict;
+  historyStrings = { ...dict };
+  clearPkLabelCache();
   if (dom.title && dict.title) dom.title.textContent = dict.title;
   if (dom.downloadBtn && dict.downloadRaw) dom.downloadBtn.textContent = dict.downloadRaw;
   if (dom.restoreBtn && dict.uploadRestore) dom.restoreBtn.textContent = dict.uploadRestore;
@@ -1211,6 +1243,9 @@ export function applyHistoryI18n(dict) {
   updatePeriodLabelDisplay();
   updateParseSummaryDisplay();
   renderLegend();
+  if (histChart) {
+    renderChart();
+  }
 }
 
 export function setHistoryConsent(ok) {
