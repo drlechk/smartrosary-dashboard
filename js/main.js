@@ -8,7 +8,7 @@ import { requestKeysConsent, backupKeys, restoreKeys } from './auth.js';
 import { initRemote } from './remote.js';
 import { i18n } from './i18n.js';
 import { attachWallpaperFS, resetWallpaperFS, setWallpaperConsent } from './wallpaper.js';
-import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetHistoryCard, refreshHistory } from './history.js';
+import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetHistoryCard, refreshHistory, primeHistoryServer } from './history.js';
 import { initIntentions } from './intentions.js';
 
 const client = new BleClient();
@@ -431,14 +431,22 @@ async function handleConnect() {
     progAggregateSet('intentions', 100);
 
     // 8) Attach History FS if consent
+    const ua = navigator.userAgent || '';
+    const touchPoints = Number(navigator.maxTouchPoints || 0);
+    const isiOS = /iPad|iPhone|iPod/i.test(ua) || (/(Macintosh|Mac OS X)/.test(ua) && touchPoints > 1);
+    const isBluefy = /bluefy/i.test(ua);
+    const shouldAutoHistory = true;
     if (client.consentOk) {
+      try { primeHistoryServer(client.server); } catch {}
       try {
-        setStatusKey('statusLoadingHistory', 'Loading history…');
-        // Map history module's own progress into the overall bar segment
-        progAggregateEnter('history');
-        await attachHistoryFS(client.server);
-        await refreshHistory();
-        progAggregateLeave('history');
+        if (shouldAutoHistory) {
+          setStatusKey('statusLoadingHistory', 'Loading history…');
+          // Map history module's own progress into the overall bar segment
+          progAggregateEnter('history');
+          await attachHistoryFS(client.server);
+          await refreshHistory();
+          progAggregateLeave('history');
+        }
       } catch (e) {
         console.warn('History attach skipped:', e);
         // Consider history segment completed when skipped due to consent/other reasons

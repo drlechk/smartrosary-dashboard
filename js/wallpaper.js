@@ -233,10 +233,23 @@ export async function attachWallpaperFS(server) {
     fsData = await fss.getCharacteristic(FS_DATA_UUID); log('attachWallpaperFS: DATA ready');
     fsStat = await fss.getCharacteristic(FS_STAT_UUID); log('attachWallpaperFS: STAT ready');
 
-    await fsInfo.startNotifications();
-    await fsData.startNotifications();
-    await fsStat.startNotifications();
-    log('attachWallpaperFS: notifications started');
+    const safeStart = async (char, name) => {
+      try {
+        await char.startNotifications();
+        log(`attachWallpaperFS: ${name} notifications started`);
+        return true;
+      } catch (err) {
+        console.warn(`[wallpaper] ${name} startNotifications failed`, err?.message || err);
+        return false;
+      }
+    };
+
+    const infoNotifies = await safeStart(fsInfo, 'INFO');
+    const dataNotifies = await safeStart(fsData, 'DATA');
+    const statNotifies = await safeStart(fsStat, 'STAT');
+    if (!infoNotifies || !dataNotifies || !statNotifies) {
+      log('attachWallpaperFS: proceeding despite notification errors');
+    }
 
     fsInfo.addEventListener('characteristicvaluechanged', _onFsInfo);
     fsData.addEventListener('characteristicvaluechanged', _onFsData);
@@ -302,9 +315,20 @@ async function _rebindFsService() {
     const data = await svc.getCharacteristic(FS_DATA_UUID);
     const stat = await svc.getCharacteristic(FS_STAT_UUID);
 
-    await info.startNotifications();
-    await data.startNotifications();
-    await stat.startNotifications();
+    const safeStart = async (char, name) => {
+      try {
+        await char.startNotifications();
+        log(`_rebindFsService: ${name} notifications started`);
+        return true;
+      } catch (err) {
+        console.warn(`[wallpaper] rebind ${name} startNotifications failed`, err?.message || err);
+        return false;
+      }
+    };
+
+    await safeStart(info, 'INFO');
+    await safeStart(data, 'DATA');
+    await safeStart(stat, 'STAT');
 
     info.addEventListener('characteristicvaluechanged', _onFsInfo);
     data.addEventListener('characteristicvaluechanged', _onFsData);

@@ -96,13 +96,13 @@ export function initIntentions({ client, setStatus }) {
   const emptyState = $('intentionsEmpty');
   const card = $('intentionsCard');
 
-  const state = {
-    summary: null,
-    entries: [],
-    dirty: false,
-    available: false,
-    busy: false,
-  };
+const state = {
+  summary: null,
+  entries: [],
+  dirty: false,
+  available: false,
+  busy: false,
+};
 
   function setBusy(flag) {
     log('setBusy', flag);
@@ -301,7 +301,7 @@ export function initIntentions({ client, setStatus }) {
     return parsed;
   }
 
-  async function refresh({ silent = false, ignoreBusy = false } = {}) {
+  async function refresh({ silent = false, ignoreBusy = false, consentRetry = false } = {}) {
     if (!state.available) return false;
     if (state.busy && !ignoreBusy) return false;
     const alreadyBusy = state.busy;
@@ -313,6 +313,20 @@ export function initIntentions({ client, setStatus }) {
       const summary = await readSummary();
       state.summary = summary;
       state.entries = [];
+
+      if (summary.requireConsent) {
+        const consentMsg =
+          strings.consentRequired ||
+          'Allow the dashboard on the device, then press “Load” again.';
+        state.entries = [];
+        renderTable();
+        clearDirty();
+        showEmpty(consentMsg);
+        autoToggle.disabled = true;
+        log('refresh: requireConsent flag from device');
+        setStatus(consentMsg);
+        return false;
+      }
 
       if (!summary.present) {
         resetTable();
@@ -465,6 +479,7 @@ export function initIntentions({ client, setStatus }) {
 
   if (loadBtn) {
     loadBtn.addEventListener('click', () => {
+      log('loadBtn clicked');
       if (!state.available) return;
       if (state.dirty && !confirm(IL().confirmDiscard)) return;
       refresh();

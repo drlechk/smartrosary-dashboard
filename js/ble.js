@@ -81,8 +81,12 @@ export class BleClient extends EventTarget {
 
     // STATUS pacing
     this.statusChar = await withRetry(() => this.service.getCharacteristic(UUID.STATUS));
-    await this.statusChar.startNotifications();
-    log('STATUS characteristic notifications enabled');
+    try {
+      await this.statusChar.startNotifications();
+      log('STATUS characteristic notifications enabled');
+    } catch (err) {
+      console.warn('[ble] STATUS startNotifications failed', err?.message || err);
+    }
     this.statusChar.addEventListener('characteristicvaluechanged', (ev) => {
       const v = new Uint8Array(ev.target.value.buffer)[0];
       if (v === 0x01) this.readyFlag = true;  // READY tick from FW
@@ -227,6 +231,18 @@ export class BleClient extends EventTarget {
       }
     }
     finally { this._onDisconnected(); }
+  }
+
+  async requestConsent() {
+    log('requestConsent: re-running HELLO handshake');
+    this.consentOk = false;
+    await this._helloAndConsent();
+    try {
+      await this._getAllChars();
+    } catch (err) {
+      log('requestConsent: reacquire chars failed', err?.message || err);
+    }
+    return this.consentOk;
   }
 
   _onDisconnected() {

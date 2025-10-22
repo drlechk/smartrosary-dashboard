@@ -1048,7 +1048,27 @@ function wireUi() {
     hiddenRestoreInput.click();
   });
 
-  dom.downloadBtn?.addEventListener('click', downloadRawFile);
+  dom.downloadBtn?.addEventListener('click', async () => {
+    log('downloadBtn clicked', { connected, consentOk });
+    if (!consentOk) {
+      alert('Allow dashboard access on the device first.');
+      return;
+    }
+    if (!connected) {
+      if (!serverRef) {
+        alert('Connect first.');
+        return;
+      }
+      try {
+        await attachHistoryFS(serverRef);
+      } catch (err) {
+        console.error('History attach failed', err);
+        alert('Failed to bind history service: ' + err.message);
+        return;
+      }
+    }
+    downloadRawFile();
+  });
 
   dom.bucketSel?.addEventListener('change', () => {
     setAnchorToNow(dom.bucketSel.value);
@@ -1140,6 +1160,10 @@ export function setHistoryConsent(ok) {
   setControlsEnabled(connected && consentOk);
 }
 
+export function primeHistoryServer(server) {
+  serverRef = server;
+}
+
 export async function attachHistoryFS(server) {
   serverRef = server;
 
@@ -1155,10 +1179,23 @@ export async function attachHistoryFS(server) {
     dataListener = (ev) => onData(ev);
     statListener = (ev) => onStat(ev);
 
-    await chInfo.startNotifications();
-    await chData.startNotifications();
-    await chStat.startNotifications();
-    log('attachHistoryFS: notifications started');
+    const safeStart = async (char, name) => {
+      try {
+        await char.startNotifications();
+        log(`attachHistoryFS: ${name} notifications started`);
+        return true;
+      } catch (err) {
+        console.warn(`[history] ${name} startNotifications failed`, err?.message || err);
+        return false;
+      }
+    };
+
+    const infoNotifies = await safeStart(chInfo, 'INFO');
+    const dataNotifies = await safeStart(chData, 'DATA');
+    const statNotifies = await safeStart(chStat, 'STAT');
+    if (!infoNotifies || !dataNotifies || !statNotifies) {
+      log('attachHistoryFS: one or more notifications unavailable; proceeding with manual reads');
+    }
 
     chInfo.addEventListener('characteristicvaluechanged', infoListener);
     chData.addEventListener('characteristicvaluechanged', dataListener);
