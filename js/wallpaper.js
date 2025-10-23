@@ -2,7 +2,7 @@
 
 // --- import i18n dictionary (ESM) ---
 import { i18n } from './i18n.js';
-import { downloadBlob, openFilePicker, loadImageSource, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
+import { downloadBlob, openFilePicker, loadImageSource, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive } from './utils.js';
 
 const log = (...args) => console.log('[wallpaper]', ...args);
 const CANVAS_BG = '#2f3642';
@@ -148,6 +148,8 @@ let readState = null;
 
 // busy flags so idle status packets don't hide progress mid-transfer
 const busy = { uploading:false, reading:false };
+let currentGlobalProgressLabel = null;
+let currentGlobalProgressMax = null;
 
 // ---------- Utils ----------
 
@@ -181,11 +183,21 @@ function _crc32(bytes){
 
 // ---------- Progress helpers ----------
 function _hideProgress() {
-    if (ui.prog) ui.prog.value = 0;
-    if (ui.progText) ui.progText.textContent = '';
-    const wrap = document.querySelector('#wpCard .wp-progress');
-    if (wrap) wrap.style.display = 'none';
+  if (ui.prog) ui.prog.value = 0;
+  if (ui.progText) ui.progText.textContent = '';
+  const wrap = document.querySelector('#wpCard .wp-progress');
+  if (wrap) wrap.style.display = 'none';
+  if (!progAggregateActive() && currentGlobalProgressLabel) {
+    const finalValue = (currentGlobalProgressMax != null && currentGlobalProgressMax > 0)
+      ? currentGlobalProgressMax
+      : 100;
+    try { globalProgressSet(finalValue, currentGlobalProgressLabel); } catch {}
+  }
+  if (!progAggregateActive()) {
     try { globalProgressDone(400); } catch {}
+  }
+  currentGlobalProgressLabel = null;
+  currentGlobalProgressMax = null;
 }
 
 function _showProgress(max, label) {
@@ -197,7 +209,22 @@ function _showProgress(max, label) {
 
   const wrap = document.querySelector('#wpCard .wp-progress');
   if (wrap) wrap.style.display = 'flex';   // flex column per CSS
-  try { globalProgressStart(label || 'Working…', 100); } catch {}
+  const effectiveLabel = label || 'Working…';
+  const effectiveMax = Number(max) > 0 ? Number(max) : 100;
+  currentGlobalProgressMax = effectiveMax;
+  if (!progAggregateActive()) {
+    try {
+      globalProgressStart(effectiveLabel, effectiveMax);
+      globalProgressSet(0, effectiveLabel);
+      currentGlobalProgressLabel = effectiveLabel;
+    } catch {
+      currentGlobalProgressLabel = null;
+      currentGlobalProgressMax = null;
+    }
+  } else {
+    currentGlobalProgressLabel = null;
+    currentGlobalProgressMax = null;
+  }
 }
 
 // ---------- Muted handling ----------
@@ -794,6 +821,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
     _showProgress(sz, WP().uploading || 'Uploading…');
 
     const rowBytes = w * 2;
+    const uploadLabel = WP().uploading || 'Uploading…';
     let   sent     = 0;
 
     const redrawBase = () => {
@@ -864,10 +892,12 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
       lastProgressTs = performance.now();
 
       if (ui.prog) ui.prog.value = off;
-      try {
-        const pct = Math.floor((off * 100) / sz);
-        globalProgressSet(pct, WP().uploading || 'Uploading…');
-      } catch {}
+      const pct = Math.floor((off * 100) / sz);
+      if (!progAggregateActive()) {
+        try {
+          globalProgressSet(sent, currentGlobalProgressLabel || uploadLabel);
+        } catch {}
+      }
       if (ui.progText) {
         const doneKiB  = off / 1024;
         const totalKiB = sz  / 1024;
@@ -876,9 +906,9 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
                     : `${doneKiB.toFixed(1)} KiB / ${totalKiB.toFixed(1)} KiB`);
       }
 
-      const pct = (sent * 100) / sz;
+      const pctBadge = (sent * 100) / sz;
       rowsRevealed = redrawBase();
-      _drawBadge(rowsRevealed, pct, redrawBase);
+      _drawBadge(rowsRevealed, pctBadge, redrawBase);
 
       // gentle ramp-up if credits flowing quickly
       if (performance.now() - lastCreditTs < 300) {
@@ -893,7 +923,6 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
     _blit();
     _fadeBadge(h, _blit);
     _hideProgress();
-    try { globalProgressDone(600); } catch {}
 
     // show on device and refresh list
     await _sleep(120);
@@ -986,7 +1015,6 @@ function _onFsInfo(e){
 
     _blit();
     _showProgress(readState.size, WP().receiving || 'Receiving…');
-    try { globalProgressStart(WP().receiving || 'Receiving…', 100); } catch {}
 
     // draw 0% overlay
     const redrawBase0 = () => {
@@ -1049,10 +1077,12 @@ function _onFsData(e){
   readState.off += bytes.length;
 
   if (ui.prog) ui.prog.value = readState.off;
-  try {
-    const pct = Math.floor((readState.off * 100) / (readState.size || 1));
-    globalProgressSet(pct, WP().receiving || 'Receiving…');
-  } catch {}
+  const receiveLabel = WP().receiving || 'Receiving…';
+  if (!progAggregateActive()) {
+    try {
+      globalProgressSet(readState.off, currentGlobalProgressLabel || receiveLabel);
+    } catch {}
+  }
   if (ui.progText) {
     const doneKiB = readState.off/1024, totalKiB = readState.size/1024;
     ui.progText.textContent = (WP().kib ? WP().kib(doneKiB, totalKiB) : `${doneKiB.toFixed(1)} KiB / ${totalKiB.toFixed(1)} KiB`);
@@ -1093,7 +1123,6 @@ function _onFsData(e){
 
     busy.reading = false;
     _hideProgress();
-    try { globalProgressDone(600); } catch {}
   }
 }
 

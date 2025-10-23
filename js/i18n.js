@@ -33,6 +33,7 @@ export const i18n = {
     statusLoadingIntentions:"Loading intentions…",
     statusIntentionsReady:  "Intentions ready",
     statusLoadingHistory:   "Loading history…",
+    statusRefreshing:       "Refreshing…",
     statusHistoryReady:     "History ready",
     statusUpdated: "Up to date.",
     statusResetReq: "Statistics reset requested…",
@@ -133,7 +134,9 @@ export const i18n = {
       periodLabel: (bucket) => {
         const map = { day: "Today", week: "This week", month: "This month", year: "This year" };
         return map[bucket] || map.day;
-      }
+      },
+      progressDownload: "Downloading history…",
+      progressUpload: "Uploading history…"
     },
     calendar: {
       monthShort: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
@@ -228,6 +231,7 @@ export const i18n = {
     statusLoadingIntentions:"Wczytywanie intencji…",
     statusIntentionsReady:  "Intencje gotowe",
     statusLoadingHistory:   "Wczytywanie historii…",
+    statusRefreshing:       "Odświeżanie…",
     statusHistoryReady:     "Historia gotowa",
     statusUpdated: "Aktualne.",
     statusResetReq: "Żądanie resetu statystyk…",
@@ -328,7 +332,9 @@ export const i18n = {
       periodLabel: (bucket) => {
         const map = { day: "Dziś", week: "Ten tydzień", month: "Ten miesiąc", year: "Ten rok" };
         return map[bucket] || map.day;
-      }
+      },
+      progressDownload: "Pobieranie historii…",
+      progressUpload: "Wgrywanie historii…"
     },
     calendar: {
       monthShort: ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'],
@@ -409,6 +415,7 @@ export const i18n = {
     statusLoadingIntentions:"Intentionen werden geladen…",
     statusIntentionsReady:  "Intentionen bereit",
     statusLoadingHistory:   "Historie wird geladen…",
+    statusRefreshing:       "Aktualisiere…",
     statusHistoryReady:     "Historie bereit",
     overview: "Übersicht",
     beads: "Perlen", decades: "Gesätzchen", rosaries: "Rosenkränze", chaplets: "Koronen",
@@ -523,7 +530,9 @@ export const i18n = {
       periodLabel: (bucket) => {
         const map = { day: "Heute", week: "Diese Woche", month: "Dieser Monat", year: "Dieses Jahr" };
         return map[bucket] || map.day;
-      }
+      },
+      progressDownload: "Historie wird heruntergeladen…",
+      progressUpload: "Historie wird hochgeladen…"
     },
     calendar: {
       monthShort: ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],

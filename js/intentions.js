@@ -1,4 +1,4 @@
-import { $, dec, packKV, le32 } from './utils.js';
+import { $, dec, packKV, le32, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive } from './utils.js';
 import { i18n } from './i18n.js';
 import { getLang } from './ui.js';
 
@@ -338,10 +338,27 @@ const state = {
     const alreadyBusy = state.busy;
     if (!alreadyBusy) setBusy(true);
     const strings = IL();
+    const progressLabel = strings.statusLoading || 'Loading intentions…';
+    const useStandaloneProgress = !silent && !progAggregateActive();
+    let standaloneProgressActive = false;
+    const updateStandaloneProgress = (pct) => {
+      if (!standaloneProgressActive) return;
+      try { globalProgressSet(Math.max(0, Math.min(100, pct)), progressLabel); } catch {}
+    };
+    if (useStandaloneProgress) {
+      try {
+        globalProgressStart(progressLabel, 100);
+        standaloneProgressActive = true;
+        updateStandaloneProgress(5);
+      } catch {
+        standaloneProgressActive = false;
+      }
+    }
     if (!silent) setStatus(() => IL().statusLoading);
     log('refresh: begin', { silent, ignoreBusy });
     try {
       const summary = await readSummary();
+      updateStandaloneProgress(20);
       state.summary = summary;
       state.entries = [];
 
@@ -357,6 +374,7 @@ const state = {
         autoToggle.disabled = true;
         log('refresh: requireConsent flag from device');
         setStatus(() => IL().consentRequired || consentDefault);
+        updateStandaloneProgress(100);
         return false;
       }
 
@@ -367,6 +385,7 @@ const state = {
         const msg = strings.emptySchedule;
         showEmpty(msg);
         if (!silent) setStatus(() => IL().emptySchedule);
+        updateStandaloneProgress(100);
         return true;
       }
 
@@ -374,6 +393,7 @@ const state = {
       log('refresh: summary', { count, auto: summary.auto, selected: summary.selected });
       if (!count) {
         setAvailable(false, strings.emptySchedule);
+        updateStandaloneProgress(100);
         return true;
       }
       const names = typeof summary.names === 'string' ? summary.names.split('\n') : [];
@@ -403,12 +423,19 @@ const state = {
           part: detail.part !== undefined ? detail.part : scheduledPart,
           controls: null,
         });
+        if (standaloneProgressActive) {
+          const progressBase = 25;
+          const progressSpan = 55;
+          const pct = progressBase + (count ? ((idx + 1) / count) * progressSpan : progressSpan);
+          updateStandaloneProgress(Math.min(85, pct));
+        }
       }
 
       autoToggle.disabled = !state.entries.length;
       autoToggle.checked = !!summary.auto;
       renderTable();
       clearDirty();
+      updateStandaloneProgress(95);
 
       if (!silent) {
         const selectedIndex = summary.selected != null ? Number(summary.selected) + 1 : null;
@@ -418,6 +445,7 @@ const state = {
           return `${base}.`;
         });
       }
+      updateStandaloneProgress(100);
       log('refresh: completed', { entries: state.entries.length });
       return true;
     } catch (err) {
@@ -434,6 +462,9 @@ const state = {
       return false;
     } finally {
       if (!alreadyBusy) setBusy(false);
+      if (standaloneProgressActive) {
+        try { globalProgressDone(400); } catch {}
+      }
       log('refresh: end');
     }
   }
@@ -450,9 +481,27 @@ const state = {
     if (state.busy) return;
     setBusy(true);
     const strings = IL();
+    const progressLabel = strings.statusSaving || 'Saving intentions schedule…';
+    const useStandaloneProgress = !progAggregateActive();
+    let standaloneProgressActive = false;
+    const updateStandaloneProgress = (pct) => {
+      if (!standaloneProgressActive) return;
+      try { globalProgressSet(Math.max(0, Math.min(100, pct)), progressLabel); } catch {}
+    };
+    if (useStandaloneProgress) {
+      try {
+        globalProgressStart(progressLabel, 100);
+        standaloneProgressActive = true;
+        updateStandaloneProgress(5);
+      } catch {
+        standaloneProgressActive = false;
+      }
+    }
     setStatus(() => IL().statusSaving);
     log('save: begin', { entries: state.entries.length });
     try {
+      const total = state.entries.length || 1;
+      let index = 0;
       for (const entry of state.entries) {
         const startEpoch = dateInputToEpoch(entry.controls?.dateInput?.value) || entry.start || 0;
         const setVal = Number(entry.controls?.setSelect?.value) || entry.set || 0;
@@ -465,10 +514,18 @@ const state = {
         await writePref(`i${pad2(entry.index)}s`, TYPE_U32, le32(startEpoch >>> 0));
         await writePref(`i${pad2(entry.index)}m`, TYPE_U8, u8(setVal));
         await writePref(`i${pad2(entry.index)}p`, TYPE_U8, u8(partVal));
+        index += 1;
+        if (standaloneProgressActive) {
+          const progressBase = 15;
+          const progressSpan = 65;
+          const pct = progressBase + ((index / total) * progressSpan);
+          updateStandaloneProgress(Math.min(85, pct));
+        }
       }
 
       await writePref('i-cnt', TYPE_U8, u8(state.entries.length));
       await writePref('i-auto', TYPE_BOOL, u8(autoToggle.checked ? 1 : 0));
+      updateStandaloneProgress(90);
 
       state.summary = state.summary || {};
       state.summary.auto = autoToggle.checked;
@@ -476,6 +533,7 @@ const state = {
       setStatus(() => IL().statusSavedRefreshing);
       await refresh({ silent: true, ignoreBusy: true });
       setStatus(() => IL().statusUpdated);
+      updateStandaloneProgress(100);
       log('save: completed');
     } catch (err) {
       console.error(err);
@@ -488,6 +546,9 @@ const state = {
       });
     } finally {
       setBusy(false);
+      if (standaloneProgressActive) {
+        try { globalProgressDone(450); } catch {}
+      }
       log('save: end');
     }
   }

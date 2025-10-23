@@ -1,4 +1,4 @@
-import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
+import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive } from './utils.js';
 
 // history.js — BLE history explorer card integration
 
@@ -33,6 +33,74 @@ let legendSets = [...FALLBACK_LEGEND_SETS];
 let legendIntentLabel = 'Intention';
 let legendRoman = [...FALLBACK_LEGEND_ROMAN];
 let historyStrings = null;
+
+const HISTORY_PROGRESS_DEFAULT = {
+  download: 'Downloading history…',
+  upload: 'Uploading history…',
+};
+
+function historyProgressLabel(kind) {
+  if (kind === 'upload') {
+    return historyStrings?.progressUpload || HISTORY_PROGRESS_DEFAULT.upload;
+  }
+  return historyStrings?.progressDownload || HISTORY_PROGRESS_DEFAULT.download;
+}
+const historyGlobalProgress = {
+  active: false,
+  label: null,
+  max: 0,
+};
+
+function historyProgressEnsure(label, max, currentValue = 0) {
+  if (progAggregateActive()) return false;
+  const safeLabel = label || 'Working…';
+  const safeMax = Number(max) > 0 ? Number(max) : 100;
+  const safeValue = Math.max(0, Math.min(Number(currentValue) || 0, safeMax));
+  if (!historyGlobalProgress.active) {
+    try {
+      globalProgressStart(safeLabel, safeMax);
+      globalProgressSet(safeValue, safeLabel);
+      historyGlobalProgress.active = true;
+      historyGlobalProgress.label = safeLabel;
+      historyGlobalProgress.max = safeMax;
+    } catch {
+      historyGlobalProgress.active = false;
+      historyGlobalProgress.label = null;
+      historyGlobalProgress.max = 0;
+      return false;
+    }
+  } else {
+    historyGlobalProgress.label = safeLabel;
+    if (safeMax > 0 && historyGlobalProgress.max !== safeMax) {
+      historyGlobalProgress.max = safeMax;
+      try {
+        globalProgressStart(historyGlobalProgress.label, safeMax);
+        globalProgressSet(safeValue, historyGlobalProgress.label);
+      } catch {}
+    }
+  }
+  return true;
+}
+
+function historyProgressUpdate(value, label) {
+  if (!historyGlobalProgress.active || progAggregateActive()) return;
+  const safeLabel = historyGlobalProgress.label || label || 'Working…';
+  const safeMax = historyGlobalProgress.max || 100;
+  const clamped = Math.max(0, Math.min(Number(value) || 0, safeMax));
+  try { globalProgressSet(clamped, safeLabel); } catch {}
+}
+
+function historyProgressComplete(defaultLabel) {
+  const label = defaultLabel || historyGlobalProgress.label || 'Working…';
+  const max = historyGlobalProgress.max || 100;
+  if (historyGlobalProgress.active && !progAggregateActive()) {
+    try { globalProgressSet(max, historyGlobalProgress.label || label); } catch {}
+    try { globalProgressDone(350); } catch {}
+  }
+  historyGlobalProgress.active = false;
+  historyGlobalProgress.label = null;
+  historyGlobalProgress.max = 0;
+}
 let lastSummary = null;
 
 const HISTORY_THEMES = {
@@ -122,6 +190,15 @@ const PROGRESS_TIMEOUT_MS = 30000;
 const CHUNK_MAX = 200;
 const CHUNK_MIN = 40;
 let dynChunk = 160;
+
+let historyProgressDelegated = false;
+let historyProgressReporter = null;
+export function setHistoryProgressDelegated(flag) {
+  historyProgressDelegated = !!flag;
+}
+export function setHistoryProgressReporter(fn) {
+  historyProgressReporter = typeof fn === 'function' ? fn : null;
+}
 
 const RETRY_MAX = 6;
 const RETRY_DELAY_MS = 90;
@@ -267,25 +344,34 @@ function resetProgress() {
     dom.downloadProgress.style.display = 'none';
     dom.downloadProgress.textContent = '';
   }
-  try { globalProgressDone(400); } catch {}
+  historyProgressComplete(historyProgressLabel('download'));
 }
 
 function showProgress() {
   if (!dom.downloadProgress) return;
   if (!downloadActive) {
     dom.downloadProgress.style.display = 'none';
-    try { globalProgressDone(400); } catch {}
     return;
   }
+  const label = historyProgressLabel('download');
   dom.downloadProgress.style.display = 'inline-flex';
   const soFar = downloadTotal > 0 ? Math.min(downloadSoFar, downloadTotal) : downloadSoFar;
   if (downloadTotal > 0) {
     const pct = Math.min(100, Math.floor((soFar * 100) / downloadTotal));
-    dom.downloadProgress.textContent = `Downloading ${soFar}/${downloadTotal} B (${pct}%)`;
-    try { globalProgressStart('Downloading…', 100); globalProgressSet(pct, 'Downloading…'); } catch {}
+    dom.downloadProgress.textContent = `${label} ${soFar}/${downloadTotal} B (${pct}%)`;
+    if (historyProgressDelegated && historyProgressReporter) {
+      historyProgressReporter(pct);
+    } else if (historyProgressEnsure(label, downloadTotal, soFar)) {
+      historyProgressUpdate(soFar, label);
+    }
   } else {
-    dom.downloadProgress.textContent = `Downloading ${soFar} B`;
-    try { globalProgressStart('Downloading…', 100); } catch {}
+    dom.downloadProgress.textContent = `${label} ${soFar} B`;
+    if (!(historyProgressDelegated && historyProgressReporter)) {
+      const fallbackPct = downloadSoFar ? Math.min(95, 15 + Math.floor((Math.min(downloadSoFar, 65536) * 70) / 65536)) : 5;
+      if (historyProgressEnsure(label, 100, fallbackPct)) {
+        historyProgressUpdate(fallbackPct, label);
+      }
+    }
   }
 }
 
@@ -311,20 +397,30 @@ function resetUploadProgress() {
     dom.uploadProg.style.display = 'none';
     dom.uploadProg.textContent = '';
   }
-  try { globalProgressDone(400); } catch {}
+  historyProgressComplete(historyProgressLabel('upload'));
 }
 
 function showUploadProgress() {
   if (!dom.uploadProg) return;
   if (!uploading) {
     dom.uploadProg.style.display = 'none';
-    try { globalProgressDone(400); } catch {}
     return;
   }
   dom.uploadProg.style.display = 'inline-flex';
+  const label = historyProgressLabel('upload');
   const pct = upTotal ? Math.min(100, Math.floor((upSent * 100) / upTotal)) : 0;
-  dom.uploadProg.textContent = `Uploading ${upSent}/${upTotal} B (${pct}%)`;
-   try { globalProgressStart('Uploading…', 100); globalProgressSet(pct, 'Uploading…'); } catch {}
+  if (upTotal) {
+    dom.uploadProg.textContent = `${label} ${upSent}/${upTotal} B (${pct}%)`;
+    if (historyProgressEnsure(label, upTotal, upSent)) {
+      historyProgressUpdate(upSent, label);
+    }
+  } else {
+    dom.uploadProg.textContent = `${label} ${upSent} B`;
+    const fallbackPct = upSent ? Math.min(95, 20 + Math.floor((Math.min(upSent, 65536) * 70) / 65536)) : 5;
+    if (historyProgressEnsure(label, 100, fallbackPct)) {
+      historyProgressUpdate(fallbackPct, label);
+    }
+  }
 }
 
 function resetList() {

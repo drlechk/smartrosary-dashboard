@@ -1,4 +1,4 @@
-import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateStart, progAggregateSet, progAggregateEnter, progAggregateLeave, progAggregateDone } from './utils.js';
+import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateStart, progAggregateSet, progAggregateEnter, progAggregateLeave, progAggregateDone, progAggregateActive } from './utils.js';
 import { BleClient } from './ble.js';
 import { initCharts } from './charts.js';
 import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText, initThemeToggle } from './ui.js';
@@ -8,10 +8,60 @@ import { requestKeysConsent, backupKeys, restoreKeys } from './auth.js';
 import { initRemote } from './remote.js';
 import { i18n } from './i18n.js';
 import { attachWallpaperFS, resetWallpaperFS, setWallpaperConsent } from './wallpaper.js';
-import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetHistoryCard, refreshHistory, primeHistoryServer } from './history.js';
+import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetHistoryCard, refreshHistory, primeHistoryServer, setHistoryProgressDelegated, setHistoryProgressReporter } from './history.js';
 import { initIntentions } from './intentions.js';
 
 const client = new BleClient();
+
+const standaloneProgress = {
+  active: false,
+  label: null,
+  max: 100,
+};
+
+function standaloneProgressBegin(label, max = 100, initialValue = 0) {
+  if (progAggregateActive()) return false;
+  const safeLabel = label || 'Working…';
+  const safeMax = Number(max) > 0 ? Number(max) : 100;
+  const safeInitial = Math.max(0, Math.min(Number(initialValue) || 0, safeMax));
+  try {
+    globalProgressStart(safeLabel, safeMax);
+    globalProgressSet(safeInitial, safeLabel);
+    standaloneProgress.active = true;
+    standaloneProgress.label = safeLabel;
+    standaloneProgress.max = safeMax;
+    return true;
+  } catch {
+    standaloneProgress.active = false;
+    standaloneProgress.label = null;
+    standaloneProgress.max = 100;
+    return false;
+  }
+}
+
+function standaloneProgressUpdate(value, label) {
+  if (!standaloneProgress.active || progAggregateActive()) return;
+  const safeLabel = label || standaloneProgress.label || 'Working…';
+  const safeMax = standaloneProgress.max || 100;
+  const clamped = Math.max(0, Math.min(Number(value) || 0, safeMax));
+  try { globalProgressSet(clamped, safeLabel); } catch {}
+}
+
+function standaloneProgressComplete(delayMs = 400, finalValue) {
+  if (!standaloneProgress.active) return;
+  if (!progAggregateActive()) {
+    const safeLabel = standaloneProgress.label || 'Working…';
+    const safeMax = standaloneProgress.max || 100;
+    const finalVal = finalValue != null
+      ? Math.max(0, Math.min(Number(finalValue) || 0, safeMax))
+      : safeMax;
+    try { globalProgressSet(finalVal, safeLabel); } catch {}
+    try { globalProgressDone(delayMs); } catch {}
+  }
+  standaloneProgress.active = false;
+  standaloneProgress.label = null;
+  standaloneProgress.max = 100;
+}
 
 initHistory();
 const intentions = initIntentions({ client, setStatus: status });
@@ -261,19 +311,28 @@ function parseJsonWithFallback(str, context, { dropEntries } = {}) {
 
 async function refreshOnce() {
   const L = i18n[getLang()];
+  const progressLabel = L?.statusRefreshing || 'Refreshing…';
+  const standaloneActive = standaloneProgressBegin(progressLabel, 100, 4);
+  const updateStandaloneProgress = (pct) => {
+    if (!standaloneActive) return;
+    standaloneProgressUpdate(Math.max(0, Math.min(100, pct)), progressLabel);
+  };
   try {
     if (!client.chStats || !client.chSettings) return false;
     console.log('[stats] refreshOnce: starting read');
     await sleep(200);
+    updateStandaloneProgress(12);
 
     const vSettings = await client.robustRead(client.chSettings);
     console.log('[stats] settings characteristic length', vSettings?.byteLength ?? (vSettings?.buffer?.byteLength));
+    updateStandaloneProgress(28);
 
     let vPartsMaybe = null;
     if (client.chParts) {
       try {
         vPartsMaybe = await client.robustRead(client.chParts);
         console.log('[stats] parts characteristic length', vPartsMaybe?.byteLength ?? (vPartsMaybe?.buffer?.byteLength));
+        updateStandaloneProgress(40);
       } catch (errParts) {
         console.warn('Parts characteristic read skipped:', errParts);
       }
@@ -282,6 +341,7 @@ async function refreshOnce() {
     await sleep(80);
     const vStats = await client.robustRead(client.chStats);
     console.log('[stats] stats characteristic length', vStats?.byteLength ?? (vStats?.buffer?.byteLength));
+    updateStandaloneProgress(58);
 
     const rawSettings = u8ToStr(vSettings);
     const rawStats    = u8ToStr(vStats);
@@ -320,8 +380,10 @@ async function refreshOnce() {
     console.log('[stats] settings parsed keys', Object.keys(jsSettings || {}));
     console.log('[stats] stats parsed keys', Object.keys(jsStats || {}));
     if (jsParts) console.log('[stats] parts parsed keys', Object.keys(jsParts || {}));
+    updateStandaloneProgress(78);
 
     updateFromJson({ jsStats, jsSettings, jsParts });
+    updateStandaloneProgress(100);
     try { setStatusKey('statusUpdated', L?.statusUpdated); } catch {
       status(() => {
         const Ln = i18n[getLang()] || i18n.en;
@@ -338,6 +400,10 @@ async function refreshOnce() {
       return formatter(errMsg);
     });
     return false;
+  } finally {
+    if (standaloneActive) {
+      standaloneProgressComplete(400);
+    }
   }
 }
 
@@ -391,18 +457,84 @@ async function writeStatKey(key, type, value){
 
 async function handleConnect() {
   const L = i18n[getLang()];
+  const segTimers = new Map();
+  let aggStarted = false;
   try {
     // --- Overall progress across connection + sync steps ---
     // Plan weights sum to ~100; adjust as needed.
     const PLAN = [
-      { id: 'connect',    weight: 35 },
-      { id: 'wallpaper',  weight: 10 },
-      { id: 'info',       weight: 20 },
-      { id: 'intentions', weight: 10 },
-      { id: 'history',    weight: 25 },
+      { id: 'connect',    weight: 20 },
+      { id: 'wallpaper',  weight: 20 },
+      { id: 'overview',   weight: 20 },
+      { id: 'intentions', weight: 20 },
+      { id: 'history',    weight: 20 },
     ];
     try { globalProgressStart('Syncing…', 100); } catch {}
     progAggregateStart(PLAN);
+    aggStarted = true;
+    const updateSegment = (id, value) => {
+      const seg = segTimers.get(id);
+      if (!seg) return;
+      const clamped = Math.min(seg.peak, value);
+      const next = Math.max(seg.current, clamped);
+      seg.current = next;
+      progAggregateSet(id, next);
+    };
+
+    const beginSegment = (id, { initial = 10, peak = 85, duration = 15000 } = {}) => {
+      const clampedInitial = Math.max(0, Math.min(initial, peak));
+      progAggregateEnter(id);
+      progAggregateSet(id, clampedInitial);
+      const start = Date.now();
+      const seg = {
+        initial: clampedInitial,
+        peak,
+        duration,
+        current: clampedInitial,
+        timer: null,
+      };
+      seg.timer = setInterval(() => {
+        const elapsed = Date.now() - start;
+        const ratio = Math.min(1, elapsed / duration);
+        const computed = clampedInitial + (peak - clampedInitial) * ratio;
+        const next = Math.max(seg.current, computed);
+        seg.current = next;
+        progAggregateSet(id, next);
+        if (ratio >= 1 && seg.timer) {
+          clearInterval(seg.timer);
+          seg.timer = null;
+        }
+      }, 400);
+      segTimers.set(id, seg);
+      if (id === 'history') {
+        setHistoryProgressDelegated(true);
+        setHistoryProgressReporter((pct) => {
+          const normalized = Math.max(0, Math.min(100, pct));
+          const mapped = seg.initial + (seg.peak - seg.initial) * (normalized / 100);
+          updateSegment('history', mapped);
+        });
+      }
+    };
+
+    const finishSegment = (id, completeValue = 100) => {
+      const seg = segTimers.get(id);
+      if (seg?.timer) {
+        clearInterval(seg.timer);
+        seg.timer = null;
+      }
+      if (seg) {
+        segTimers.delete(id);
+        progAggregateLeave(id);
+        progAggregateSet(id, completeValue);
+      } else {
+        // Segment may not have been started (e.g., skipped). Ensure final value set.
+        progAggregateSet(id, completeValue);
+      }
+      if (id === 'history') {
+        setHistoryProgressReporter(null);
+        setHistoryProgressDelegated(false);
+      }
+    };
     let connectStep = 0;
     const CONNECT_STEPS = 5;
     const bumpConnect = () => progAggregateSet('connect', Math.floor(++connectStep * 100 / CONNECT_STEPS));
@@ -420,14 +552,17 @@ async function handleConnect() {
     setStatusKey('statusPreparingUi', 'Preparing UI…'); bumpConnect();
 
     // 3) Bind Wallpaper FS service (optional)
+    beginSegment('wallpaper', { initial: 10, peak: 85, duration: 12000 });
     try {
       setStatusKey('statusBindingWallpaper', 'Binding wallpaper service…');
+      updateSegment('wallpaper', 45);
       await attachWallpaperFS(client.server);
+      updateSegment('wallpaper', 75);
     } catch (e) {
       console.warn('WallpaperFS attach skipped:', e);
     }
+    finishSegment('wallpaper');
     setStatusKey('statusWallpaperReady', 'Wallpaper ready');
-    progAggregateSet('wallpaper', 100);
     bumpConnect();
 
     // 4) Enable controls
@@ -445,21 +580,29 @@ async function handleConnect() {
     setStatusKey('statusRemoteReady', 'Remote ready'); bumpConnect();
 
     // 6) Read device info (settings/stats)
+    beginSegment('overview', { initial: 15, peak: 85, duration: 14000 });
     setStatusKey('statusReadingInfo', 'Reading device info…');
     const statsOk = await refreshUntilValid({ tries: 12, delay: 250 });
-    if (!statsOk) { await refreshOnce(); }
+    updateSegment('overview', statsOk ? 70 : 45);
+    if (!statsOk) {
+      await refreshOnce();
+      updateSegment('overview', 80);
+    }
+    finishSegment('overview');
     setStatusKey('statusInfoLoaded', 'Device info loaded');
-    progAggregateSet('info', 100);
 
     // 7) Load intentions
     try {
+      beginSegment('intentions', { initial: 15, peak: 85, duration: 8000 });
       setStatusKey('statusLoadingIntentions', 'Loading intentions…');
       await intentions.refresh({ silent: true });
+      updateSegment('intentions', 70);
     } catch (e) {
       console.warn('Intentions load skipped:', e);
+    } finally {
+      finishSegment('intentions');
     }
     setStatusKey('statusIntentionsReady', 'Intentions ready');
-    progAggregateSet('intentions', 100);
 
     // 8) Attach History FS if consent
     const ua = navigator.userAgent || '';
@@ -473,20 +616,23 @@ async function handleConnect() {
         if (shouldAutoHistory) {
           setStatusKey('statusLoadingHistory', 'Loading history…');
           // Map history module's own progress into the overall bar segment
-          progAggregateEnter('history');
+          beginSegment('history', { initial: 10, peak: 85, duration: 16000 });
           await attachHistoryFS(client.server);
+          updateSegment('history', 60);
           await refreshHistory();
-          progAggregateLeave('history');
+          updateSegment('history', 90);
+          finishSegment('history');
+        } else {
+          finishSegment('history', 100);
         }
       } catch (e) {
         console.warn('History attach skipped:', e);
-        // Consider history segment completed when skipped due to consent/other reasons
-        progAggregateSet('history', 100);
+        finishSegment('history', 100);
       }
+    } else {
+      finishSegment('history', 100);
     }
     setStatusKey('statusHistoryReady', 'History ready');
-    // If consent not granted, mark as complete so the overall bar can finish
-    if (!client.consentOk) progAggregateSet('history', 100);
 
     // 9) Subscribe to settings live updates
     if (client.chSettings) {
@@ -507,7 +653,6 @@ async function handleConnect() {
     $('swHaptic').disabled = false;
     $('swPreset').disabled = false;
     $('swAutosave').disabled = false;
-    progAggregateDone();
 
   } catch (err) {
     console.error(err);
@@ -522,6 +667,19 @@ async function handleConnect() {
     intentions.onDisconnected();
     try { await resetHistoryCard(); } catch {}
     try { globalProgressDone(400); } catch {}
+  } finally {
+    if (!client.consentOk) {
+      progAggregateSet('history', 100);
+    }
+    setHistoryProgressDelegated(false);
+    setHistoryProgressReporter(null);
+    for (const [id, seg] of segTimers) {
+      if (seg.timer) clearInterval(seg.timer);
+      progAggregateLeave(id);
+      progAggregateSet(id, 100);
+    }
+    segTimers.clear();
+    if (aggStarted) progAggregateDone();
   }
 }
 
@@ -558,19 +716,150 @@ function wireControls() {
   $('connectBtn').addEventListener('click', handleConnect);
   $('disconnectBtn').addEventListener('click', handleDisconnect);
   $('refreshBtn').addEventListener('click', async () => {
-    try {
-      await refreshOnce();
-    } finally {
+    if (progAggregateActive()) {
       try {
-        await refreshHistory();
-      } catch (e) {
-        console.warn('History refresh failed:', e);
+        await refreshOnce();
+      } finally {
+        try {
+          await refreshHistory();
+        } catch (e) {
+          console.warn('History refresh failed:', e);
+        }
+        try {
+          await intentions.refresh({ silent: true });
+        } catch (e) {
+          console.warn('Intentions refresh failed:', e);
+        }
       }
+      return;
+    }
+
+    const L = i18n[getLang()];
+    const plan = [
+      { id: 'stats',      weight: 45 },
+      { id: 'history',    weight: 35 },
+      { id: 'intentions', weight: 20 },
+    ];
+    const segTimers = new Map();
+
+    const updateSegment = (id, value) => {
+      const seg = segTimers.get(id);
+      const clamped = Math.max(0, Math.min(100, Number(value) || 0));
+      if (seg) seg.current = Math.max(seg.current, clamped);
+      progAggregateSet(id, clamped);
+    };
+
+    const beginSegment = (id, { initial = 10, peak = 85, duration = 8000 } = {}) => {
+      const safeInitial = Math.max(0, Math.min(initial, peak));
+      progAggregateEnter(id);
+      progAggregateSet(id, safeInitial);
+      const seg = {
+        initial: safeInitial,
+        peak,
+        duration,
+        current: safeInitial,
+        timer: null,
+      };
+      const startTs = Date.now();
+      seg.timer = setInterval(() => {
+        const elapsed = Date.now() - startTs;
+        const ratio = Math.min(1, elapsed / seg.duration);
+        const computed = seg.initial + (seg.peak - seg.initial) * ratio;
+        if (computed > seg.current) {
+          seg.current = computed;
+          progAggregateSet(id, computed);
+        }
+        if (ratio >= 1 && seg.timer) {
+          clearInterval(seg.timer);
+          seg.timer = null;
+        }
+      }, 420);
+      segTimers.set(id, seg);
+      return seg;
+    };
+
+    const finishSegment = (id, finalValue = 100) => {
+      const seg = segTimers.get(id);
+      if (seg?.timer) {
+        clearInterval(seg.timer);
+        seg.timer = null;
+      }
+      if (id === 'history') {
+        try { setHistoryProgressReporter(null); } catch {}
+        try { setHistoryProgressDelegated(false); } catch {}
+      }
+      segTimers.delete(id);
+      progAggregateLeave(id);
+      progAggregateSet(id, Math.max(0, Math.min(100, Number(finalValue) || 0)));
+    };
+
+    try { globalProgressStart(L?.statusRefreshing || 'Refreshing…', 100); } catch {}
+    progAggregateStart(plan);
+
+    try {
+      let statsError = null;
+      const statsSeg = beginSegment('stats', { initial: 12, peak: 85, duration: 6500 });
+      let statsOk = false;
+      try {
+        statsOk = await refreshOnce();
+      } catch (err) {
+        statsError = err;
+        console.warn('Stats refresh during manual refresh failed:', err);
+      } finally {
+        const target = statsOk ? Math.max(statsSeg.initial + 30, 72) : statsSeg.initial + 20;
+        updateSegment('stats', Math.min(100, target));
+        finishSegment('stats');
+      }
+
+      const historySeg = beginSegment('history', { initial: 10, peak: 88, duration: 8000 });
+      try {
+        setHistoryProgressDelegated(true);
+        setHistoryProgressReporter((pct) => {
+          const normalized = Math.max(0, Math.min(100, Number(pct) || 0));
+          const mapped = historySeg.initial + (historySeg.peak - historySeg.initial) * (normalized / 100);
+          if (mapped > historySeg.current) {
+            historySeg.current = mapped;
+            progAggregateSet('history', mapped);
+          }
+        });
+        let historySucceeded = false;
+        try {
+          await refreshHistory();
+          historySucceeded = true;
+        } catch (e) {
+          console.warn('History refresh failed:', e);
+        } finally {
+          const target = historySucceeded ? Math.max(historySeg.initial + 40, 92) : historySeg.initial + 20;
+          updateSegment('history', Math.min(100, target));
+        }
+      } finally {
+        finishSegment('history');
+      }
+
+      const intentSeg = beginSegment('intentions', { initial: 12, peak: 85, duration: 6000 });
+      let intentionsSucceeded = false;
       try {
         await intentions.refresh({ silent: true });
+        intentionsSucceeded = true;
       } catch (e) {
         console.warn('Intentions refresh failed:', e);
+      } finally {
+        const target = intentionsSucceeded ? Math.max(intentSeg.initial + 35, 88) : intentSeg.initial + 18;
+        updateSegment('intentions', Math.min(100, target));
+        finishSegment('intentions');
       }
+
+      if (statsError) throw statsError;
+    } finally {
+      try { setHistoryProgressReporter(null); } catch {}
+      try { setHistoryProgressDelegated(false); } catch {}
+      for (const [id, seg] of segTimers) {
+        if (seg.timer) clearInterval(seg.timer);
+        progAggregateLeave(id);
+        progAggregateSet(id, 100);
+      }
+      segTimers.clear();
+      progAggregateDone();
     }
   });
 
