@@ -11,6 +11,7 @@ const dom = {
   title: $('historyTitle'),
   restoreBtn: $('histRestoreBtn'),
   downloadBtn: $('histDownloadBtn'),
+  deleteBtn: $('histDeleteBtn'),
   uploadProg: $('histUploadProg'),
   fsInfo: $('histFsInfo'),
   parseSummary: $('histParseSummary'),
@@ -258,7 +259,7 @@ function updateParseSummaryDisplay() {
     return;
   }
   const summary = lastSummary;
-  const strings = historyStrings;
+  const strings = historyStrings || getHistoryStrings();
   if (strings?.parseSummary) {
     try {
       const text = strings.parseSummary(summary);
@@ -300,8 +301,7 @@ function clearPkLabelCache() {
 }
 
 function periodTextFallback(bucket) {
-  const txt = periodText(bucket);
-  if (txt && typeof txt === 'string') return txt;
+  // Simple, generic labels used only if concrete range cannot be computed
   switch (bucket) {
     case 'week': return 'This week';
     case 'month': return 'This month';
@@ -312,18 +312,11 @@ function periodTextFallback(bucket) {
 
 function updatePeriodLabelDisplay(bucket = dom.bucketSel?.value || 'day') {
   if (!dom.periodLabel) return;
-  const strings = historyStrings;
-  const fallback = periodTextFallback(bucket);
-  if (strings?.periodLabel) {
-    try {
-      const text = strings.periodLabel(bucket);
-      dom.periodLabel.textContent = typeof text === 'string' ? text : fallback;
-      return;
-    } catch (err) {
-      console.warn('periodLabel i18n error', err);
-    }
+  let txt = periodText(bucket);
+  if (!txt || typeof txt !== 'string') {
+    txt = periodTextFallback(bucket);
   }
-  dom.periodLabel.textContent = fallback;
+  dom.periodLabel.textContent = txt;
 }
 
 function setCardMuted(muted) {
@@ -335,6 +328,7 @@ function setControlsEnabled(enabled) {
   const ctrls = [
     dom.restoreBtn,
     dom.downloadBtn,
+    dom.deleteBtn,
     dom.bucketSel,
     dom.prevBtn,
     dom.nextBtn,
@@ -1121,16 +1115,6 @@ function parseHistory(bytes) {
   }
 
   lastSummary = { nrec, decades, chaplets, intentions };
-
-  if (dom.parseSummary) {
-    const H = getHistoryStrings();
-    if (H && typeof H.parseSummary === 'function') {
-      dom.parseSummary.textContent = H.parseSummary(nrec, decades, chaplets, intentions);
-    } else {
-      dom.parseSummary.textContent =
-        `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`;
-    }
-  }
   updateParseSummaryDisplay();
 
   log('parseHistory:', { nrec, decades, chaplets, intentions, bucket: dom.bucketSel?.value });
@@ -1227,6 +1211,13 @@ function onStat(ev) {
     case 0x00:
       log('onStat: OK/ACK', aux);
       break;
+    case 0xF5: {
+      log('onStat: deleteLog failed', aux);
+      const strings = historyStrings || getHistoryStrings();
+      const msg = strings?.deleteFailed || 'Delete history failed on device.';
+      try { alert(msg); } catch {}
+      break;
+    }
     default:
       log('STAT', code, aux);
   }
@@ -1275,6 +1266,36 @@ function wireUi() {
       }
     }
     downloadRawFile();
+  });
+
+  dom.deleteBtn?.addEventListener('click', () => {
+    if (!consentOk || !connected) {
+      alert('Connect first.');
+      return;
+    }
+    const strings = historyStrings || getHistoryStrings();
+    const confirmMsg =
+      strings?.confirmDeleteAll ||
+      'Delete all history records on the device? This cannot be undone.';
+    if (!confirm(confirmMsg)) return;
+
+    enqueue(async () => {
+      try {
+        log('deleteBtn: sending DELETE_LOG');
+        await writeCtrl(new Uint8Array([OPC.DELETE_LOG]), 'DELETE_LOG');
+        // Clear local cache and refresh UI
+        gRows = [];
+        lastSummary = { nrec: 0, decades: 0, chaplets: 0, intentions: 0 };
+        updateParseSummaryDisplay();
+        renderChart();
+        await doList();
+      } catch (err) {
+        console.error('History delete failed', err);
+        const stringsNow = historyStrings || getHistoryStrings();
+        const errMsg = stringsNow?.deleteFailed || 'Delete history failed on device.';
+        alert(errMsg + (err?.message ? `: ${err.message}` : ''));
+      }
+    });
   });
 
   dom.bucketSel?.addEventListener('change', () => {
@@ -1327,6 +1348,7 @@ export function applyHistoryI18n(dict) {
   if (dom.title && dict.title) dom.title.textContent = dict.title;
   if (dom.downloadBtn && dict.downloadRaw) dom.downloadBtn.textContent = dict.downloadRaw;
   if (dom.restoreBtn && dict.uploadRestore) dom.restoreBtn.textContent = dict.uploadRestore;
+  if (dom.deleteBtn && dict.deleteAll) dom.deleteBtn.textContent = dict.deleteAll;
   if (dom.restoreLabel && dict.restoreLabel) dom.restoreLabel.textContent = dict.restoreLabel;
   if (dom.activityTitle && dict.activity) dom.activityTitle.textContent = dict.activity;
   if (dom.bucketLabel && dict.bucket) dom.bucketLabel.textContent = dict.bucket;
@@ -1365,25 +1387,9 @@ export function applyHistoryI18n(dict) {
   updatePeriodLabelDisplay();
   updateParseSummaryDisplay();
   renderLegend();
-
-  // Re-apply summary and period label in the new language if data is present
-  if (lastSummary && dom.parseSummary) {
-    const { nrec, decades, chaplets, intentions } = lastSummary;
-    const H = getHistoryStrings();
-    if (H && typeof H.parseSummary === 'function') {
-      dom.parseSummary.textContent = H.parseSummary(nrec, decades, chaplets, intentions);
-    } else {
-      dom.parseSummary.textContent =
-        `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`;
-    }
-  }
-  if (dom.periodLabel && periodAnchor) {
-    const bucket = dom.bucketSel?.value || 'day';
-    dom.periodLabel.textContent = periodText(bucket);
   if (histChart) {
     renderChart();
   }
-}
 }
 
 export function setHistoryConsent(ok) {

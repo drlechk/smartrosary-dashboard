@@ -259,6 +259,17 @@ const state = {
         entry.start = dateInputToEpoch(inputDate.value);
         markDirty();
       });
+      const showDatePicker = () => {
+        try {
+          if (typeof inputDate.showPicker === 'function') {
+            inputDate.showPicker();
+          }
+        } catch {
+          // Native picker not available; ignore.
+        }
+      };
+      inputDate.addEventListener('focus', showDatePicker);
+      inputDate.addEventListener('click', showDatePicker);
       tdDate.appendChild(inputDate);
       tr.appendChild(tdDate);
 

@@ -121,6 +121,7 @@ export const i18n = {
       downloadRaw: "Download",
       restoreLabel: "Restore history.bin",
       uploadRestore: "Restore",
+      deleteAll: "Delete history",
       activity: "Activity",
       bucket: "Bucket:",
       bucketOptions: { day: "Day", week: "Week", month: "Month", year: "Year" },
@@ -136,7 +137,10 @@ export const i18n = {
         return map[bucket] || map.day;
       },
       progressDownload: "Downloading history…",
-      progressUpload: "Uploading history…"
+      progressUpload: "Uploading history…",
+      confirmDeleteAll: "Delete all history records on the device? This cannot be undone.",
+      deleteFailed: "Delete history failed on device.",
+      deleteDone: "History deleted."
     },
     calendar: {
       monthShort: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
@@ -319,6 +323,7 @@ export const i18n = {
       downloadRaw: "Pobierz",
       restoreLabel: "Przywróć history.bin",
       uploadRestore: "Przywróć",
+      deleteAll: "Usuń historię",
       activity: "Aktywność",
       bucket: "Okres:",
       bucketOptions: { day: "Dzień", week: "Tydzień", month: "Miesiąc", year: "Rok" },
@@ -335,7 +340,10 @@ export const i18n = {
         return map[bucket] || map.day;
       },
       progressDownload: "Pobieranie historii…",
-      progressUpload: "Wgrywanie historii…"
+      progressUpload: "Wgrywanie historii…",
+      confirmDeleteAll: "Usunąć całą historię z urządzenia? Tej operacji nie można cofnąć.",
+      deleteFailed: "Nie udało się usunąć historii na urządzeniu.",
+      deleteDone: "Historia została usunięta."
     },
     calendar: {
       monthShort: ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'],
@@ -518,6 +526,7 @@ export const i18n = {
       downloadRaw: "Herunterladen",
       restoreLabel: "history.bin wiederherstellen",
       uploadRestore: "Wiederherstellen",
+      deleteAll: "Historie löschen",
       activity: "Aktivität",
       bucket: "Zeitraum:",
       bucketOptions: { day: "Tag", week: "Woche", month: "Monat", year: "Jahr" },
@@ -533,7 +542,10 @@ export const i18n = {
         return map[bucket] || map.day;
       },
       progressDownload: "Historie wird heruntergeladen…",
-      progressUpload: "Historie wird hochgeladen…"
+      progressUpload: "Historie wird hochgeladen…",
+      confirmDeleteAll: "Alle Verlaufseinträge auf dem Gerät löschen? Dies kann nicht rückgängig gemacht werden.",
+      deleteFailed: "Löschen der Historie auf dem Gerät fehlgeschlagen.",
+      deleteDone: "Historie gelöscht."
     },
     calendar: {
       monthShort: ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],
