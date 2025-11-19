@@ -1,6 +1,6 @@
 //import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
 import { i18n } from './i18n.js';
-import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive } from './utils.js';
+import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive, platformFlags } from './utils.js';
 
 // history.js — BLE history explorer card integration
 
@@ -36,6 +36,8 @@ let legendSets = [...FALLBACK_LEGEND_SETS];
 let legendIntentLabel = 'Intention';
 let legendRoman = [...FALLBACK_LEGEND_ROMAN];
 let historyStrings = null;
+
+const isBluefyClient = !!(platformFlags && platformFlags.isBluefy);
 
 const HISTORY_PROGRESS_DEFAULT = {
   download: 'Downloading history…',
@@ -544,6 +546,11 @@ async function openAndRead() {
   }
 
   const nextReq = new Uint8Array([OPC.SEND_NEXT, 0x00, 0x00]);
+  if (isBluefyClient) {
+    const chunkHint = 128; // keep payloads small for Bluefy/iOS reliability
+    nextReq[1] = chunkHint & 0xFF;
+    nextReq[2] = (chunkHint >> 8) & 0xFF;
+  }
   let guard = 0;
   let idleRounds = 0;
 
@@ -555,11 +562,14 @@ async function openAndRead() {
       await sleep(20);
     }
 
-    const progressed = await waitForProgress(before, 650);
+    const progressed = await waitForProgress(before, isBluefyClient ? 1200 : 650);
     if (progressed) {
       idleRounds = 0;
       lastDownloadProgressTs = performance.now();
       log('openAndRead: chunk received', downloadSoFar, '/', downloadTotal || '?');
+      if (isBluefyClient) {
+        await sleep(90);
+      }
     } else {
       idleRounds++;
       log('openAndRead: no progress', { idleRounds, guard, downloadSoFar, downloadTotal });

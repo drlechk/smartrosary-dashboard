@@ -9,15 +9,20 @@ export const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const anchorProbe = (typeof document !== 'undefined') ? document.createElement('a') : null;
 const supportsDownloadAttr = !!(anchorProbe && 'download' in anchorProbe);
 
+const navUA = (typeof navigator !== 'undefined') ? (navigator.userAgent || '') : '';
+const navPlatform = (typeof navigator !== 'undefined') ? (navigator.platform || '') : '';
+const navTouchPoints = (typeof navigator !== 'undefined') ? (Number(navigator.maxTouchPoints) || 0) : 0;
+const isBluefy = /Bluefy/i.test(navUA);
 const isLikelyIOS = (() => {
   if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  const platform = navigator.platform || '';
-  const touchPoints = Number(navigator.maxTouchPoints) || 0;
-  if (/iPad|iPhone|iPod/.test(ua)) return true;
+  if (/iPad|iPhone|iPod/.test(navUA)) return true;
   // iPadOS reports as MacIntel with touch points > 1
-  return platform === 'MacIntel' && touchPoints > 1;
+  return navPlatform === 'MacIntel' && navTouchPoints > 1;
 })();
+export const platformFlags = {
+  isBluefy,
+  isLikelyIOS,
+};
 
 function restoreInlineStyles(node, snapshot) {
   Object.entries(snapshot).forEach(([prop, value]) => {
@@ -37,10 +42,16 @@ export function downloadBlob(blob, filename) {
     a.rel = 'noopener';
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => {
+    const blobSize = Number(blob.size) || 0;
+    const iosBaseDelay = (isBluefy ? 20000 : 4000);
+    const extraPer64KiB = (blobSize > 0) ? Math.min(60000, Math.ceil(blobSize / 65536) * 2000) : 0;
+    const releaseDelay = (isLikelyIOS || isBluefy) ? (iosBaseDelay + extraPer64KiB) : 0;
+    const cleanup = () => {
       URL.revokeObjectURL(url);
-      a.remove();
-    }, 0);
+      if (a.parentNode) a.remove();
+    };
+    // Bluefy/iOS needs extra time to read the blob before it disappears.
+    setTimeout(cleanup, releaseDelay);
     return true;
   }
 

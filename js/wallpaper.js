@@ -2,10 +2,24 @@
 
 // --- import i18n dictionary (ESM) ---
 import { i18n } from './i18n.js';
-import { downloadBlob, openFilePicker, loadImageSource, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive } from './utils.js';
+import { downloadBlob, openFilePicker, loadImageSource, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive, platformFlags } from './utils.js';
 
 const log = (...args) => console.log('[wallpaper]', ...args);
+const isBluefyClient = !!(platformFlags && platformFlags.isBluefy);
 const CANVAS_BG = '#2f3642';
+const BLUEFY_FLUSH_ROWS = 24;
+const BLUEFY_FLUSH_INTERVAL_MS = 140;
+const FS_READ_READY_CMD = 0x13;
+const FS_READ_READY_ARM = 0x80;
+const FS_READ_READY_RELEASE = 0x01;
+const FS_READ_READY_CANCEL = 0x40;
+
+let debugWallpaperChunks = false;
+try {
+  const stored = window?.localStorage?.getItem('wpChunkDebug') === '1';
+  debugWallpaperChunks = stored || isBluefyClient;
+} catch {}
+const logChunk = (...args) => { if (debugWallpaperChunks) log(...args); };
 
 let wpLang = 'en';
 export function setWallpaperLang(code) {
@@ -69,6 +83,7 @@ const FS_CTRL_UUID = "12345678-1234-5678-1234-56789abcf001";
 const FS_INFO_UUID = "12345678-1234-5678-1234-56789abcf002";
 const FS_DATA_UUID = "12345678-1234-5678-1234-56789abcf003";
 const FS_STAT_UUID = "12345678-1234-5678-1234-56789abcf004";
+const bluefyReadGate = { armed:false };
 
 const TAG_LIST = 0xE0;   // ... 0xE1 (chunked listing)
 const TAG_DATA = 0x90;   // ... 0x91 (read/write data)
@@ -723,12 +738,42 @@ async function _list() {
 }
 async function _listAfter(ms=300){ await _sleep(ms); await _list(); }
 
+function _resetBluefyGateState() {
+  if (isBluefyClient && bluefyReadGate.armed) {
+    _writeFs(new Uint8Array([FS_READ_READY_CMD, FS_READ_READY_CANCEL]))
+      .catch((err) => console.warn('[wallpaper] Bluefy gate cancel failed', err));
+  }
+  bluefyReadGate.armed = false;
+  log('Bluefy gate reset');
+}
+async function _armBluefyReadGate() {
+  if (!isBluefyClient) return;
+  _resetBluefyGateState();
+  log('Bluefy gate arm request');
+  try {
+    await _writeFs(new Uint8Array([FS_READ_READY_CMD, FS_READ_READY_ARM]));
+    bluefyReadGate.armed = true;
+    log('Bluefy gate armed');
+  } catch (err) {
+    console.warn('[wallpaper] Bluefy gate arm failed', err);
+  }
+}
+function _releaseBluefyReadGate(reason) {
+  if (!isBluefyClient || !bluefyReadGate.armed) return;
+  log('Bluefy gate release', { reason });
+  _writeFs(new Uint8Array([FS_READ_READY_CMD, FS_READ_READY_RELEASE]))
+    .catch((err) => console.warn('[wallpaper] Bluefy gate release failed', reason, err));
+}
+
 async function _read(name) {
   _resetUrls(); _clearPreview();
+  _clearBluefyFlushTimer();
   const enc = new TextEncoder();
   const nm = enc.encode(name.startsWith('/')? name : '/'+name);
   const buf = new Uint8Array(2 + nm.length);
   buf[0]=0x11; buf[1]=nm.length; buf.set(nm,2);
+  if (isBluefyClient) await _armBluefyReadGate();
+  log('_read begin', { name, bluefy:isBluefyClient });
   await _writeFs(buf);
   readState = { name, header:false, size:0, off:0, w:0, h:0, offset:4, rowsDrawn:0, bigEndian:true, buf:null };
 }
@@ -998,17 +1043,27 @@ function _onFsInfo(e){
   log('_onFsInfo', { len: dv.byteLength, first: dv.getUint8(0) });
 
   // READ header
-  if (dv.byteLength === 10 && dv.getUint8(0) === 0x11) {
-    busy.reading = true;
-    readState = {
-      name: (readState?.name)||'',
-      header:true,
+    if (dv.byteLength === 10 && dv.getUint8(0) === 0x11) {
+      busy.reading = true;
+      readState = {
+        name: (readState?.name)||'',
+        header:true,
       w: dv.getUint16(1, true),
       h: dv.getUint16(3, true),
       size: dv.getUint32(6, true),
-      off: 0, rowsDrawn: 0, offset: 4, bigEndian:true, buf:null
+      off: 0, rowsDrawn: 0, offset: 4, bigEndian:true, buf:null, imgData:null,
+      pendingRows:0, lastFlushTs: performance.now(), lightPreview:isBluefyClient
     };
     workCanvas.width = readState.w; workCanvas.height = readState.h;
+    readState.imgData = workCtx.createImageData(readState.w, readState.h);
+    log('READ header', {
+      name: readState.name,
+      w: readState.w,
+      h: readState.h,
+      size: readState.size,
+      offset: readState.offset,
+      bluefyMode: !!readState.lightPreview
+    });
 
     const needRaw = readState.w * readState.h * 2;
     if (readState.size === needRaw) readState.offset = 0; // raw without LVGL header
@@ -1026,6 +1081,9 @@ function _onFsInfo(e){
       viewCtx.restore();
     };
     _drawBadge(0, 0, redrawBase0);
+    if (isBluefyClient) {
+      _releaseBluefyReadGate('header ready');
+    }
     return;
   }
 
@@ -1063,18 +1121,99 @@ function _onFsInfo(e){
     }
   }
 }
+function _flushReadRows(targetRows) {
+  if (!readState || !workCtx) return readState?.rowsDrawn || 0;
+  if (!readState.imgData) {
+    readState.imgData = workCtx.createImageData(readState.w, readState.h);
+  }
+  const startRow = readState.rowsDrawn || 0;
+  const clampedTarget = Math.min(readState.h, Math.max(startRow, targetRows || 0));
+  const rowsToDraw = clampedTarget - startRow;
+  if (rowsToDraw <= 0) return readState.rowsDrawn || 0;
+  logChunk('flushRows', {
+    startRow,
+    target: clampedTarget,
+    rowsToDraw,
+    offset: readState.offset,
+    bytesAvailable: readState.off
+  });
+  _drawRowsRGB565(readState.buf, readState.w, readState.h, readState.imgData, startRow, rowsToDraw, { offset: readState.offset });
+  workCtx.putImageData(readState.imgData, 0, 0);
+  readState.rowsDrawn = clampedTarget;
+  return readState.rowsDrawn;
+}
+
+function _clearBluefyFlushTimer() {
+  if (readState?.pendingTimer) {
+    clearTimeout(readState.pendingTimer);
+    readState.pendingTimer = null;
+  }
+}
+
+function _maybeFlushBluefyRows(force = false) {
+  if (!readState || !readState.lightPreview) return;
+  const pending = Math.max(readState.pendingRows || 0, readState.rowsDrawn || 0);
+  const drawn = readState.rowsDrawn || 0;
+  const now = performance.now();
+  logChunk('_maybeFlushBluefyRows', {
+    force,
+    pending,
+    drawn,
+    since: now - (readState.lastFlushTs || 0)
+  });
+  if (!force) {
+    const gap = pending - drawn;
+    const since = now - (readState.lastFlushTs || 0);
+    if (gap <= 0) {
+      _clearBluefyFlushTimer();
+      return;
+    }
+    if (gap < BLUEFY_FLUSH_ROWS && since < BLUEFY_FLUSH_INTERVAL_MS) {
+      if (!readState.pendingTimer) {
+        readState.pendingTimer = setTimeout(() => {
+          readState.pendingTimer = null;
+          _maybeFlushBluefyRows(true);
+        }, BLUEFY_FLUSH_INTERVAL_MS - since);
+      }
+      return;
+    }
+  }
+  _clearBluefyFlushTimer();
+  const target = force ? pending : pending;
+  _flushReadRows(target);
+  readState.lastFlushTs = now;
+  readState.pendingRows = target;
+  _blit();
+}
+
 function _onFsData(e){
   if (!readState || !readState.header) return;
   const dv = e.target.value;
   const tag = dv.getUint8(0);
   const last = (tag & 1) === 1;
-  log('_onFsData', { tag, last, len: dv.byteLength, off: readState.off, size: readState.size });
+  logChunk('_onFsData chunk', {
+    tag,
+    last,
+    chunk: dv.byteLength - 1,
+    newOff: readState.off,
+    size: readState.size,
+    rowsDrawn: readState.rowsDrawn,
+    bluefyMode: !!readState.lightPreview
+  });
   if ((tag & 0xFE) !== TAG_DATA) return;
 
   const bytes = new Uint8Array(dv.buffer, dv.byteOffset+1, dv.byteLength-1);
   if (!readState.buf) readState.buf = new Uint8Array(readState.size);
   readState.buf.set(bytes, readState.off);
   readState.off += bytes.length;
+  readState.lastProgressTs = performance.now();
+  if (readState.lightPreview) {
+    logChunk('_onFsData accumulate', {
+      bytes: bytes.length,
+      newOff: readState.off,
+      size: readState.size
+    });
+  }
 
   if (ui.prog) ui.prog.value = readState.off;
   const receiveLabel = WP().receiving || 'Receiving…';
@@ -1092,33 +1231,61 @@ function _onFsData(e){
   const rowBytes = readState.w * 2;
   const availBytes = Math.max(0, readState.off - readState.offset);
   const availRows  = Math.min(readState.h, Math.floor(availBytes / rowBytes));
-  if (availRows > 0) {
-    const img = workCtx.createImageData(readState.w, readState.h);
-    _drawRowsRGB565(readState.buf, readState.w, readState.h, img, 0, availRows, { offset: readState.offset });
-    workCtx.putImageData(img, 0, 0);
+  if (availRows > (readState.rowsDrawn || 0)) {
+    if (readState.lightPreview) {
+      const newPending = Math.max(readState.pendingRows || 0, availRows);
+      if (newPending !== readState.pendingRows) {
+        logChunk('pendingRows update', { from: readState.pendingRows || 0, to: newPending });
+      }
+      readState.pendingRows = newPending;
+      _maybeFlushBluefyRows();
+    } else {
+      const drawnRows = _flushReadRows(availRows);
+      const redrawBase = () => {
+        _blit();
+        viewCtx.save();
+        viewCtx.fillStyle = "rgba(0,0,0,0.35)";
+        const yv = _workYtoViewY(drawnRows);
+        viewCtx.fillRect(0, yv, ui.canvas.clientWidth, ui.canvas.clientHeight - yv);
+        viewCtx.restore();
+      };
+      const pct = (readState.off / readState.size) * 100;
+      _drawBadge(drawnRows, pct, redrawBase);
+    }
+  } else if (!readState.lightPreview) {
+    const pct = (readState.off / readState.size) * 100;
+    const redrawBase = () => {
+      _blit();
+      viewCtx.save();
+      viewCtx.fillStyle = "rgba(0,0,0,0.35)";
+      const yv = _workYtoViewY(readState.rowsDrawn || 0);
+      viewCtx.fillRect(0, yv, ui.canvas.clientWidth, ui.canvas.clientHeight - yv);
+      viewCtx.restore();
+    };
+    _drawBadge(readState.rowsDrawn || 0, pct, redrawBase);
   }
-
-  // overlay
-  const redrawBase = () => {
-    _blit();
-    viewCtx.save();
-    viewCtx.fillStyle = "rgba(0,0,0,0.35)";
-    const yv = _workYtoViewY(availRows);
-    viewCtx.fillRect(0, yv, ui.canvas.clientWidth, ui.canvas.clientHeight - yv);
-    viewCtx.restore();
-  };
-  const pct = (readState.off / readState.size) * 100;
-  _drawBadge(availRows, pct, redrawBase);
 
   // done
   if (last && readState.off >= readState.size) {
-    // final pass to ensure full image drawn
-    const img = workCtx.createImageData(readState.w, readState.h);
-    _drawRowsRGB565(readState.buf, readState.w, readState.h, img, 0, readState.h, { offset: readState.offset });
-    workCtx.putImageData(img, 0, 0);
+    if (readState.lightPreview) {
+      readState.pendingRows = Math.max(readState.pendingRows || 0, readState.h);
+      _maybeFlushBluefyRows(true);
+    }
+    const finalRows = readState.lightPreview ? (readState.rowsDrawn || readState.pendingRows || 0) : _flushReadRows(readState.h);
+    log('READ complete', {
+      rows: finalRows,
+      bytes: readState.off,
+      size: readState.size,
+      bluefyMode: !!readState.lightPreview
+    });
     _blit();
-    _fadeBadge(readState.h, _blit);
+    if (!readState.lightPreview) {
+      _fadeBadge(readState.h, _blit);
+    }
 
+    _clearBluefyFlushTimer();
+    _releaseBluefyReadGate('read complete');
+    _resetBluefyGateState();
     _showSaveButtons(readState.name, readState.buf);
 
     busy.reading = false;
