@@ -1384,6 +1384,7 @@ export function applyHistoryI18n(dict) {
     renderChart();
   }
 }
+}
 
 export function setHistoryConsent(ok) {
   consentOk = !!ok;
