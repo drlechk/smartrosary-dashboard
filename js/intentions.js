@@ -1,6 +1,10 @@
-import { $, dec, packKV, le32 } from './utils.js';
+import { $, dec, packKV, le32, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive } from './utils.js';
 import { i18n } from './i18n.js';
 import { getLang } from './ui.js';
+
+const log = (...args) => {
+  try { console.log('[intentions]', ...args); } catch {}
+};
 
 const OP_SET_PREF = 0x50;
 const TYPE_BOOL = 0x01;
@@ -92,15 +96,16 @@ export function initIntentions({ client, setStatus }) {
   const emptyState = $('intentionsEmpty');
   const card = $('intentionsCard');
 
-  const state = {
-    summary: null,
-    entries: [],
-    dirty: false,
-    available: false,
-    busy: false,
-  };
+const state = {
+  summary: null,
+  entries: [],
+  dirty: false,
+  available: false,
+  busy: false,
+};
 
   function setBusy(flag) {
+    log('setBusy', flag);
     state.busy = flag;
     loadBtn.disabled = !state.available || flag;
     saveBtn.disabled = flag || !state.entries.length || !state.available || !state.dirty;
@@ -108,6 +113,7 @@ export function initIntentions({ client, setStatus }) {
   }
 
   function setAvailable(flag, message) {
+    log('setAvailable', { available: flag, message });
     const strings = IL();
     state.available = flag;
     if (card) card.classList.toggle('card-muted', !flag);
@@ -159,6 +165,7 @@ export function initIntentions({ client, setStatus }) {
 
   function renderTable() {
     const strings = IL();
+    const tableLabels = strings.table || {};
     if (!tbody) return;
     tbody.innerHTML = '';
     if (!state.entries.length) {
@@ -171,55 +178,80 @@ export function initIntentions({ client, setStatus }) {
       const tr = document.createElement('tr');
 
       const tdIndex = document.createElement('td');
-      tdIndex.textContent = String(entry.index + 1);
+      tdIndex.dataset.label = tableLabels.index ?? '#';
+      const indexWrap = document.createElement('div');
+      indexWrap.className = 'intentions-index-wrap';
+      const indexNumber = document.createElement('span');
+      indexNumber.className = 'intentions-index';
+      indexNumber.textContent = String(entry.index + 1);
+      indexWrap.appendChild(indexNumber);
+      tdIndex.appendChild(indexWrap);
       tr.appendChild(tdIndex);
 
       const tdTitle = document.createElement('td');
       tdTitle.className = 'intentions-title-cell';
+      tdTitle.dataset.label = tableLabels.title ?? 'Intention';
+
+      const titleWrap = document.createElement('div');
+      titleWrap.className = 'intentions-title-wrap';
+
       const titleSpan = document.createElement('span');
       titleSpan.className = 'intentions-title';
-      titleSpan.textContent = entry.title || strings.fallbackTitle(entry.index + 1);
-      const descBlock = document.createElement('div');
-      descBlock.className = 'intentions-desc';
-      const descToggle = document.createElement('button');
-      descToggle.type = 'button';
-      descToggle.className = 'intentions-desc-toggle';
-      descToggle.textContent = '▸';
-      descToggle.setAttribute('aria-label', strings.descShow);
-      const descText = document.createElement('div');
-      descText.className = 'intentions-desc-text';
-      descText.textContent = entry.desc || '';
-      const descId = `intent-desc-${entry.index}`;
-      descText.id = descId;
-      descToggle.setAttribute('aria-controls', descId);
-      if (!descText.textContent.trim()) {
-        descToggle.disabled = true;
-        descToggle.classList.add('muted');
-        descToggle.textContent = '—';
-        descToggle.removeAttribute('aria-label');
-        descToggle.removeAttribute('aria-controls');
-        descText.style.display = 'none';
-      } else {
+      const titleText = entry.title || strings.fallbackTitle(entry.index + 1);
+      titleSpan.textContent = titleText;
+      titleSpan.title = titleText;
+      titleWrap.appendChild(titleSpan);
+
+      const rawDesc = (entry.desc || '').trim();
+      let descRow = null;
+      let descToggle = null;
+
+      if (rawDesc.length) {
+        const descId = `intent-desc-${entry.index}`;
+        descToggle = document.createElement('button');
+        descToggle.type = 'button';
+        descToggle.className = 'intentions-desc-toggle';
+        descToggle.textContent = '▸';
+        descToggle.setAttribute('aria-label', strings.descShow);
+        descToggle.setAttribute('aria-controls', descId);
         descToggle.setAttribute('aria-expanded', 'false');
+
+        const descCell = document.createElement('td');
+        descCell.colSpan = 5;
+        descCell.className = 'intentions-desc-cell';
+
+        const descText = document.createElement('div');
+        descText.className = 'intentions-desc-text';
+        descText.id = descId;
+        descText.textContent = rawDesc;
         descText.setAttribute('aria-hidden', 'true');
-        descText.style.maxHeight = '0px';
+
+        descCell.appendChild(descText);
+        descRow = document.createElement('tr');
+        descRow.className = 'intentions-desc-row';
+        descRow.hidden = true;
+        descRow.appendChild(descCell);
+
         descToggle.addEventListener('click', () => {
           const stringsClick = IL();
-          const expanded = descText.classList.toggle('expanded');
-          descToggle.textContent = expanded ? '▾' : '▸';
-          descToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-          descToggle.setAttribute('aria-label', expanded ? stringsClick.descHide : stringsClick.descShow);
-          descText.setAttribute('aria-hidden', expanded ? 'false' : 'true');
-          descText.style.maxHeight = expanded ? descText.scrollHeight + 'px' : '0px';
+          const expanded = descToggle.getAttribute('aria-expanded') === 'true';
+          const nextState = !expanded;
+          descToggle.textContent = nextState ? '▾' : '▸';
+          descToggle.setAttribute('aria-expanded', String(nextState));
+          descToggle.setAttribute('aria-label', nextState ? stringsClick.descHide : stringsClick.descShow);
+          descText.setAttribute('aria-hidden', String(!nextState));
+          descRow.hidden = !nextState;
+          descRow.classList.toggle('open', nextState);
         });
+
+        indexWrap.appendChild(descToggle);
       }
-      descBlock.appendChild(descToggle);
-      descBlock.appendChild(descText);
-      tdTitle.appendChild(titleSpan);
-      tdTitle.appendChild(descBlock);
+
+      tdTitle.appendChild(titleWrap);
       tr.appendChild(tdTitle);
 
       const tdDate = document.createElement('td');
+      tdDate.dataset.label = tableLabels.start ?? 'Start Date';
       const inputDate = document.createElement('input');
       inputDate.type = 'date';
       inputDate.value = epochToDateInput(entry.start);
@@ -231,6 +263,7 @@ export function initIntentions({ client, setStatus }) {
       tr.appendChild(tdDate);
 
       const tdSet = document.createElement('td');
+      tdSet.dataset.label = tableLabels.set ?? 'Mystery';
       const selectSet = document.createElement('select');
       getMysteryOptions().forEach((opt) => {
         const option = document.createElement('option');
@@ -247,6 +280,7 @@ export function initIntentions({ client, setStatus }) {
       tr.appendChild(tdSet);
 
       const tdPart = document.createElement('td');
+      tdPart.dataset.label = tableLabels.part ?? 'Part';
       const selectPart = document.createElement('select');
       const blank = document.createElement('option');
       blank.value = '0';
@@ -269,37 +303,80 @@ export function initIntentions({ client, setStatus }) {
       entry.controls = { dateInput: inputDate, setSelect: selectSet, partSelect: selectPart };
 
       tbody.appendChild(tr);
+      if (descRow) {
+        tbody.appendChild(descRow);
+      }
     });
   }
 
   async function readSummary() {
     if (!client.chIntentions) throw new Error(IL().summaryMissing);
+    log('readSummary: request');
     const value = await client.chIntentions.readValue();
     const text = dec.decode(toUint8(value));
-    return safeJsonParse(text);
+    const parsed = safeJsonParse(text);
+    log('readSummary: response', parsed);
+    return parsed;
   }
 
   async function readEntry(index) {
     if (!client.chIntentEntry) throw new Error(IL().entryMissing);
+    log('readEntry: request', index);
     const buf = new Uint8Array([index & 0xff, (index >> 8) & 0xff]);
     await client.chIntentEntry.writeValue(buf);
     await client.waitReady();
     const value = await client.chIntentEntry.readValue();
     const text = dec.decode(toUint8(value));
-    return safeJsonParse(text);
+    const parsed = safeJsonParse(text);
+    log('readEntry: response', { index, parsed });
+    return parsed;
   }
 
-  async function refresh({ silent = false, ignoreBusy = false } = {}) {
+  async function refresh({ silent = false, ignoreBusy = false, consentRetry = false } = {}) {
     if (!state.available) return false;
     if (state.busy && !ignoreBusy) return false;
     const alreadyBusy = state.busy;
     if (!alreadyBusy) setBusy(true);
     const strings = IL();
-    if (!silent) setStatus(strings.statusLoading);
+    const progressLabel = strings.statusLoading || 'Loading intentions…';
+    const useStandaloneProgress = !silent && !progAggregateActive();
+    let standaloneProgressActive = false;
+    const updateStandaloneProgress = (pct) => {
+      if (!standaloneProgressActive) return;
+      try { globalProgressSet(Math.max(0, Math.min(100, pct)), progressLabel); } catch {}
+    };
+    if (useStandaloneProgress) {
+      try {
+        globalProgressStart(progressLabel, 100);
+        standaloneProgressActive = true;
+        updateStandaloneProgress(5);
+      } catch {
+        standaloneProgressActive = false;
+      }
+    }
+    if (!silent) setStatus(() => IL().statusLoading);
+    log('refresh: begin', { silent, ignoreBusy });
     try {
       const summary = await readSummary();
+      updateStandaloneProgress(20);
       state.summary = summary;
       state.entries = [];
+
+      if (summary.requireConsent) {
+        const consentDefault = 'Allow the dashboard on the device, then press “Load” again.';
+        const consentMsg =
+          strings.consentRequired ||
+          consentDefault;
+        state.entries = [];
+        renderTable();
+        clearDirty();
+        showEmpty(consentMsg);
+        autoToggle.disabled = true;
+        log('refresh: requireConsent flag from device');
+        setStatus(() => IL().consentRequired || consentDefault);
+        updateStandaloneProgress(100);
+        return false;
+      }
 
       if (!summary.present) {
         resetTable();
@@ -307,13 +384,16 @@ export function initIntentions({ client, setStatus }) {
         clearDirty();
         const msg = strings.emptySchedule;
         showEmpty(msg);
-        if (!silent) setStatus(msg);
+        if (!silent) setStatus(() => IL().emptySchedule);
+        updateStandaloneProgress(100);
         return true;
       }
 
       const count = Math.min(Number(summary.count) || 0, ROW_LIMIT);
+      log('refresh: summary', { count, auto: summary.auto, selected: summary.selected });
       if (!count) {
         setAvailable(false, strings.emptySchedule);
+        updateStandaloneProgress(100);
         return true;
       }
       const names = typeof summary.names === 'string' ? summary.names.split('\n') : [];
@@ -343,26 +423,49 @@ export function initIntentions({ client, setStatus }) {
           part: detail.part !== undefined ? detail.part : scheduledPart,
           controls: null,
         });
+        if (standaloneProgressActive) {
+          const progressBase = 25;
+          const progressSpan = 55;
+          const pct = progressBase + (count ? ((idx + 1) / count) * progressSpan : progressSpan);
+          updateStandaloneProgress(Math.min(85, pct));
+        }
       }
 
       autoToggle.disabled = !state.entries.length;
       autoToggle.checked = !!summary.auto;
       renderTable();
       clearDirty();
+      updateStandaloneProgress(95);
 
       if (!silent) {
-        const selected = summary.selected != null
-          ? strings.statusSelected(Number(summary.selected) + 1)
-          : strings.statusLoaded;
-        setStatus(`${selected}.`);
+        const selectedIndex = summary.selected != null ? Number(summary.selected) + 1 : null;
+        setStatus(() => {
+          const s = IL();
+          const base = selectedIndex != null ? s.statusSelected(selectedIndex) : s.statusLoaded;
+          return `${base}.`;
+        });
       }
+      updateStandaloneProgress(100);
+      log('refresh: completed', { entries: state.entries.length });
       return true;
     } catch (err) {
       console.error(err);
-      if (!silent) setStatus(`${strings.statusLoadFailed}: ${err.message}`);
+      log('refresh: error', err?.message || err);
+      if (!silent) {
+        const errMsg = err?.message || String(err);
+        setStatus(() => {
+          const s = IL();
+          const base = s.statusLoadFailed || 'Intentions load failed';
+          return `${base}: ${errMsg}`;
+        });
+      }
       return false;
     } finally {
       if (!alreadyBusy) setBusy(false);
+      if (standaloneProgressActive) {
+        try { globalProgressDone(400); } catch {}
+      }
+      log('refresh: end');
     }
   }
 
@@ -378,8 +481,27 @@ export function initIntentions({ client, setStatus }) {
     if (state.busy) return;
     setBusy(true);
     const strings = IL();
-    setStatus(strings.statusSaving);
+    const progressLabel = strings.statusSaving || 'Saving intentions schedule…';
+    const useStandaloneProgress = !progAggregateActive();
+    let standaloneProgressActive = false;
+    const updateStandaloneProgress = (pct) => {
+      if (!standaloneProgressActive) return;
+      try { globalProgressSet(Math.max(0, Math.min(100, pct)), progressLabel); } catch {}
+    };
+    if (useStandaloneProgress) {
+      try {
+        globalProgressStart(progressLabel, 100);
+        standaloneProgressActive = true;
+        updateStandaloneProgress(5);
+      } catch {
+        standaloneProgressActive = false;
+      }
+    }
+    setStatus(() => IL().statusSaving);
+    log('save: begin', { entries: state.entries.length });
     try {
+      const total = state.entries.length || 1;
+      let index = 0;
       for (const entry of state.entries) {
         const startEpoch = dateInputToEpoch(entry.controls?.dateInput?.value) || entry.start || 0;
         const setVal = Number(entry.controls?.setSelect?.value) || entry.set || 0;
@@ -392,26 +514,47 @@ export function initIntentions({ client, setStatus }) {
         await writePref(`i${pad2(entry.index)}s`, TYPE_U32, le32(startEpoch >>> 0));
         await writePref(`i${pad2(entry.index)}m`, TYPE_U8, u8(setVal));
         await writePref(`i${pad2(entry.index)}p`, TYPE_U8, u8(partVal));
+        index += 1;
+        if (standaloneProgressActive) {
+          const progressBase = 15;
+          const progressSpan = 65;
+          const pct = progressBase + ((index / total) * progressSpan);
+          updateStandaloneProgress(Math.min(85, pct));
+        }
       }
 
       await writePref('i-cnt', TYPE_U8, u8(state.entries.length));
       await writePref('i-auto', TYPE_BOOL, u8(autoToggle.checked ? 1 : 0));
+      updateStandaloneProgress(90);
 
       state.summary = state.summary || {};
       state.summary.auto = autoToggle.checked;
       clearDirty();
-      setStatus(strings.statusSavedRefreshing);
+      setStatus(() => IL().statusSavedRefreshing);
       await refresh({ silent: true, ignoreBusy: true });
-      setStatus(strings.statusUpdated);
+      setStatus(() => IL().statusUpdated);
+      updateStandaloneProgress(100);
+      log('save: completed');
     } catch (err) {
       console.error(err);
-      setStatus(`${strings.statusSaveFailed}: ${err.message}`);
+      log('save: error', err?.message || err);
+      const errMsg = err?.message || String(err);
+      setStatus(() => {
+        const s = IL();
+        const base = s.statusSaveFailed || 'Intentions save failed';
+        return `${base}: ${errMsg}`;
+      });
     } finally {
       setBusy(false);
+      if (standaloneProgressActive) {
+        try { globalProgressDone(450); } catch {}
+      }
+      log('save: end');
     }
   }
 
   function onConnected() {
+    log('onConnected');
     const available = !!(client.chIntentions && client.chIntentEntry);
     if (!available) {
       setAvailable(false, IL().editorMissing);
@@ -426,6 +569,7 @@ export function initIntentions({ client, setStatus }) {
   }
 
   function onDisconnected() {
+    log('onDisconnected');
     state.summary = null;
     state.entries = [];
     state.dirty = false;
@@ -442,6 +586,7 @@ export function initIntentions({ client, setStatus }) {
 
   if (loadBtn) {
     loadBtn.addEventListener('click', () => {
+      log('loadBtn clicked');
       if (!state.available) return;
       if (state.dirty && !confirm(IL().confirmDiscard)) return;
       refresh();

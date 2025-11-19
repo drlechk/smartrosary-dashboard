@@ -33,10 +33,20 @@ export const i18n = {
     statusLoadingIntentions:"Loading intentions…",
     statusIntentionsReady:  "Intentions ready",
     statusLoadingHistory:   "Loading history…",
+    statusRefreshing:       "Refreshing…",
     statusHistoryReady:     "History ready",
     statusUpdated: "Up to date.",
     statusResetReq: "Statistics reset requested…",
     statusDisconnected: "Disconnected.",
+    statusAwaitingConsent: "Awaiting on-device consent…",
+    statusReadFailed: (msg) => `Read failed: ${msg}`,
+    statusGenericError: (msg) => `Error: ${msg}`,
+    statusResetFailed: (msg) => `Reset failed: ${msg}`,
+    statusBackupFailed: (msg) => `Backup failed: ${msg}`,
+    statusRestoreFailed: (msg) => `Restore failed: ${msg}`,
+    statusWriteFailed: (msg) => `Write failed: ${msg}`,
+    statusKeysBackupFailed: (msg) => `Keys backup failed: ${msg}`,
+    statusKeysRestoreCancelled: (msg) => `Keys restore cancelled: ${msg}`,
     bkTip: "",
     backupStart: ()=>`Creating backup…`,
     backupDone:  "Backup ready.",
@@ -90,6 +100,7 @@ export const i18n = {
       emptyList: "No intentions found on the device.",
       emptySchedule: "No intentions stored on the device. Flash an intentions NVS image first.",
       emptyDisconnected: "Connect and load to view intentions stored on the device.",
+      consentRequired: "Allow the dashboard on the rosary, then tap Load again.",
       descShow: "Show description",
       descHide: "Hide description",
       fallbackTitle: (idx) => `Intention ${idx}`,
@@ -119,9 +130,13 @@ export const i18n = {
       legendSets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
       legendIntent: "Intention",
       legendRoman: ["I","II","III","IV","V"],
-      periodWeekLabel: "Week",
-      parseSummary: (nrec, decades, chaplets, intentions) =>
-        `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`
+      parseSummary: ({ nrec, decades, chaplets, intentions }) => `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`,
+      periodLabel: (bucket) => {
+        const map = { day: "Today", week: "This week", month: "This month", year: "This year" };
+        return map[bucket] || map.day;
+      },
+      progressDownload: "Downloading history…",
+      progressUpload: "Uploading history…"
     },
     calendar: {
       monthShort: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
@@ -216,10 +231,20 @@ export const i18n = {
     statusLoadingIntentions:"Wczytywanie intencji…",
     statusIntentionsReady:  "Intencje gotowe",
     statusLoadingHistory:   "Wczytywanie historii…",
+    statusRefreshing:       "Odświeżanie…",
     statusHistoryReady:     "Historia gotowa",
     statusUpdated: "Aktualne.",
     statusResetReq: "Żądanie resetu statystyk…",
     statusDisconnected: "Rozłączono.",
+    statusAwaitingConsent: "Oczekiwanie na zgodę na urządzeniu…",
+    statusReadFailed: (msg) => `Błąd odczytu: ${msg}`,
+    statusGenericError: (msg) => `Błąd: ${msg}`,
+    statusResetFailed: (msg) => `Reset nie powiódł się: ${msg}`,
+    statusBackupFailed: (msg) => `Kopia zapasowa nie powiodła się: ${msg}`,
+    statusRestoreFailed: (msg) => `Przywracanie nie powiodło się: ${msg}`,
+    statusWriteFailed: (msg) => `Zapis nie powiódł się: ${msg}`,
+    statusKeysBackupFailed: (msg) => `Eksport kluczy nie powiódł się: ${msg}`,
+    statusKeysRestoreCancelled: (msg) => `Przywracanie kluczy przerwane: ${msg}`,
     bkTip: "",
     backupStart: ()=>`Tworzenie kopii…`,
     backupDone:  "Kopia gotowa.",
@@ -273,6 +298,7 @@ export const i18n = {
       emptyList: "Na urządzeniu nie znaleziono intencji.",
       emptySchedule: "Na urządzeniu nie ma intencji. Wgraj obraz NVS z intencjami.",
       emptyDisconnected: "Połącz urządzenie i wczytaj intencje.",
+      consentRequired: "Zatwierdź dashboard na różańcu, a następnie ponownie wybierz Wczytaj.",
       descShow: "Pokaż opis",
       descHide: "Ukryj opis",
       fallbackTitle: (idx) => `Intencja ${idx}`,
@@ -303,8 +329,13 @@ export const i18n = {
       legendIntent: "Intencja",
       legendRoman: ["I","II","III","IV","V"],
       periodWeekLabel: "Tydzień",
-      parseSummary: (nrec, decades, chaplets, intentions) =>
-        `${nrec} zapis(ów) — dziesiątki:${decades} koronki:${chaplets} z intencją:${intentions}`
+      parseSummary: ({ nrec, decades, chaplets, intentions }) => `${nrec} zapisów — dziesiątki:${decades} koronki:${chaplets} intencje:${intentions}`,
+      periodLabel: (bucket) => {
+        const map = { day: "Dziś", week: "Ten tydzień", month: "Ten miesiąc", year: "Ten rok" };
+        return map[bucket] || map.day;
+      },
+      progressDownload: "Pobieranie historii…",
+      progressUpload: "Wgrywanie historii…"
     },
     calendar: {
       monthShort: ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'],
@@ -385,6 +416,7 @@ export const i18n = {
     statusLoadingIntentions:"Intentionen werden geladen…",
     statusIntentionsReady:  "Intentionen bereit",
     statusLoadingHistory:   "Historie wird geladen…",
+    statusRefreshing:       "Aktualisiere…",
     statusHistoryReady:     "Historie bereit",
     overview: "Übersicht",
     beads: "Perlen", decades: "Gesätzchen", rosaries: "Rosenkränze", chaplets: "Koronen",
@@ -404,6 +436,15 @@ export const i18n = {
     statusUpdated: "Aktuell.",
     statusResetReq: "Zurücksetzen angefordert…",
     statusDisconnected: "Getrennt.",
+    statusAwaitingConsent: "Warte auf Freigabe am Gerät…",
+    statusReadFailed: (msg) => `Lesefehler: ${msg}`,
+    statusGenericError: (msg) => `Fehler: ${msg}`,
+    statusResetFailed: (msg) => `Zurücksetzen fehlgeschlagen: ${msg}`,
+    statusBackupFailed: (msg) => `Backup fehlgeschlagen: ${msg}`,
+    statusRestoreFailed: (msg) => `Wiederherstellung fehlgeschlagen: ${msg}`,
+    statusWriteFailed: (msg) => `Schreiben fehlgeschlagen: ${msg}`,
+    statusKeysBackupFailed: (msg) => `Schlüssel-Backup fehlgeschlagen: ${msg}`,
+    statusKeysRestoreCancelled: (msg) => `Schlüssel-Wiederherstellung abgebrochen: ${msg}`,
     backupStart: ()=>`Backup wird erstellt…`,
     backupDone:  "Backup bereit.",
     restoreStart:"Wiederherstellen…",
@@ -456,6 +497,7 @@ export const i18n = {
       emptyList: "Keine Intentionen auf dem Gerät gefunden.",
       emptySchedule: "Keine Intentionen auf dem Gerät. Flashen Sie zuerst ein NVS-Image mit Intentionen.",
       emptyDisconnected: "Verbinden Sie das Gerät und laden Sie die Intentionen.",
+      consentRequired: "Erteilen Sie die Freigabe direkt am Rosenkranz und tippen Sie anschließend erneut auf Laden.",
       descShow: "Beschreibung anzeigen",
       descHide: "Beschreibung ausblenden",
       fallbackTitle: (idx) => `Intention ${idx}`,
@@ -471,24 +513,28 @@ export const i18n = {
       summaryMissing: "Zusammenfassungs-Charakteristik für Intentionen fehlt",
       entryMissing: "Eintrags-Charakteristik für Intentionen fehlt"
     },
-	    history: {
-	      title: "Historie",
-	      downloadRaw: "Herunterladen",
-	      restoreLabel: "history.bin wiederherstellen",
-	      uploadRestore: "Wiederherstellen",
-	      activity: "Aktivität",
-	      bucket: "Zeitraum:",
-	      bucketOptions: { day: "Tag", week: "Woche", month: "Monat", year: "Jahr" },
-	      prev: "◀ Zurück",
-	      next: "Weiter ▶",
-	      notConnected: "– nicht verbunden –",
-	      legendSets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
-	      legendIntent: "Intention",
-	      legendRoman: ["I","II","III","IV","V"],
-	      periodWeekLabel: "Woche",
-	      parseSummary: (nrec, decades, chaplets, intentions) =>
-	        `${nrec} Eintrag(e) — Gesätzchen:${decades} Koronen:${chaplets} mit Intention:${intentions}`
-	    },
+    history: {
+      title: "Historie",
+      downloadRaw: "Herunterladen",
+      restoreLabel: "history.bin wiederherstellen",
+      uploadRestore: "Wiederherstellen",
+      activity: "Aktivität",
+      bucket: "Zeitraum:",
+      bucketOptions: { day: "Tag", week: "Woche", month: "Monat", year: "Jahr" },
+      prev: "◀ Zurück",
+      next: "Weiter ▶",
+      notConnected: "– nicht verbunden –",
+      legendSets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
+      legendIntent: "Intention",
+      legendRoman: ["I","II","III","IV","V"],
+      parseSummary: ({ nrec, decades, chaplets, intentions }) => `${nrec} Einträge — Gesätzchen:${decades} Koronen:${chaplets} Intentionen:${intentions}`,
+      periodLabel: (bucket) => {
+        const map = { day: "Heute", week: "Diese Woche", month: "Dieser Monat", year: "Dieses Jahr" };
+        return map[bucket] || map.day;
+      },
+      progressDownload: "Historie wird heruntergeladen…",
+      progressUpload: "Historie wird hochgeladen…"
+    },
     calendar: {
       monthShort: ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],
       weekDow:    ['Mo','Di','Mi','Do','Fr','Sa','So']        // Monday-first

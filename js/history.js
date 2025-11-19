@@ -1,5 +1,6 @@
-import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
+//import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
 import { i18n } from './i18n.js';
+import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive } from './utils.js';
 
 // history.js — BLE history explorer card integration
 
@@ -33,6 +34,76 @@ const FALLBACK_LEGEND_ROMAN = ['I','II','III','IV','V'];
 let legendSets = [...FALLBACK_LEGEND_SETS];
 let legendIntentLabel = 'Intention';
 let legendRoman = [...FALLBACK_LEGEND_ROMAN];
+let historyStrings = null;
+
+const HISTORY_PROGRESS_DEFAULT = {
+  download: 'Downloading history…',
+  upload: 'Uploading history…',
+};
+
+function historyProgressLabel(kind) {
+  if (kind === 'upload') {
+    return historyStrings?.progressUpload || HISTORY_PROGRESS_DEFAULT.upload;
+  }
+  return historyStrings?.progressDownload || HISTORY_PROGRESS_DEFAULT.download;
+}
+const historyGlobalProgress = {
+  active: false,
+  label: null,
+  max: 0,
+};
+
+function historyProgressEnsure(label, max, currentValue = 0) {
+  if (progAggregateActive()) return false;
+  const safeLabel = label || 'Working…';
+  const safeMax = Number(max) > 0 ? Number(max) : 100;
+  const safeValue = Math.max(0, Math.min(Number(currentValue) || 0, safeMax));
+  if (!historyGlobalProgress.active) {
+    try {
+      globalProgressStart(safeLabel, safeMax);
+      globalProgressSet(safeValue, safeLabel);
+      historyGlobalProgress.active = true;
+      historyGlobalProgress.label = safeLabel;
+      historyGlobalProgress.max = safeMax;
+    } catch {
+      historyGlobalProgress.active = false;
+      historyGlobalProgress.label = null;
+      historyGlobalProgress.max = 0;
+      return false;
+    }
+  } else {
+    historyGlobalProgress.label = safeLabel;
+    if (safeMax > 0 && historyGlobalProgress.max !== safeMax) {
+      historyGlobalProgress.max = safeMax;
+      try {
+        globalProgressStart(historyGlobalProgress.label, safeMax);
+        globalProgressSet(safeValue, historyGlobalProgress.label);
+      } catch {}
+    }
+  }
+  return true;
+}
+
+function historyProgressUpdate(value, label) {
+  if (!historyGlobalProgress.active || progAggregateActive()) return;
+  const safeLabel = historyGlobalProgress.label || label || 'Working…';
+  const safeMax = historyGlobalProgress.max || 100;
+  const clamped = Math.max(0, Math.min(Number(value) || 0, safeMax));
+  try { globalProgressSet(clamped, safeLabel); } catch {}
+}
+
+function historyProgressComplete(defaultLabel) {
+  const label = defaultLabel || historyGlobalProgress.label || 'Working…';
+  const max = historyGlobalProgress.max || 100;
+  if (historyGlobalProgress.active && !progAggregateActive()) {
+    try { globalProgressSet(max, historyGlobalProgress.label || label); } catch {}
+    try { globalProgressDone(350); } catch {}
+  }
+  historyGlobalProgress.active = false;
+  historyGlobalProgress.label = null;
+  historyGlobalProgress.max = 0;
+}
+let lastSummary = null;
 
 const HISTORY_THEMES = {
   dark: {
@@ -123,6 +194,15 @@ const CHUNK_MAX = 200;
 const CHUNK_MIN = 40;
 let dynChunk = 160;
 
+let historyProgressDelegated = false;
+let historyProgressReporter = null;
+export function setHistoryProgressDelegated(flag) {
+  historyProgressDelegated = !!flag;
+}
+export function setHistoryProgressReporter(fn) {
+  historyProgressReporter = typeof fn === 'function' ? fn : null;
+}
+
 const RETRY_MAX = 6;
 const RETRY_DELAY_MS = 90;
 
@@ -135,12 +215,17 @@ const shades = {
   chaplet:'#8B4513'
 };
 const PK_NAME = ['NONE','JOYFUL','LUMINOUS','SORROWFUL','GLORIOUS','DIVINE_MERCY'];
+const PK_NAME_INTL = {
+  en: ['None','Joyful','Luminous','Sorrowful','Glorious','Chaplet'],
+  pl: ['Brak','Radosne','Tajemnice Światła','Bolesne','Chwalebne','Koronka'],
+  de: ['Keins','Freudenreicher','Lichtreicher','Schmerzhafter','Glorreicher','Korone']
+};
 
 let gRows = [];
 let histChart = null;
 let periodAnchor = null;
 let queueChain = Promise.resolve();
-let lastSummary = null; // { nrec, decades, chaplets, intentions }
+//let lastSummary = null; // { nrec, decades, chaplets, intentions }
 
 function getHistoryStrings() {
   try {
@@ -160,6 +245,85 @@ function enqueue(task) {
 
 function log(...args) {
   console.log('[history]', ...args);
+}
+
+function fallbackParseSummary({ nrec, decades, chaplets, intentions }) {
+  return `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`;
+}
+
+function updateParseSummaryDisplay() {
+  if (!dom.parseSummary) return;
+  if (!lastSummary) {
+    dom.parseSummary.textContent = '';
+    return;
+  }
+  const summary = lastSummary;
+  const strings = historyStrings;
+  if (strings?.parseSummary) {
+    try {
+      const text = strings.parseSummary(summary);
+      if (typeof text === 'string') {
+        dom.parseSummary.textContent = text;
+        return;
+      }
+    } catch (err) {
+      console.warn('parseSummary i18n error', err);
+    }
+  }
+  dom.parseSummary.textContent = fallbackParseSummary(summary);
+}
+
+const PK_LABEL_CACHE = new Map();
+
+function lookupPkLabel(pk) {
+  const key = `${historyStrings?.lang || 'fallback'}:${pk}`;
+  if (PK_LABEL_CACHE.has(key)) return PK_LABEL_CACHE.get(key);
+
+  let label = null;
+  const strings = historyStrings;
+  if (strings?.legendSets && Array.isArray(strings.legendSets) && strings.legendSets[pk]) {
+    label = strings.legendSets[pk];
+  } else {
+    const lang = strings?.lang;
+    if (lang && PK_NAME_INTL[lang] && PK_NAME_INTL[lang][pk]) {
+      label = PK_NAME_INTL[lang][pk];
+    }
+  }
+  if (!label) label = PK_NAME[pk] || `PK${pk}`;
+
+  PK_LABEL_CACHE.set(key, label);
+  return label;
+}
+
+function clearPkLabelCache() {
+  PK_LABEL_CACHE.clear();
+}
+
+function periodTextFallback(bucket) {
+  const txt = periodText(bucket);
+  if (txt && typeof txt === 'string') return txt;
+  switch (bucket) {
+    case 'week': return 'This week';
+    case 'month': return 'This month';
+    case 'year': return 'This year';
+    default: return 'Today';
+  }
+}
+
+function updatePeriodLabelDisplay(bucket = dom.bucketSel?.value || 'day') {
+  if (!dom.periodLabel) return;
+  const strings = historyStrings;
+  const fallback = periodTextFallback(bucket);
+  if (strings?.periodLabel) {
+    try {
+      const text = strings.periodLabel(bucket);
+      dom.periodLabel.textContent = typeof text === 'string' ? text : fallback;
+      return;
+    } catch (err) {
+      console.warn('periodLabel i18n error', err);
+    }
+  }
+  dom.periodLabel.textContent = fallback;
 }
 
 function setCardMuted(muted) {
@@ -194,25 +358,34 @@ function resetProgress() {
     dom.downloadProgress.style.display = 'none';
     dom.downloadProgress.textContent = '';
   }
-  try { globalProgressDone(400); } catch {}
+  historyProgressComplete(historyProgressLabel('download'));
 }
 
 function showProgress() {
   if (!dom.downloadProgress) return;
   if (!downloadActive) {
     dom.downloadProgress.style.display = 'none';
-    try { globalProgressDone(400); } catch {}
     return;
   }
+  const label = historyProgressLabel('download');
   dom.downloadProgress.style.display = 'inline-flex';
   const soFar = downloadTotal > 0 ? Math.min(downloadSoFar, downloadTotal) : downloadSoFar;
   if (downloadTotal > 0) {
     const pct = Math.min(100, Math.floor((soFar * 100) / downloadTotal));
-    dom.downloadProgress.textContent = `Downloading ${soFar}/${downloadTotal} B (${pct}%)`;
-    try { globalProgressStart('Downloading…', 100); globalProgressSet(pct, 'Downloading…'); } catch {}
+    dom.downloadProgress.textContent = `${label} ${soFar}/${downloadTotal} B (${pct}%)`;
+    if (historyProgressDelegated && historyProgressReporter) {
+      historyProgressReporter(pct);
+    } else if (historyProgressEnsure(label, downloadTotal, soFar)) {
+      historyProgressUpdate(soFar, label);
+    }
   } else {
-    dom.downloadProgress.textContent = `Downloading ${soFar} B`;
-    try { globalProgressStart('Downloading…', 100); } catch {}
+    dom.downloadProgress.textContent = `${label} ${soFar} B`;
+    if (!(historyProgressDelegated && historyProgressReporter)) {
+      const fallbackPct = downloadSoFar ? Math.min(95, 15 + Math.floor((Math.min(downloadSoFar, 65536) * 70) / 65536)) : 5;
+      if (historyProgressEnsure(label, 100, fallbackPct)) {
+        historyProgressUpdate(fallbackPct, label);
+      }
+    }
   }
 }
 
@@ -238,20 +411,30 @@ function resetUploadProgress() {
     dom.uploadProg.style.display = 'none';
     dom.uploadProg.textContent = '';
   }
-  try { globalProgressDone(400); } catch {}
+  historyProgressComplete(historyProgressLabel('upload'));
 }
 
 function showUploadProgress() {
   if (!dom.uploadProg) return;
   if (!uploading) {
     dom.uploadProg.style.display = 'none';
-    try { globalProgressDone(400); } catch {}
     return;
   }
   dom.uploadProg.style.display = 'inline-flex';
+  const label = historyProgressLabel('upload');
   const pct = upTotal ? Math.min(100, Math.floor((upSent * 100) / upTotal)) : 0;
-  dom.uploadProg.textContent = `Uploading ${upSent}/${upTotal} B (${pct}%)`;
-   try { globalProgressStart('Uploading…', 100); globalProgressSet(pct, 'Uploading…'); } catch {}
+  if (upTotal) {
+    dom.uploadProg.textContent = `${label} ${upSent}/${upTotal} B (${pct}%)`;
+    if (historyProgressEnsure(label, upTotal, upSent)) {
+      historyProgressUpdate(upSent, label);
+    }
+  } else {
+    dom.uploadProg.textContent = `${label} ${upSent} B`;
+    const fallbackPct = upSent ? Math.min(95, 20 + Math.floor((Math.min(upSent, 65536) * 70) / 65536)) : 5;
+    if (historyProgressEnsure(label, 100, fallbackPct)) {
+      historyProgressUpdate(fallbackPct, label);
+    }
+  }
 }
 
 function resetList() {
@@ -761,7 +944,7 @@ function buildDatasetsFixed(mode) {
         : base;
 
       datasets.push({
-        label: `${PK_NAME[pk] || ('PK' + pk)}${pk === 5 ? '' : (' ' + part)}`,
+        label: `${lookupPkLabel(pk)}${pk === 5 ? '' : (' ' + part)}`,
         data: solid,
         backgroundColor: base,
         borderWidth: 0,
@@ -770,7 +953,7 @@ function buildDatasetsFixed(mode) {
         meta: { pk, part, isIntent: false, baseColor: base }
       });
       datasets.push({
-        label: `${PK_NAME[pk] || ('PK' + pk)}${pk === 5 ? '' : (' ' + part)} (intent)`,
+        label: `${lookupPkLabel(pk)}${pk === 5 ? '' : (' ' + part)} (${legendIntentLabel})`,
         data: intent,
         backgroundColor: stripe,
         borderWidth: 0,
@@ -797,8 +980,6 @@ function renderChart() {
   const ctx = dom.chartCanvas.getContext('2d');
   if (!ctx) return;
 
-  if (dom.periodLabel) dom.periodLabel.textContent = periodText(bucket);
-
   historyPalette = resolveHistoryPalette();
 
   const options = {
@@ -811,6 +992,8 @@ function renderChart() {
     },
     animations: { y: { from: 0, duration: 700, easing: 'easeOutCubic' } }
   };
+
+  updatePeriodLabelDisplay(bucket);
 
   if (!histChart) {
     log('renderChart: creating chart instance');
@@ -948,6 +1131,7 @@ function parseHistory(bytes) {
         `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`;
     }
   }
+  updateParseSummaryDisplay();
 
   log('parseHistory:', { nrec, decades, chaplets, intentions, bucket: dom.bucketSel?.value });
 
@@ -1071,7 +1255,27 @@ function wireUi() {
     hiddenRestoreInput.click();
   });
 
-  dom.downloadBtn?.addEventListener('click', downloadRawFile);
+  dom.downloadBtn?.addEventListener('click', async () => {
+    log('downloadBtn clicked', { connected, consentOk });
+    if (!consentOk) {
+      alert('Allow dashboard access on the device first.');
+      return;
+    }
+    if (!connected) {
+      if (!serverRef) {
+        alert('Connect first.');
+        return;
+      }
+      try {
+        await attachHistoryFS(serverRef);
+      } catch (err) {
+        console.error('History attach failed', err);
+        alert('Failed to bind history service: ' + err.message);
+        return;
+      }
+    }
+    downloadRawFile();
+  });
 
   dom.bucketSel?.addEventListener('change', () => {
     setAnchorToNow(dom.bucketSel.value);
@@ -1093,7 +1297,8 @@ function bootDefaults() {
   resetList();
   resetProgress();
   resetUploadProgress();
-  if (dom.parseSummary) dom.parseSummary.textContent = '';
+  lastSummary = null;
+  updateParseSummaryDisplay();
   if (dom.fsInfo) dom.fsInfo.textContent = '';
   if (dom.bucketSel) dom.bucketSel.value = 'day';
   periodAnchor = startOfTodayUTC();
@@ -1117,6 +1322,8 @@ export function initHistory() {
 
 export function applyHistoryI18n(dict) {
   if (!dict) return;
+  historyStrings = { ...dict };
+  clearPkLabelCache();
   if (dom.title && dict.title) dom.title.textContent = dict.title;
   if (dom.downloadBtn && dict.downloadRaw) dom.downloadBtn.textContent = dict.downloadRaw;
   if (dom.restoreBtn && dict.uploadRestore) dom.restoreBtn.textContent = dict.uploadRestore;
@@ -1155,6 +1362,8 @@ export function applyHistoryI18n(dict) {
     WEEK_DOW = [...WEEK_DOW_DEFAULT];
   }
   // ---
+  updatePeriodLabelDisplay();
+  updateParseSummaryDisplay();
   renderLegend();
 
   // Re-apply summary and period label in the new language if data is present
@@ -1171,6 +1380,8 @@ export function applyHistoryI18n(dict) {
   if (dom.periodLabel && periodAnchor) {
     const bucket = dom.bucketSel?.value || 'day';
     dom.periodLabel.textContent = periodText(bucket);
+  if (histChart) {
+    renderChart();
   }
 }
 
@@ -1179,24 +1390,45 @@ export function setHistoryConsent(ok) {
   setControlsEnabled(connected && consentOk);
 }
 
+export function primeHistoryServer(server) {
+  serverRef = server;
+}
+
 export async function attachHistoryFS(server) {
   serverRef = server;
 
   try {
     log('attachHistoryFS: acquiring history service');
     const svc = await server.getPrimaryService(FS_SVC_UUID);
-    chCtrl = await svc.getCharacteristic(FS_CTRL_UUID);
-    chInfo = await svc.getCharacteristic(FS_INFO_UUID);
-    chData = await svc.getCharacteristic(FS_DATA_UUID);
-    chStat = await svc.getCharacteristic(FS_STAT_UUID);
+    chCtrl = await svc.getCharacteristic(FS_CTRL_UUID); log('attachHistoryFS: CTRL ready');
+    chInfo = await svc.getCharacteristic(FS_INFO_UUID); log('attachHistoryFS: INFO ready');
+    chData = await svc.getCharacteristic(FS_DATA_UUID); log('attachHistoryFS: DATA ready');
+    chStat = await svc.getCharacteristic(FS_STAT_UUID); log('attachHistoryFS: STAT ready');
 
     infoListener = (ev) => onInfo(ev);
     dataListener = (ev) => onData(ev);
     statListener = (ev) => onStat(ev);
 
-    await chInfo.startNotifications();
-    await chData.startNotifications();
-    await chStat.startNotifications();
+    const safeStart = async (char, name) => {
+      const attempts = 2;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          await char.startNotifications();
+          log(`attachHistoryFS: ${name} notifications started${i ? ' (retry)' : ''}`);
+          await sleep(120);
+          return;
+        } catch (err) {
+          const msg = err?.message || err;
+          console.warn(`[history] ${name} startNotifications attempt ${i + 1} failed`, msg);
+          if (i === attempts - 1) throw err;
+          await sleep(180);
+        }
+      }
+    };
+
+    await safeStart(chInfo, 'INFO');
+    await safeStart(chData, 'DATA');
+    await safeStart(chStat, 'STAT');
 
     chInfo.addEventListener('characteristicvaluechanged', infoListener);
     chData.addEventListener('characteristicvaluechanged', dataListener);

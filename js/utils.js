@@ -237,12 +237,30 @@ const __gProg = {
 
 export function globalProgressStart(label, max = 100) {
   try {
+    // When the aggregator is active, the global bar is already managed
+    // by weighted segments. Avoid resetting the bar here; simply ensure
+    // it stays visible.
+    if (__gAgg.active) {
+      const el = document.getElementById('globalProg');
+      if (el) {
+        let fill = el.querySelector('.bar');
+        if (!fill) { fill = document.createElement('div'); fill.className = 'bar'; el.appendChild(fill); }
+        el.hidden = false;
+        el.classList.remove('idle');
+      }
+      const now = Date.now();
+      __gProg.lastUpdate = now;
+      __gProg.lockUntil = now + 300;
+      if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
+      return;
+    }
     const el = document.getElementById('globalProg');
     if (el) {
       const m = Number(max) || 100;
       el.dataset.max = String(m);
       let fill = el.querySelector('.bar');
       if (!fill) { fill = document.createElement('div'); fill.className = 'bar'; el.appendChild(fill); }
+      fill.style.width = '0%';
       el.hidden = false;
       el.classList.remove('idle');
     }
@@ -261,6 +279,9 @@ export function globalProgressSet(value, label) {
     if (__gAgg.active && __gAgg.delegateId) {
       const pct = Math.max(0, Math.min(100, Math.floor(Number(value) || 0)));
       __gAgg.setSegment(__gAgg.delegateId, pct);
+      return;
+    }
+    if (__gAgg.active) {
       return;
     }
     const el = document.getElementById('globalProg');
@@ -325,12 +346,15 @@ const __gAgg = {
   totalWeight: 0,
   segments: new Map(), // id -> { weight, pct }
   order: [],
+  lastLogPct: null,
+  lastOverall: null,
   // Ensure the bar exists and return { el, fill }
   _ensureBar() {
     const el = document.getElementById('globalProg');
     if (!el) return { el: null, fill: null };
     let fill = el.querySelector('.bar');
     if (!fill) { fill = document.createElement('div'); fill.className = 'bar'; el.appendChild(fill); }
+    if (!fill.style.transition) fill.style.transition = 'width 0.35s ease';
     el.hidden = false;
     el.classList.remove('idle');
     return { el, fill };
@@ -345,8 +369,13 @@ const __gAgg = {
       const pct = Math.max(0, Math.min(100, Number(seg.pct) || 0));
       acc += (seg.weight * pct) / 100;
     }
-    const overall = Math.max(0, Math.min(100, Math.floor((acc * 100) / this.totalWeight)));
+    const rawOverall = Math.max(0, Math.min(100, Math.floor((acc * 100) / this.totalWeight)));
+    const overall = (this.lastOverall == null) ? rawOverall : Math.max(this.lastOverall, rawOverall);
     fill.style.width = overall + '%';
+    if (this.lastLogPct === null || Math.abs(overall - this.lastLogPct) >= 3 || overall === 100) {
+      try { console.log('[progress][aggregate]', overall); } catch {}
+      this.lastLogPct = overall;
+    }
     // keep progress visible and non-idle while active
     el.hidden = false;
     el.classList.remove('idle');
@@ -354,6 +383,7 @@ const __gAgg = {
     __gProg.lastUpdate = now;
     __gProg.lockUntil = now + 350;
     if (__gProg.hideTimer) { clearTimeout(__gProg.hideTimer); __gProg.hideTimer = null; }
+    this.lastOverall = overall;
   },
   start(plan) {
     this.active = true;
@@ -361,6 +391,7 @@ const __gAgg = {
     this.totalWeight = 0;
     this.segments.clear();
     this.order = [];
+    this.lastLogPct = null;
     for (const seg of plan || []) {
       if (!seg || !seg.id) continue;
       const w = Number(seg.weight) || 0;
@@ -368,6 +399,7 @@ const __gAgg = {
       this.segments.set(seg.id, { weight: w, pct: 0 });
       this.order.push(seg.id);
     }
+    this.lastOverall = 0;
     // show bar at 0%
     const { el, fill } = this._ensureBar();
     if (el && fill) {
@@ -403,6 +435,8 @@ const __gAgg = {
     }
     this.active = false;
     this.delegateId = null;
+    this.lastLogPct = null;
+    this.lastOverall = null;
     try { globalProgressDone(600); } catch {}
   },
 };
@@ -412,3 +446,4 @@ export function progAggregateSet(id, pct) { __gAgg.setSegment(id, pct); }
 export function progAggregateEnter(id) { __gAgg.enter(id); }
 export function progAggregateLeave(id) { __gAgg.leave(id); }
 export function progAggregateDone() { __gAgg.done(); }
+export function progAggregateActive() { return __gAgg.active; }
