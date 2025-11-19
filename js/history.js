@@ -1,4 +1,5 @@
 import { sleep, downloadBlob, globalProgressStart, globalProgressSet, globalProgressDone } from './utils.js';
+import { i18n } from './i18n.js';
 
 // history.js — BLE history explorer card integration
 
@@ -68,11 +69,12 @@ const hiddenRestoreInput = (() => {
   return input;
 })();
 
-const FS_SVC_UUID   = '12345678-1234-5678-1234-56789abcf000';
-const FS_CTRL_UUID  = '12345678-1234-5678-1234-56789abcf001';
-const FS_INFO_UUID  = '12345678-1234-5678-1234-56789abcf002';
-const FS_DATA_UUID  = '12345678-1234-5678-1234-56789abcf003';
-const FS_STAT_UUID  = '12345678-1234-5678-1234-56789abcf004';
+// Dedicated History FS service (separate from wallpaper FS)
+const FS_SVC_UUID   = '12345678-1234-5678-1234-56789abcf100';
+const FS_CTRL_UUID  = '12345678-1234-5678-1234-56789abcf101';
+const FS_INFO_UUID  = '12345678-1234-5678-1234-56789abcf102';
+const FS_DATA_UUID  = '12345678-1234-5678-1234-56789abcf103';
+const FS_STAT_UUID  = '12345678-1234-5678-1234-56789abcf104';
 
 const OPC = {
   LIST:          0x70,
@@ -138,6 +140,17 @@ let gRows = [];
 let histChart = null;
 let periodAnchor = null;
 let queueChain = Promise.resolve();
+let lastSummary = null; // { nrec, decades, chaplets, intentions }
+
+function getHistoryStrings() {
+  try {
+    const lang = (typeof window !== 'undefined' && window.currentLang) || 'en';
+    const L = i18n[lang] || i18n.en;
+    return L.history || i18n.en.history;
+  } catch {
+    return i18n.en.history;
+  }
+}
 
 function enqueue(task) {
   const run = queueChain.then(() => task());
@@ -651,12 +664,14 @@ function fmtYMD(d) {
 }
 
 function periodText(mode) {
+  const H = getHistoryStrings();
   if (mode === 'day') return fmtYMD(periodAnchor);
   if (mode === 'week') {
     const { start, end } = getPeriodBounds('week');
     const sTxt = fmtYMD(start);
     const eTxt = fmtYMD(new Date(end.getTime() - 1));
-    return `Week: ${sTxt} – ${eTxt}`;
+    const label = (H && H.periodWeekLabel) || 'Week';
+    return `${label}: ${sTxt} – ${eTxt}`;
   }
   if (mode === 'month') {
     const y = periodAnchor.getUTCFullYear();
@@ -922,8 +937,16 @@ function parseHistory(bytes) {
     gRows.push({ date: d, pk, dec, intent });
   }
 
+  lastSummary = { nrec, decades, chaplets, intentions };
+
   if (dom.parseSummary) {
-    dom.parseSummary.textContent = `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`;
+    const H = getHistoryStrings();
+    if (H && typeof H.parseSummary === 'function') {
+      dom.parseSummary.textContent = H.parseSummary(nrec, decades, chaplets, intentions);
+    } else {
+      dom.parseSummary.textContent =
+        `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`;
+    }
   }
 
   log('parseHistory:', { nrec, decades, chaplets, intentions, bucket: dom.bucketSel?.value });
@@ -1133,6 +1156,22 @@ export function applyHistoryI18n(dict) {
   }
   // ---
   renderLegend();
+
+  // Re-apply summary and period label in the new language if data is present
+  if (lastSummary && dom.parseSummary) {
+    const { nrec, decades, chaplets, intentions } = lastSummary;
+    const H = getHistoryStrings();
+    if (H && typeof H.parseSummary === 'function') {
+      dom.parseSummary.textContent = H.parseSummary(nrec, decades, chaplets, intentions);
+    } else {
+      dom.parseSummary.textContent =
+        `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`;
+    }
+  }
+  if (dom.periodLabel && periodAnchor) {
+    const bucket = dom.bucketSel?.value || 'day';
+    dom.periodLabel.textContent = periodText(bucket);
+  }
 }
 
 export function setHistoryConsent(ok) {

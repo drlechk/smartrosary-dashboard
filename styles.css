@@ -541,41 +541,13 @@ td.actions .actions-wrap { display: inline-flex; align-items: center; gap: 6px; 
 .intentions-desc-text.expanded { }
 
 /* --- Light theme overrides --- */
+/* Keep the same global background/colors as dark mode; only cards and inner surfaces differ. */
 body.theme-light {
-  color-scheme: light;
-  background: linear-gradient(180deg, #f2f7ff 0%, #dfeaff 55%, #cfe0ff 100%);
-  color:#0f172a;
+  color-scheme: dark;
+  background: var(--bg);
+  color:#eaf0f6;
 }
-body.theme-light header,
-body.theme-light .toolbar-wrap {
-  background:#e6f1ff;
-  border-color:#c3d7ff;
-}
-body.theme-light .header-with-lang h1 { color:#1e3a8a; }
-body.theme-light #themeToggle {
-  background:#ffffff;
-  color:#0f172a;
-  border:1px solid #d1d5db;
-}
-body.theme-light #themeToggle:hover { background:#f1f5f9; }
-body.theme-light #langSelect {
-  background:#ffffff;
-  color:#0f172a;
-  border:1px solid #d1d5db;
-}
-body.theme-light .toolbar-status { color:#1d4ed8; }
-body.theme-light button,
-body.theme-light select {
-  background:#ffffff;
-  color:#0f172a;
-  border:1px solid #d1d5db;
-}
-body.theme-light #refreshBtn { color:#ffffff; }
-body.theme-light button:disabled,
-body.theme-light select:disabled {
-  background:#f3f4f6;
-  color:#9ca3af;
-}
+/* Header + toolbar look the same in light and dark; rely on base styles above. */
 body.theme-light .card {
   background:#ffffff;
   border:1px solid #e5e7eb;
@@ -597,7 +569,7 @@ body.theme-light .badge {
 body.theme-light .badge.muted { background:#eef2f7; color:#64748b; }
 body.theme-light .muted,
 body.theme-light .smallnote { color:#64748b; }
-body.theme-light #status { color:#334155; }
+body.theme-light #status { color:#ffffff; }
 body.theme-light .settings-list .setting {
   background:#f9fafb;
   border:1px solid #e5e7eb;
@@ -644,9 +616,7 @@ body.theme-light progress {
 body.theme-light progress::-webkit-progress-bar {
   background:#eef2f7;
 }
-body.theme-light .toolbar-progress {
-  background:#dbeafe;
-}
+/* Toolbar progress bar uses same colors in light/dark (see base .toolbar-progress). */
 body.theme-light .history-panel {
   background:#ffffff;
   border:1px solid #e5e7eb;
@@ -670,11 +640,20 @@ body.theme-light .history-card button.danger {
   border:1px solid #fecaca;
   color:#991b1b;
 }
+/* History buttons: force white text in light mode */
+body.theme-light .history-card button {
+  color:#ffffff;
+}
+/* History bucket selector: white text in light mode */
+body.theme-light #histBucketSel {
+  color:#ffffff;
+}
 body.theme-light table.files th,
 body.theme-light table.files td {
   border-bottom:1px solid #e5e7eb;
 }
 body.theme-light table.files th { color:#0f172a; }
+body.theme-light table.files td { color:#0f172a; }
 body.theme-light .canvas-shell,
 body.theme-light .wp-canvas-shell { background:#f3f4f6; }
 body.theme-light #lvgl_canvas {

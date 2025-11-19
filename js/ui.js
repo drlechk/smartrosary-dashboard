@@ -5,6 +5,7 @@ import { applyHistoryI18n, applyHistoryTheme } from './history.js';
 import { i18n } from './i18n.js';
 
 let lang = 'pl';
+try { if (typeof window !== 'undefined') window.currentLang = lang; } catch {}
 let lastStats = null;
 let lastSettings = null;
 let lastStatusKey = null; // i18n key of last status (if set via key)
@@ -43,7 +44,11 @@ function cacheSettings(patch) {
 }
 
 export function getLang() { return lang; }
-export function setLang(v){ lang = v; applyI18n(); }
+export function setLang(v){
+  lang = v;
+  try { if (typeof window !== 'undefined') window.currentLang = v; } catch {}
+  applyI18n();
+}
 
 // Status helpers so status can re-localize on language change
 export function setStatusKey(key, fallback) {

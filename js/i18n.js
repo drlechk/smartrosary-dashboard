@@ -118,7 +118,10 @@ export const i18n = {
       notConnected: "– not connected –",
       legendSets: ["None","Joyful","Sorrowful","Glorious","Luminous","Chaplet"],
       legendIntent: "Intention",
-      legendRoman: ["I","II","III","IV","V"]
+      legendRoman: ["I","II","III","IV","V"],
+      periodWeekLabel: "Week",
+      parseSummary: (nrec, decades, chaplets, intentions) =>
+        `${nrec} record(s) — decades:${decades} chaplets:${chaplets} intentions:${intentions}`
     },
     calendar: {
       monthShort: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
@@ -298,7 +301,10 @@ export const i18n = {
       notConnected: "– brak połączenia –",
       legendSets: ["Brak","Radosne","Bolesne","Chwalebne","Światła","Koronka"],
       legendIntent: "Intencja",
-      legendRoman: ["I","II","III","IV","V"]
+      legendRoman: ["I","II","III","IV","V"],
+      periodWeekLabel: "Tydzień",
+      parseSummary: (nrec, decades, chaplets, intentions) =>
+        `${nrec} zapis(ów) — dziesiątki:${decades} koronki:${chaplets} z intencją:${intentions}`
     },
     calendar: {
       monthShort: ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'],
@@ -465,21 +471,24 @@ export const i18n = {
       summaryMissing: "Zusammenfassungs-Charakteristik für Intentionen fehlt",
       entryMissing: "Eintrags-Charakteristik für Intentionen fehlt"
     },
-    history: {
-      title: "Historie",
-      downloadRaw: "Herunterladen",
-      restoreLabel: "history.bin wiederherstellen",
-      uploadRestore: "Wiederherstellen",
-      activity: "Aktivität",
-      bucket: "Zeitraum:",
-      bucketOptions: { day: "Tag", week: "Woche", month: "Monat", year: "Jahr" },
-      prev: "◀ Zurück",
-      next: "Weiter ▶",
-      notConnected: "– nicht verbunden –",
-      legendSets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
-      legendIntent: "Intention",
-      legendRoman: ["I","II","III","IV","V"]
-    },
+	    history: {
+	      title: "Historie",
+	      downloadRaw: "Herunterladen",
+	      restoreLabel: "history.bin wiederherstellen",
+	      uploadRestore: "Wiederherstellen",
+	      activity: "Aktivität",
+	      bucket: "Zeitraum:",
+	      bucketOptions: { day: "Tag", week: "Woche", month: "Monat", year: "Jahr" },
+	      prev: "◀ Zurück",
+	      next: "Weiter ▶",
+	      notConnected: "– nicht verbunden –",
+	      legendSets: ["Keins","Freudenreiche","Schmerzensreiche","Glorreiche","Lichtreiche","Korone"],
+	      legendIntent: "Intention",
+	      legendRoman: ["I","II","III","IV","V"],
+	      periodWeekLabel: "Woche",
+	      parseSummary: (nrec, decades, chaplets, intentions) =>
+	        `${nrec} Eintrag(e) — Gesätzchen:${decades} Koronen:${chaplets} mit Intention:${intentions}`
+	    },
     calendar: {
       monthShort: ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'],
       weekDow:    ['Mo','Di','Mi','Do','Fr','Sa','So']        // Monday-first

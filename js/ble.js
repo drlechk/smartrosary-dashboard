@@ -4,6 +4,7 @@ import { withRetry, readWithRetry, sleep } from './utils.js';
 export const UUID = {
   OTA_SVC:          '12345678-1234-5678-1234-56789abcdef0',
   FS_SVC:           '12345678-1234-5678-1234-56789abcf000',
+  FS_HIST_SVC:      '12345678-1234-5678-1234-56789abcf100',
   INFO_STATS:       'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1001',
   INFO_SETTINGS:    'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1002',
   INFO_CTRL:        'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10ff',
@@ -49,12 +50,12 @@ export class BleClient extends EventTarget {
     try {
       dev = await navigator.bluetooth.requestDevice({
         filters: [{ services: [UUID.OTA_SVC] }],
-        optionalServices: [UUID.OTA_SVC, UUID.FS_SVC],
+        optionalServices: [UUID.OTA_SVC, UUID.FS_SVC, UUID.FS_HIST_SVC],
       });
     } catch {
       dev = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: [UUID.OTA_SVC, UUID.FS_SVC],
+        optionalServices: [UUID.OTA_SVC, UUID.FS_SVC, UUID.FS_HIST_SVC],
       });
       if (!dev.name || !dev.name.toLowerCase().startsWith('rosary')) {
         throw new Error('Please pick your Rosary device.');
