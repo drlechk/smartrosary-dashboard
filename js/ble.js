@@ -9,6 +9,7 @@ export const UUID = {
   OTA_SVC:          '12345678-1234-5678-1234-56789abcdef0',
   FS_SVC:           '12345678-1234-5678-1234-56789abcf000',
   FS_HIST_SVC:      '12345678-1234-5678-1234-56789abcf100',
+  INTENTIONS_BIN:   '12345678-1234-5678-1234-56789abcde10',
   INFO_STATS:       'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1001',
   INFO_SETTINGS:    'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1002',
   INFO_CTRL:        'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10ff',
@@ -35,6 +36,7 @@ export class BleClient extends EventTarget {
     this.chParts = null;
     this.chIntentions = null;
     this.chIntentEntry = null;
+    this.chIntentionsBin = null;
     this.statusChar = null;
 
     this.chAuthInfo = null;
@@ -174,6 +176,13 @@ export class BleClient extends EventTarget {
     } catch (err) {
       this.chIntentEntry = null;
       log('INFO_INTENT_ENTRY characteristic missing', err?.message || err);
+    }
+    try {
+      this.chIntentionsBin = await withRetry(() => this.service.getCharacteristic(UUID.INTENTIONS_BIN));
+      log('INTENTIONS_BIN characteristic ready');
+    } catch (err) {
+      this.chIntentionsBin = null;
+      log('INTENTIONS_BIN characteristic missing', err?.message || err);
     }
 
     // auth (optional)

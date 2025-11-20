@@ -249,7 +249,11 @@
             <p class="muted" id="intentionsIntro">Review monthly intentions stored on the rosary, adjust start dates and mysteries, then push the schedule back to the device.</p>
           </div>
           <div class="intentions-actions">
-            <button id="intentionsLoadBtn" disabled>Load</button>
+            <input type="file" id="intentionsRestoreInput" accept="application/json" style="display:none">
+            <button id="intentionsDownloadBtn" disabled>Download</button>
+            <button id="intentionsRestoreBtn" disabled>Restore</button>
+            <button id="intentionsResetBtn" disabled>Reset schedule</button>
+            <button id="intentionsDeleteBtn" disabled>Delete intentions</button>
             <button id="intentionsSaveBtn" disabled>Save Changes</button>
           </div>
         </div>

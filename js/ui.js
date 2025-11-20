@@ -150,10 +150,16 @@ export function applyI18n() {
   setTxt('intentionsTitle', IL.title || 'Intentions Scheduler');
   const intentionsIntro = $('intentionsIntro');
   if (intentionsIntro && IL.intro) intentionsIntro.textContent = IL.intro;
-  const intentionsLoadBtn = $('intentionsLoadBtn');
-  if (intentionsLoadBtn && IL.loadBtn) intentionsLoadBtn.textContent = IL.loadBtn;
   const intentionsSaveBtn = $('intentionsSaveBtn');
   if (intentionsSaveBtn && IL.saveBtn) intentionsSaveBtn.textContent = IL.saveBtn;
+  const intentionsDownloadBtn = $('intentionsDownloadBtn');
+  if (intentionsDownloadBtn && IL.downloadBtn) intentionsDownloadBtn.textContent = IL.downloadBtn;
+  const intentionsRestoreBtn = $('intentionsRestoreBtn');
+  if (intentionsRestoreBtn && IL.restoreBtn) intentionsRestoreBtn.textContent = IL.restoreBtn;
+  const intentionsResetBtn = $('intentionsResetBtn');
+  if (intentionsResetBtn && IL.resetBtn) intentionsResetBtn.textContent = IL.resetBtn;
+  const intentionsDeleteBtn = $('intentionsDeleteBtn');
+  if (intentionsDeleteBtn && IL.deleteBtn) intentionsDeleteBtn.textContent = IL.deleteBtn;
   setTxt('intentionsAutoLabel', IL.autoLabel || '');
   const intentionsHint = $('intentionsHint');
   if (intentionsHint && IL.hint) intentionsHint.textContent = IL.hint;

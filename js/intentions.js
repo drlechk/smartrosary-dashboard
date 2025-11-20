@@ -1,6 +1,8 @@
-import { $, dec, packKV, le32, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive } from './utils.js';
+import { $, enc, dec, packKV, le32, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive, downloadBlob, openFilePicker } from './utils.js';
 import { i18n } from './i18n.js';
 import { getLang } from './ui.js';
+import { buildIntentionsBin, crc32Bytes } from './intentions-nvs.js';
+import { UUID } from './ble.js';
 
 const log = (...args) => {
   try { console.log('[intentions]', ...args); } catch {}
@@ -14,6 +16,9 @@ const TYPE_U32 = 0x14;
 const DEFAULT_SET_LABELS = ['None', 'Joyful', 'Sorrowful', 'Glorious', 'Luminous', 'Chaplet'];
 
 const ROW_LIMIT = 32;
+const EXPORT_VERSION = 1;
+const NVS_FILENAME = 'nvs-intentions.bin';
+const NVS_CHUNK_SIZE = 320;
 
 function toUint8(view) {
   if (!view) return new Uint8Array();
@@ -87,29 +92,55 @@ function safeJsonParse(text) {
   }
 }
 
+async function getIntentionsWriteChar(client) {
+  if (client.chIntentionsBin) return client.chIntentionsBin;
+  try {
+    const svc = client.service || (client.server && await client.server.getPrimaryService(UUID.OTA_SVC));
+    if (!svc) return null;
+    const ch = await svc.getCharacteristic(UUID.INTENTIONS_BIN);
+    client.chIntentionsBin = ch;
+    return ch;
+  } catch (err) {
+    console.warn('intentions write char missing', err);
+    return null;
+  }
+}
+
 export function initIntentions({ client, setStatus }) {
-  const loadBtn = $('intentionsLoadBtn');
   const saveBtn = $('intentionsSaveBtn');
+  const downloadBtn = $('intentionsDownloadBtn');
+  const restoreBtn = $('intentionsRestoreBtn');
+  const restoreInput = $('intentionsRestoreInput');
+  const resetBtn = $('intentionsResetBtn');
+  const deleteBtn = $('intentionsDeleteBtn');
   const autoToggle = $('intentionsAuto');
   const table = $('intentionsTable');
   const tbody = table ? table.querySelector('tbody') : null;
   const emptyState = $('intentionsEmpty');
   const card = $('intentionsCard');
 
-const state = {
-  summary: null,
-  entries: [],
-  dirty: false,
-  available: false,
-  busy: false,
-};
+  const state = {
+    summary: null,
+    entries: [],
+    dirty: false,
+    available: false,
+    busy: false,
+  };
+
+  function updateActions() {
+    const hasEntries = !!state.entries.length;
+    if (saveBtn) saveBtn.disabled = state.busy || !hasEntries || !state.available || !state.dirty;
+    if (downloadBtn) downloadBtn.disabled = state.busy || !state.available || !hasEntries;
+    if (restoreBtn) restoreBtn.disabled = state.busy || !state.available;
+    if (resetBtn) resetBtn.disabled = state.busy || !state.available;
+    if (deleteBtn) deleteBtn.disabled = state.busy || !state.available;
+    if (autoToggle) autoToggle.disabled = state.busy || !hasEntries || !state.available;
+  }
 
   function setBusy(flag) {
     log('setBusy', flag);
     state.busy = flag;
-    loadBtn.disabled = !state.available || flag;
-    saveBtn.disabled = flag || !state.entries.length || !state.available || !state.dirty;
-    autoToggle.disabled = flag || !state.entries.length;
+    updateActions();
   }
 
   function setAvailable(flag, message) {
@@ -119,19 +150,17 @@ const state = {
     if (card) card.classList.toggle('card-muted', !flag);
     if (!flag) {
       showEmpty(message || strings.serviceMissing);
-      loadBtn.disabled = true;
-      saveBtn.disabled = true;
-      autoToggle.disabled = true;
-      autoToggle.checked = false;
+      if (autoToggle) {
+        autoToggle.disabled = true;
+        autoToggle.checked = false;
+      }
       state.summary = null;
       state.entries = [];
       state.dirty = false;
     } else {
-      loadBtn.disabled = false;
-      saveBtn.disabled = true;
-      autoToggle.disabled = true;
       showEmpty(strings.promptLoad);
     }
+    updateActions();
   }
 
   function showEmpty(message) {
@@ -150,17 +179,18 @@ const state = {
   function resetTable() {
     if (tbody) tbody.innerHTML = '';
     showEmpty(IL().promptLoad);
+    updateActions();
   }
 
   function markDirty() {
     if (!state.available) return;
     state.dirty = true;
-    saveBtn.disabled = state.busy || !state.entries.length;
+    updateActions();
   }
 
   function clearDirty() {
     state.dirty = false;
-    saveBtn.disabled = true;
+    updateActions();
   }
 
   function renderTable() {
@@ -374,7 +404,7 @@ const state = {
       state.entries = [];
 
       if (summary.requireConsent) {
-        const consentDefault = 'Allow the dashboard on the device, then press “Load” again.';
+        const consentDefault = 'Allow the dashboard on the device, then try again.';
         const consentMsg =
           strings.consentRequired ||
           consentDefault;
@@ -382,7 +412,8 @@ const state = {
         renderTable();
         clearDirty();
         showEmpty(consentMsg);
-        autoToggle.disabled = true;
+        if (autoToggle) autoToggle.checked = false;
+        updateActions();
         log('refresh: requireConsent flag from device');
         setStatus(() => IL().consentRequired || consentDefault);
         updateStandaloneProgress(100);
@@ -391,7 +422,7 @@ const state = {
 
       if (!summary.present) {
         resetTable();
-        autoToggle.disabled = true;
+        if (autoToggle) autoToggle.checked = false;
         clearDirty();
         const msg = strings.emptySchedule;
         showEmpty(msg);
@@ -403,7 +434,12 @@ const state = {
       const count = Math.min(Number(summary.count) || 0, ROW_LIMIT);
       log('refresh: summary', { count, auto: summary.auto, selected: summary.selected });
       if (!count) {
-        setAvailable(false, strings.emptySchedule);
+        state.entries = [];
+        renderTable();
+        clearDirty();
+        showEmpty(strings.emptySchedule);
+        if (autoToggle) autoToggle.checked = false;
+        updateActions();
         updateStandaloneProgress(100);
         return true;
       }
@@ -442,10 +478,10 @@ const state = {
         }
       }
 
-      autoToggle.disabled = !state.entries.length;
-      autoToggle.checked = !!summary.auto;
+      if (autoToggle) autoToggle.checked = !!summary.auto;
       renderTable();
       clearDirty();
+      updateActions();
       updateStandaloneProgress(95);
 
       if (!silent) {
@@ -564,6 +600,270 @@ const state = {
     }
   }
 
+  function buildExportPayload() {
+    const entries = state.entries.map((entry, idx) => {
+      const startEpoch = dateInputToEpoch(entry.controls?.dateInput?.value) || entry.start || 0;
+      const setVal = Number(entry.controls?.setSelect?.value ?? entry.set ?? 0) || 0;
+      const partVal = Number(entry.controls?.partSelect?.value ?? entry.part ?? 0) || 0;
+      return {
+        index: idx,
+        start: startEpoch,
+        set: setVal,
+        part: partVal,
+      };
+    });
+    const summary = state.summary || {};
+    return {
+      version: EXPORT_VERSION,
+      generatedAt: new Date().toISOString(),
+      auto: !!summary.auto,
+      selected: summary.selected != null ? Number(summary.selected) : null,
+      count: entries.length,
+      entries,
+    };
+  }
+
+  function parseRestorePayload(data) {
+    if (!data || typeof data !== 'object') throw new Error(IL().invalidJson || 'Invalid JSON payload');
+    const rawEntries = Array.isArray(data.entries)
+      ? data.entries
+      : Array.isArray(data.intentions)
+        ? data.intentions
+        : null;
+    if (!rawEntries || !rawEntries.length) {
+      throw new Error(IL().restoreNoEntries || 'No intentions found in file.');
+    }
+    const existingByIndex = new Map();
+    state.entries.forEach((e) => { existingByIndex.set(e.index, e); });
+    const strings = IL();
+    const normalized = rawEntries.slice(0, ROW_LIMIT).map((entry, idx) => {
+      const setVal = Math.max(0, Math.min(5, Number(entry?.set) || 0));
+      const partVal = Math.max(0, Math.min(5, Number(entry?.part) || 0));
+      let startVal = Number(entry?.start) || 0;
+      if (!startVal && idx < 12) {
+        startVal = defaultMonthStartEpoch(idx);
+      }
+      const index = Number.isFinite(entry?.index) ? Number(entry.index) : idx;
+      const existing = existingByIndex.get(index);
+      const title = existing?.title || strings.fallbackTitle(index + 1);
+      const desc = existing?.desc || '';
+      return {
+        index,
+        title,
+        desc,
+        start: startVal,
+        set: setVal,
+        part: partVal,
+        controls: null,
+      };
+    });
+    normalized.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+    normalized.forEach((entry, idx) => { entry.index = idx; });
+    const auto = data.auto;
+    return { entries: normalized, auto };
+  }
+
+  async function downloadIntentions() {
+    if (!state.available) {
+      alert(IL().connectFirst || 'Connect to the rosary first.');
+      return;
+    }
+    if (state.busy) return;
+    if (!state.entries.length) {
+      alert(IL().emptyList || 'No intentions found on the device.');
+      return;
+    }
+    const strings = IL();
+    try {
+      const payload = buildExportPayload();
+      setStatus(() => strings.statusDownloading || 'Preparing intentions download…');
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const now = new Date();
+      const stamp = `${now.getUTCFullYear()}${pad2(now.getUTCMonth() + 1)}${pad2(now.getUTCDate())}`;
+      downloadBlob(blob, `intentions_${stamp}.json`);
+      setStatus(() => strings.statusUpdated || 'Intentions updated.');
+    } catch (err) {
+      console.error(err);
+      const errMsg = err?.message || String(err);
+      setStatus(() => {
+        const base = strings.statusDownloadFailed || 'Intentions download failed';
+        return `${base}: ${errMsg}`;
+      });
+    }
+  }
+
+  async function restoreFromFile(file) {
+    if (!file) return;
+    if (!state.available) {
+      alert(IL().connectFirst || 'Connect to the rosary first.');
+      return;
+    }
+    if (state.busy) return;
+    const strings = IL();
+    let data = null;
+    try {
+      const text = await file.text();
+      data = JSON.parse(text);
+    } catch (err) {
+      console.error(err);
+      alert(strings.invalidJson || 'Invalid JSON payload');
+      return;
+    }
+
+    let parsed = null;
+    try {
+      parsed = parseRestorePayload(data);
+    } catch (err) {
+      console.error(err);
+      alert(err?.message || (strings.invalidJson || 'Invalid JSON payload'));
+      return;
+    }
+
+    if (state.dirty && !confirm(strings.confirmDiscard || 'Discard unsaved intention edits?')) return;
+    if (!confirm(strings.confirmRestore || 'Restore and overwrite the intentions schedule from this file?')) return;
+
+    state.entries = parsed.entries;
+    state.summary = state.summary || {};
+    if (parsed.auto != null) state.summary.auto = !!parsed.auto;
+    if (autoToggle) autoToggle.checked = !!state.summary.auto;
+    renderTable();
+    clearDirty();
+    markDirty();
+
+    try {
+      setStatus(() => strings.statusRestoring || 'Restoring intentions…');
+      await save();
+      setStatus(() => strings.statusRestoreDone || strings.statusUpdated || 'Intentions restored.');
+    } catch (err) {
+      console.error(err);
+      const errMsg = err?.message || String(err);
+      setStatus(() => {
+        const base = strings.statusRestoreFailed || 'Intentions restore failed';
+        return `${base}: ${errMsg}`;
+      });
+    } finally {
+      updateActions();
+    }
+  }
+
+  async function uploadIntentionsBin(data, { statusLabel }) {
+    const ch = await getIntentionsWriteChar(client);
+    if (!ch) throw new Error('Intentions upload characteristic missing');
+    const strings = IL();
+    const label = statusLabel || strings.statusDeleting || 'Deleting intentions…';
+    const useStandaloneProgress = !progAggregateActive();
+    let standaloneProgressActive = false;
+    const updateStandaloneProgress = (pct) => {
+      if (!standaloneProgressActive) return;
+      try { globalProgressSet(Math.max(0, Math.min(100, pct)), label); } catch {}
+    };
+    if (useStandaloneProgress) {
+      try {
+        globalProgressStart(label, 100);
+        standaloneProgressActive = true;
+        updateStandaloneProgress(4);
+      } catch {
+        standaloneProgressActive = false;
+      }
+    }
+    try {
+      await ch.writeValue(enc.encode(NVS_FILENAME));
+      await client.waitReady(8000);
+      let offset = 0;
+      while (offset < data.length) {
+        const len = Math.min(NVS_CHUNK_SIZE, data.length - offset);
+        const chunk = data.slice(offset, offset + len);
+        const pkt = new Uint8Array(len + 4);
+        pkt.set(chunk);
+        const crc = crc32Bytes(chunk);
+        const dv = new DataView(pkt.buffer, pkt.byteOffset, pkt.byteLength);
+        dv.setUint32(len, crc, true);
+        await ch.writeValue(pkt);
+        await client.waitReady(8000);
+        offset += len;
+        const pct = Math.min(95, Math.round((offset / data.length) * 100));
+        updateStandaloneProgress(pct);
+      }
+      updateStandaloneProgress(100);
+    } finally {
+      if (standaloneProgressActive) {
+        try { globalProgressDone(400); } catch {}
+      }
+    }
+  }
+
+  async function resetSchedule() {
+    if (!state.available || state.busy) return;
+    const strings = IL();
+    if (!confirm(strings.confirmReset || 'Reset the intentions schedule on the device?')) return;
+    if (!state.entries.length) {
+      alert(strings.emptyList || 'No intentions found on the device.');
+      return;
+    }
+
+    // Normalize schedule fields back to defaults but keep titles/descriptions intact.
+    state.entries.forEach((entry, idx) => {
+      const nextStart = idx < 12 ? defaultMonthStartEpoch(idx) : 0;
+      entry.start = nextStart;
+      entry.set = 0;
+      entry.part = 0;
+      if (entry.controls?.dateInput) entry.controls.dateInput.value = epochToDateInput(nextStart);
+      if (entry.controls?.setSelect) entry.controls.setSelect.value = '0';
+      if (entry.controls?.partSelect) entry.controls.partSelect.value = '0';
+    });
+    state.summary = state.summary || {};
+    state.summary.auto = false;
+    if (autoToggle) autoToggle.checked = false;
+    markDirty();
+    setBusy(true);
+    try {
+      setStatus(() => strings.statusResetting || 'Resetting intentions…');
+      await save();
+      setStatus(() => strings.statusResetDone || strings.statusUpdated || 'Intentions reset.');
+    } catch (err) {
+      console.error(err);
+      const errMsg = err?.message || String(err);
+      setStatus(() => {
+        const base = strings.statusResetFailed || 'Intentions reset failed';
+        return `${base}: ${errMsg}`;
+      });
+    } finally {
+      setBusy(false);
+      updateActions();
+    }
+  }
+
+  async function deleteIntentions() {
+    if (!state.available || state.busy) return;
+    const strings = IL();
+    if (!confirm(strings.confirmDelete || 'Delete all intentions from the device? This cannot be undone.')) return;
+    setBusy(true);
+    try {
+      setStatus(() => strings.statusDeleting || 'Deleting intentions…');
+      const blank = buildIntentionsBin({ numIntentions: 0, iS: '', titles: [], descs: [] });
+      await uploadIntentionsBin(blank, { statusLabel: strings.statusDeleting });
+      await writePref('i-cnt', TYPE_U8, u8(0));
+      await writePref('i-auto', TYPE_BOOL, u8(0));
+      state.summary = null;
+      state.entries = [];
+      renderTable();
+      clearDirty();
+      showEmpty(strings.emptySchedule || 'No intentions stored on the device.');
+      if (autoToggle) autoToggle.checked = false;
+      setStatus(() => strings.statusDeleteDone || strings.statusUpdated || 'Intentions deleted.');
+    } catch (err) {
+      console.error(err);
+      const errMsg = err?.message || String(err);
+      setStatus(() => {
+        const base = strings.statusDeleteFailed || 'Intentions delete failed';
+        return `${base}: ${errMsg}`;
+      });
+    } finally {
+      setBusy(false);
+      updateActions();
+    }
+  }
+
   function onConnected() {
     log('onConnected');
     const available = !!(client.chIntentions && client.chIntentEntry);
@@ -588,20 +888,9 @@ const state = {
     state.available = false;
     showEmpty(IL().emptyDisconnected);
     if (card) card.classList.add('card-muted');
-    loadBtn.disabled = true;
-    saveBtn.disabled = true;
-    autoToggle.disabled = true;
-    autoToggle.checked = false;
+    if (autoToggle) autoToggle.checked = false;
+    updateActions();
     clearDirty();
-  }
-
-  if (loadBtn) {
-    loadBtn.addEventListener('click', () => {
-      log('loadBtn clicked');
-      if (!state.available) return;
-      if (state.dirty && !confirm(IL().confirmDiscard)) return;
-      refresh();
-    });
   }
 
   if (saveBtn) {
@@ -619,10 +908,46 @@ const state = {
     });
   }
 
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      downloadIntentions();
+    });
+  }
+
+  if (restoreInput) {
+    restoreInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+      await restoreFromFile(file);
+    });
+  }
+
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', () => {
+      if (!state.available) {
+        alert(IL().connectFirst || 'Connect to the rosary first.');
+        return;
+      }
+      if (!restoreInput) return;
+      openFilePicker(restoreInput);
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      resetSchedule();
+    });
+  }
+
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', () => {
+      deleteIntentions();
+    });
+  }
+
   showEmpty(IL().emptyDisconnected);
-  loadBtn.disabled = true;
-  saveBtn.disabled = true;
-  autoToggle.disabled = true;
+  updateActions();
 
   return {
     onConnected,
