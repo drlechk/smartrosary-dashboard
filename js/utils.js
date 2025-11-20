@@ -34,18 +34,42 @@ export function downloadBlob(blob, filename) {
   if (!blob) return false;
   const safeName = filename || 'download.bin';
 
-  if (supportsDownloadAttr) {
+  const blobSize = Number(blob.size) || 0;
+  const iosBaseDelay = (isBluefy ? 20000 : 4000);
+  const extraPer64KiB = (blobSize > 0) ? Math.min(60000, Math.ceil(blobSize / 65536) * 2000) : 0;
+  const releaseDelay = (isLikelyIOS || isBluefy) ? (iosBaseDelay + extraPer64KiB) : 0;
+
+  // Native share (iOS/Bluefy) — avoids the download attribute that breaks on Bluefy
+  try {
+    const shareCapable = (isLikelyIOS || isBluefy)
+      && typeof navigator !== 'undefined'
+      && typeof navigator.canShare === 'function'
+      && typeof navigator.share === 'function';
+    if (shareCapable) {
+      const file = new File([blob], safeName, { type: blob.type || 'application/octet-stream' });
+      if (navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: safeName }).catch((err) => {
+          console.warn('downloadBlob share failed', err);
+        });
+        return true;
+      }
+    }
+  } catch (err) {
+    console.warn('downloadBlob share error', err);
+  }
+
+  const useDownloadAttr = supportsDownloadAttr && !isBluefy;
+
+  // Standard object URL download path (skipped on Bluefy where it is unreliable)
+  if (useDownloadAttr) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = safeName;
     a.rel = 'noopener';
+    if (isLikelyIOS) a.target = '_blank';
     document.body.appendChild(a);
     a.click();
-    const blobSize = Number(blob.size) || 0;
-    const iosBaseDelay = (isBluefy ? 20000 : 4000);
-    const extraPer64KiB = (blobSize > 0) ? Math.min(60000, Math.ceil(blobSize / 65536) * 2000) : 0;
-    const releaseDelay = (isLikelyIOS || isBluefy) ? (iosBaseDelay + extraPer64KiB) : 0;
     const cleanup = () => {
       URL.revokeObjectURL(url);
       if (a.parentNode) a.remove();
@@ -53,6 +77,26 @@ export function downloadBlob(blob, filename) {
     // Bluefy/iOS needs extra time to read the blob before it disappears.
     setTimeout(cleanup, releaseDelay);
     return true;
+  }
+
+  // Bluefy/iOS fallback: open blob in a new tab/window without relying on download attr
+  try {
+    const url = URL.createObjectURL(blob);
+    const opened = window.open(url, '_blank');
+    if (!opened) {
+      const tmp = document.createElement('a');
+      tmp.href = url;
+      tmp.target = '_blank';
+      tmp.rel = 'noopener';
+      tmp.download = safeName;
+      document.body.appendChild(tmp);
+      tmp.click();
+      tmp.remove();
+    }
+    setTimeout(() => { URL.revokeObjectURL(url); }, releaseDelay);
+    return true;
+  } catch (err) {
+    console.warn('downloadBlob fallback (object URL) failed', err);
   }
 
   try {
