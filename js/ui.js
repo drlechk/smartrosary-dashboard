@@ -249,7 +249,6 @@ export function renderPillsFromCache(){
 export function updateFromJson({ jsStats, jsSettings, jsParts }) {
   lastStats = jsStats;
   const mergedSettings = cacheSettings(jsSettings) || {};
-
   $('kpiBeads').textContent    = (jsStats.totals?.beads ?? '—');
   $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
   $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');

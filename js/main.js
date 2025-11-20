@@ -1,4 +1,4 @@
-import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateStart, progAggregateSet, progAggregateEnter, progAggregateLeave, progAggregateDone, progAggregateActive } from './utils.js';
+import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateStart, progAggregateSet, progAggregateEnter, progAggregateLeave, progAggregateDone, progAggregateActive, platformFlags } from './utils.js';
 import { BleClient } from './ble.js';
 import { initCharts } from './charts.js';
 import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText, initThemeToggle } from './ui.js';
@@ -317,6 +317,9 @@ async function refreshOnce() {
     if (!standaloneActive) return;
     standaloneProgressUpdate(Math.max(0, Math.min(100, pct)), progressLabel);
   };
+  let jsSettings = null;
+  let jsStats = null;
+  let jsParts = null;
   try {
     if (!client.chStats || !client.chSettings) return false;
     console.log('[stats] refreshOnce: starting read');
@@ -338,29 +341,54 @@ async function refreshOnce() {
       }
     }
 
-    await sleep(80);
-    const vStats = await client.robustRead(client.chStats);
-    console.log('[stats] stats characteristic length', vStats?.byteLength ?? (vStats?.buffer?.byteLength));
-    updateStandaloneProgress(58);
-
     const rawSettings = u8ToStr(vSettings);
-    const rawStats    = u8ToStr(vStats);
     const rawParts    = vPartsMaybe ? u8ToStr(vPartsMaybe) : null;
     console.debug('Raw settings text', rawSettings);
-    console.debug('Raw stats text', rawStats);
     if (rawParts != null) console.debug('Raw parts text', rawParts);
     const cleanedSettings = rawSettings ? rawSettings.split('\0')[0] : '';
-    const cleanedStats    = rawStats    ? rawStats.split('\0')[0]    : '';
     const cleanedParts    = rawParts   ? rawParts.split('\0')[0]   : null;
     if (!cleanedSettings?.trim() || cleanedSettings.trim()==='{}') return false;
-    if (!cleanedStats?.trim()    || cleanedStats.trim()==='{}')    return false;
 
-    let jsSettings, jsStats, jsParts=null;
     try { jsSettings = parseJsonWithFallback(cleanedSettings, 'Settings', { dropEntries: true }); }
     catch (parseErr) { console.warn('Settings JSON failed after recovery', parseErr); return false; }
 
+    if (cleanedParts != null) {
+      try { jsParts = parseJsonWithFallback(cleanedParts, 'Parts'); }
+      catch (parseErr) { console.warn('Parts JSON failed after recovery', parseErr); jsParts = null; }
+    }
+
+    await sleep(80);
+    let rawStats = '';
+    try {
+      const vStats = await client.robustRead(client.chStats);
+      console.log('[stats] stats characteristic length', vStats?.byteLength ?? (vStats?.buffer?.byteLength));
+      updateStandaloneProgress(58);
+      rawStats = u8ToStr(vStats);
+    } catch (statsReadErr) {
+      console.warn('[stats] Stats characteristic read failed; applying settings-only update', statsReadErr);
+      if (jsSettings) {
+        try { updateSettingsOnly(jsSettings); } catch {}
+      }
+      return false;
+    }
+
+    console.debug('Raw stats text', rawStats);
+    const cleanedStats    = rawStats    ? rawStats.split('\0')[0]    : '';
+    if (!cleanedStats?.trim()    || cleanedStats.trim()==='{}') {
+      if (jsSettings) {
+        try { updateSettingsOnly(jsSettings); } catch {}
+      }
+      return false;
+    }
+
     try { jsStats    = parseJsonWithFallback(cleanedStats, 'Stats'); }
-    catch (parseErr) { console.warn('Stats JSON failed after recovery', parseErr); return false; }
+    catch (parseErr) {
+      console.warn('Stats JSON failed after recovery', parseErr);
+      if (jsSettings) {
+        try { updateSettingsOnly(jsSettings); } catch {}
+      }
+      return false;
+    }
 
     // Firmware may signal consent requirement in-band
     if (jsSettings?.requireConsent || jsStats?.requireConsent) {
@@ -370,11 +398,6 @@ async function refreshOnce() {
       });
       console.warn('Device reports consent required for info reads.');
       return false;
-    }
-
-    if (cleanedParts != null) {
-      try { jsParts = parseJsonWithFallback(cleanedParts, 'Parts'); }
-      catch (parseErr) { console.warn('Parts JSON failed after recovery', parseErr); jsParts = null; }
     }
 
     console.log('[stats] settings parsed keys', Object.keys(jsSettings || {}));
@@ -460,6 +483,7 @@ async function handleConnect() {
   const segTimers = new Map();
   let aggStarted = false;
   try {
+    stopSettingsPolling();
     // --- Overall progress across connection + sync steps ---
     // Plan weights sum to ~100; adjust as needed.
     const PLAN = [
@@ -617,7 +641,7 @@ async function handleConnect() {
           setStatusKey('statusLoadingHistory', 'Loading history…');
           // Map history module's own progress into the overall bar segment
           beginSegment('history', { initial: 10, peak: 85, duration: 16000 });
-          await attachHistoryFS(client.server);
+          await attachHistoryFS(client.server, { autoFetch: false });
           updateSegment('history', 60);
           await refreshHistory();
           updateSegment('history', 90);
@@ -635,16 +659,39 @@ async function handleConnect() {
     setStatusKey('statusHistoryReady', 'History ready');
 
     // 9) Subscribe to settings live updates
+    const needsSettingsPoll = platformFlags?.isBluefy || platformFlags?.isLikelyIOS;
     if (client.chSettings) {
-      await client.chSettings.startNotifications();
+      let notifReady = false;
+      try {
+        await client.chSettings.startNotifications();
+        notifReady = true;
+      } catch (err) {
+        console.warn('Settings startNotifications failed', err);
+      }
       client.chSettings.addEventListener('characteristicvaluechanged', (ev) => {
         try {
           const u8 = new Uint8Array(ev.target.value.buffer, ev.target.value.byteOffset, ev.target.value.byteLength);
-          const textPayload = new TextDecoder().decode(u8).split('\0')[0];
-          const js = parseJsonWithFallback(textPayload, 'Settings-notif', { dropEntries: true });
-          updateSettingsOnly(js);
+          const textPayload = new TextDecoder().decode(u8);
+          applySettingsPayload(textPayload, 'Settings-notif');
         } catch (e) { console.warn('settings notif parse failed', e); }
       });
+      if (!notifReady || needsSettingsPoll) {
+        startSettingsPolling(!notifReady ? 'notifications failed' : 'ios/bluefy safeguard');
+      }
+      // Always kick off a one-shot poll for freshness; timer will no-op if running
+      if (!settingsRealtime.timer) startSettingsPolling('post-subscribe');
+      else {
+        // Immediate poll attempt without waiting interval
+        (async () => {
+          try {
+            const v = await client.robustRead(client.chSettings);
+            const raw = u8ToStr(v);
+            applySettingsPayload(raw, 'Settings-poll-instant');
+          } catch (err) {
+            console.warn('Immediate settings poll failed', err?.message || err);
+          }
+        })();
+      }
     }
     setStatusKey('statusReady', (L.statusReady || L.statusUpdated || 'Ready.'));
     progAggregateSet('connect', 100);
@@ -686,6 +733,7 @@ async function handleConnect() {
 async function handleDisconnect() {
   try { resetWallpaperFS(); } catch {}
   try { await resetHistoryCard(); } catch {}
+  stopSettingsPolling();
   await client.disconnect();
   intentions.onDisconnected();
   setCardsMuted(true);
@@ -712,6 +760,62 @@ async function handleDisconnect() {
 
 // UI handlers
 let updatingFromDevice = false;
+const settingsRealtime = { timer: null, inFlight: false };
+let settingsFailCount = 0;
+
+function applySettingsPayload(textPayload, contextLabel) {
+  if (!textPayload) return;
+  const trimmed = textPayload.split('\0')[0];
+  if (!trimmed.trim() || trimmed.trim() === '{}') return;
+  try {
+    const js = parseJsonWithFallback(trimmed, contextLabel, { dropEntries: true });
+    updatingFromDevice = true;
+    updateSettingsOnly(js);
+  } catch (err) {
+    console.warn(`${contextLabel} parse failed`, err);
+  } finally {
+    updatingFromDevice = false;
+  }
+}
+
+function stopSettingsPolling() {
+  if (settingsRealtime.timer) {
+    clearInterval(settingsRealtime.timer);
+    settingsRealtime.timer = null;
+  }
+  settingsRealtime.inFlight = false;
+  settingsFailCount = 0;
+}
+
+function startSettingsPolling(reason = 'fallback') {
+  if (settingsRealtime.timer) return;
+  console.log('[settings] starting poll loop', reason);
+  const interval = (platformFlags?.isBluefy || platformFlags?.isLikelyIOS) ? 1200 : 2200;
+  settingsRealtime.timer = setInterval(async () => {
+    if (!client?.chSettings || settingsRealtime.inFlight) return;
+    settingsRealtime.inFlight = true;
+    try {
+      const v = await client.robustRead(client.chSettings);
+      const raw = u8ToStr(v);
+      applySettingsPayload(raw, 'Settings-poll');
+      settingsFailCount = 0;
+    } catch (err) {
+      console.warn('Settings poll read failed', err?.message || err);
+      settingsFailCount++;
+      if (settingsFailCount >= 3) {
+        settingsFailCount = 0;
+        try {
+          console.warn('Settings poll triggering characteristic reacquire');
+          await client.reacquire();
+        } catch (reErr) {
+          console.warn('Settings poll reacquire failed', reErr?.message || reErr);
+        }
+      }
+    } finally {
+      settingsRealtime.inFlight = false;
+    }
+  }, interval);
+}
 function wireControls() {
   $('connectBtn').addEventListener('click', handleConnect);
   $('disconnectBtn').addEventListener('click', handleDisconnect);

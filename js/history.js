@@ -1411,7 +1411,7 @@ export function primeHistoryServer(server) {
   serverRef = server;
 }
 
-export async function attachHistoryFS(server) {
+export async function attachHistoryFS(server, { autoFetch = true } = {}) {
   serverRef = server;
 
   try {
@@ -1455,15 +1455,17 @@ export async function attachHistoryFS(server) {
     setControlsEnabled(consentOk && connected);
     log('attachHistoryFS: notifications started; consentOk=', consentOk);
 
-    enqueue(async () => {
-      try {
-        log('attachHistoryFS: initial list/download');
-        await doList();
-        await openAndRead();
-      } catch (e) {
-        console.warn('Auto history fetch failed', e);
-      }
-    });
+    if (autoFetch) {
+      enqueue(async () => {
+        try {
+          log('attachHistoryFS: initial list/download');
+          await doList();
+          await openAndRead();
+        } catch (e) {
+          console.warn('Auto history fetch failed', e);
+        }
+      });
+    }
 
     enqueue(async () => {
       try { await sleep(200); } catch {}
