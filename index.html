@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<title>SmartRosary — Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
-<link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <title>SmartRosary — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
   <header class="header-with-lang">
     <h1 id="titleTxt">SmartRosary — Dashboard</h1>
@@ -34,7 +36,9 @@
         <div id="status" class="toolbar-status">Not connected.</div>
       </div>
     </div>
-    <div id="globalProg" hidden class="toolbar-progress"><div class="bar"></div></div>
+    <div id="globalProg" hidden class="toolbar-progress">
+      <div class="bar"></div>
+    </div>
   </div>
 
   <section class="wrap">
@@ -44,24 +48,37 @@
         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
 
 
-          <div class="kpi"><div class="label" id="lblBeads">Beads</div><div class="value" id="kpiBeads">—</div></div>
-          <div class="kpi"><div class="label" id="lblDecades">Decades</div><div class="value" id="kpiDecades">—</div></div>
-          <div class="kpi"><div class="label" id="lblRosaries">Rosaries</div><div class="value" id="kpiRosaries">—</div></div>
-          <div class="kpi"><div class="label" id="lblChaplets">Chaplets</div><div class="value" id="kpiChaplets">—</div></div>
+          <div class="kpi">
+            <div class="label" id="lblBeads">Beads</div>
+            <div class="value" id="kpiBeads">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label" id="lblDecades">Decades</div>
+            <div class="value" id="kpiDecades">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label" id="lblRosaries">Rosaries</div>
+            <div class="value" id="kpiRosaries">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label" id="lblChaplets">Chaplets</div>
+            <div class="value" id="kpiChaplets">—</div>
+          </div>
         </div>
         <div class="flex" style="margin-top:12px;">
           <span class="pill" id="pillDevice"><span id="lblDevice">Device</span>: <span id="valDevice">—</span></span>
           <span class="pill" id="pillFW"><span id="lblFW">FW</span>: <span id="valFW">—</span></span>
-          <span class="pill" id="pillLastMystery"><span id="lblLastMystery">Last mystery</span>: <span id="valLastMystery">—</span></span>
+          <span class="pill" id="pillLastMystery"><span id="lblLastMystery">Last mystery</span>: <span
+              id="valLastMystery">—</span></span>
         </div>
         <p class="smallnote" id="bkNote"></p>
         <h3 id="lblBackupRestore">Backup & Restore</h3>
         <div class="row">
-          <button id="backupBtn"  disabled>Download</button>
-          <input type="file" id="restoreFile" accept="application/json" style="display:none">
-          <button id="restoreBtn" disabled>Restore</button>
-          <button id="resetBtn" disabled>Reset Statistics</button>
-                  </div>
+          <button id="backupAllBtn" disabled>Backup All</button>
+          <input type="file" id="restoreAllInput" accept=".zip,application/json" style="display:none">
+          <button id="restoreAllBtn" disabled>Restore...</button>
+          <button id="resetAllBtn" disabled>Reset...</button>
+        </div>
       </div>
 
       <div class="card">
@@ -70,7 +87,7 @@
           <div class="setting">
             <div class="meta">
               <span class="title" id="lblPreset">Start with preset mystery</span>
-              <span class="desc"  id="descPreset">Begin rosary on a chosen set (disables autosave).</span>
+              <span class="desc" id="descPreset">Begin rosary on a chosen set (disables autosave).</span>
             </div>
             <label class="switch">
               <input type="checkbox" id="swPreset" disabled>
@@ -80,7 +97,7 @@
           <div class="setting">
             <div class="meta">
               <span class="title" id="lblAutosave">Autosave last state</span>
-              <span class="desc"  id="descAutosave">Continue where you left off.</span>
+              <span class="desc" id="descAutosave">Continue where you left off.</span>
             </div>
             <label class="switch">
               <input type="checkbox" id="swAutosave" disabled>
@@ -90,7 +107,7 @@
           <div class="setting">
             <div class="meta">
               <span class="title" id="lblHaptic">Haptic feedback</span>
-              <span class="desc"  id="descHaptic">Vibration on key/bead events.</span>
+              <span class="desc" id="descHaptic">Vibration on key/bead events.</span>
             </div>
             <label class="switch">
               <input type="checkbox" id="swHaptic" disabled>
@@ -100,7 +117,7 @@
           <div class="setting" style="display:flex; justify-content:space-between; align-items:center;">
             <div class="meta">
               <span class="title" id="lblDispBright">Display brightness</span>
-              <span class="desc"  id="descDispBright">Adjust screen backlight (0–100).</span>
+              <span class="desc" id="descDispBright">Adjust screen backlight (0–100).</span>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <input id="slDispBright" type="range" min="0" max="100" step="1" value="0" disabled style="width:140px;">
@@ -110,7 +127,7 @@
           <div class="setting" style="display:flex; justify-content:space-between; align-items:center;">
             <div class="meta">
               <span class="title" id="lblWallBright">Wallpaper brightness</span>
-              <span class="desc"  id="descWallBright">Adjust background image opacity.</span>
+              <span class="desc" id="descWallBright">Adjust background image opacity.</span>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <input type="range" id="slWallBright" min="0" max="100" value="0" disabled style="width:140px" />
@@ -122,19 +139,43 @@
 
       <div class="card">
         <h3 id="avgTitle">Durations & Averages</h3>
-         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
-          <div class="kpi"><div class="label" id="lblAvgBead">Avg bead</div><div class="value" id="kpiAvgBead">—</div></div>
-          <div class="kpi"><div class="label" id="lblAvgDecade">Avg decade</div><div class="value" id="kpiAvgDecade">—</div></div>
-          <div class="kpi"><div class="label" id="lblAvgRosary">Avg rosary</div><div class="value" id="kpiAvgRosary">—</div></div>
-          <div class="kpi"><div class="label" id="lblAvgChaplet">Avg chaplet</div><div class="value" id="kpiAvgChaplet">—</div></div>
+        <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
+          <div class="kpi">
+            <div class="label" id="lblAvgBead">Avg bead</div>
+            <div class="value" id="kpiAvgBead">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label" id="lblAvgDecade">Avg decade</div>
+            <div class="value" id="kpiAvgDecade">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label" id="lblAvgRosary">Avg rosary</div>
+            <div class="value" id="kpiAvgRosary">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label" id="lblAvgChaplet">Avg chaplet</div>
+            <div class="value" id="kpiAvgChaplet">—</div>
+          </div>
         </div>
         <p class="smallnote" id="avgNote">Averages are computed from lifetime device totals.</p>
         <h3 id="totalsTitle">Totals (time)</h3>
         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
-          <div class="kpi"><div class="label" id="lblTrosary">Rosary</div><div class="value" id="totRosary">—</div></div>
-          <div class="kpi"><div class="label" id="lblTdecades">Decades</div><div class="value" id="totDecade">—</div></div>
-          <div class="kpi"><div class="label" id="lblTbeads">Beads</div><div class="value" id="totBead">—</div></div>
-          <div class="kpi"><div class="label" id="lblTchaplet">Chaplet</div><div class="value" id="totChaplet">—</div></div>
+          <div class="kpi">
+            <div class="label" id="lblTrosary">Rosary</div>
+            <div class="value" id="totRosary">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label" id="lblTdecades">Decades</div>
+            <div class="value" id="totDecade">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label" id="lblTbeads">Beads</div>
+            <div class="value" id="totBead">—</div>
+          </div>
+          <div class="kpi">
+            <div class="label" id="lblTchaplet">Chaplet</div>
+            <div class="value" id="totChaplet">—</div>
+          </div>
         </div>
       </div>
 
@@ -153,11 +194,8 @@
         <div class="row history-row">
           <span id="histParseSummary" class="badge"></span>
           <span id="histDownloadProgress" class="badge pill muted" style="display:none;"></span>
-          </div>
+        </div>
         <div class="row history-row overview-history">
-          <button id="histDownloadBtn" disabled>Download</button>
-          <button id="histRestoreBtn" disabled>Restore</button>
-          <button id="histDeleteBtn" disabled>Delete history</button>
           <span id="histUploadProg" class="badge pill muted" style="display:none;"></span>
         </div>
 
@@ -189,71 +227,67 @@
         </div>
       </div>
 
-<!-- Wallpaper / SPIFFS Explorer -->
-<div class="card wp-muted" id="wpCard">
-  <div class="wp-header">
-    <h3 id="wpTitle">Wallpaper</h3>
-  </div>
+      <!-- Wallpaper / SPIFFS Explorer -->
+      <div class="card wp-muted" id="wpCard">
+        <div class="wp-header">
+          <h3 id="wpTitle">Wallpaper</h3>
+        </div>
 
-  <!-- Files table -->
-<div id="wpFilesPanel" class="wp-files-panel" style="display:none">
-  <table class="files">
-    <thead>
-      <tr>
-        <th class="name">File</th>
-        <th class="size">Size</th>
-        <th class="actions">Actions</th>
-      </tr>
-    </thead>
-    <tbody id="wpFiles"></tbody>
-  </table>
-</div>
-<div id="wpFullMsg" class="muted" style="display:none; margin-top:6px; text-align:center;">
-  🚫 Storage full (6/6) — delete one on the device first.
-</div>
+        <!-- Files table -->
+        <div id="wpFilesPanel" class="wp-files-panel" style="display:none">
+          <table class="files">
+            <thead>
+              <tr>
+                <th class="name">File</th>
+                <th class="size">Size</th>
+                <th class="actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="wpFiles"></tbody>
+          </table>
+        </div>
+        <div id="wpFullMsg" class="muted" style="display:none; margin-top:6px; text-align:center;">
+          🚫 Storage full (6/6) — delete one on the device first.
+        </div>
 
-  <!-- Round preview canvas -->
-<div class="wp-canvas-wrap">
-  <div class="wp-canvas-shell muted">
-    <canvas id="wpCanvas" width="240" height="240"></canvas>
-  </div>
-</div>
+        <!-- Round preview canvas -->
+        <div class="wp-canvas-wrap">
+          <div class="wp-canvas-shell muted">
+            <canvas id="wpCanvas" width="240" height="240"></canvas>
+          </div>
+        </div>
 
-  <!-- Actions -->
-<div class="wp-actions">
-<button id="wpSelectBtn">Select file…</button>
-<input id="wpFileInput" type="file"
-       accept=".bin,.rgb565,.565,.raw,image/png,image/jpeg,image/webp"
-       style="display:none">
+        <!-- Actions -->
+        <div class="wp-actions">
+          <button id="wpSelectBtn">Select file…</button>
+          <input id="wpFileInput" type="file" accept=".bin,.rgb565,.565,.raw,image/png,image/jpeg,image/webp"
+            style="display:none">
 
-<button id="wpUploadBtn" disabled>Upload</button>
-<select id="wpPresetSelect" style="min-width:180px">
-  <option value="">— Preset —</option>
-</select></br>
-<div>
-  <button id="wpSaveBinBtn" class="pill" hidden>Save .bin</button>
-  <button id="wpSavePngBtn" class="pill" hidden>Save .png</button>
-</div>
+          <button id="wpUploadBtn" disabled>Upload</button>
+          <select id="wpPresetSelect" style="min-width:180px">
+            <option value="">— Preset —</option>
+          </select></br>
+          <div>
+            <button id="wpSaveBinBtn" class="pill" hidden>Save .bin</button>
+            <button id="wpSavePngBtn" class="pill" hidden>Save .png</button>
+          </div>
 
-</div>
-
+        </div>
 
 
-</div>
-   
+
+      </div>
+
 
       <div class="card intentions-card" id="intentionsCard">
         <div class="intentions-head">
           <div class="intentions-copy">
             <h3 id="intentionsTitle">Intentions Scheduler</h3>
-            <p class="muted" id="intentionsIntro">Review monthly intentions stored on the rosary, adjust start dates and mysteries, then push the schedule back to the device.</p>
+            <p class="muted" id="intentionsIntro">Review monthly intentions stored on the rosary, adjust start dates and
+              mysteries, then push the schedule back to the device.</p>
           </div>
           <div class="intentions-actions">
             <input type="file" id="intentionsRestoreInput" accept="application/json" style="display:none">
-            <button id="intentionsDownloadBtn" disabled>Download</button>
-            <button id="intentionsRestoreBtn" disabled>Restore</button>
-            <button id="intentionsResetBtn" disabled>Reset schedule</button>
-            <button id="intentionsDeleteBtn" disabled>Delete intentions</button>
             <button id="intentionsSaveBtn" disabled>Save Changes</button>
           </div>
         </div>
@@ -261,7 +295,8 @@
           <input type="checkbox" id="intentionsAuto" disabled>
           <span id="intentionsAutoLabel">Enable automatic selection based on start dates</span>
         </label>
-        <p class="muted intentions-hint" id="intentionsHint">The active intention is the latest entry whose start date is on or before today (stored at 00:00 UTC).</p>
+        <p class="muted intentions-hint" id="intentionsHint">The active intention is the latest entry whose start date
+          is on or before today (stored at 00:00 UTC).</p>
         <div class="intentions-table-wrap">
           <table id="intentionsTable">
             <thead>
@@ -275,7 +310,8 @@
             </thead>
             <tbody></tbody>
           </table>
-          <div class="muted intentions-empty" id="intentionsEmpty">Connect and load to view intentions stored on the device.</div>
+          <div class="muted intentions-empty" id="intentionsEmpty">Connect and load to view intentions stored on the
+            device.</div>
         </div>
       </div>
 
@@ -287,15 +323,15 @@
           </div>
           <div class="dpad" role="group" aria-label="LVGL directions + center">
             <div class="empty"></div>
-            <button id="btnUp"    aria-label="Top">▲</button>
+            <button id="btnUp" aria-label="Top">▲</button>
             <div class="empty"></div>
 
-            <button id="btnLeft"  aria-label="Left">◀</button>
+            <button id="btnLeft" aria-label="Left">◀</button>
             <button id="btnCenter" class="center" aria-label="Center">●</button>
             <button id="btnRight" aria-label="Right">▶</button>
 
             <div class="empty"></div>
-            <button id="btnDown"  aria-label="Bottom">▼</button>
+            <button id="btnDown" aria-label="Bottom">▼</button>
             <div class="empty"></div>
           </div>
           <div id="rcStatus">Touch + D-pad will activate after connecting.</div>
@@ -307,13 +343,51 @@
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/patternomaly@1.3.2/dist/patternomaly.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <dialog id="selectionDialog"
+    style="background:#101722; color:#eaf0f6; border:1px solid #172231; border-radius:14px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,0.5); max-width:400px; width:90%;">
+    <h3 id="dialogTitle" style="margin-top:0; color:#cfe4ff;">Select Components</h3>
+    <p id="dialogDesc" style="color:#95a7ba; font-size:13px; margin-bottom:16px;"></p>
+    <form method="dialog">
+      <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px;">
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="selStats" checked style="width:18px; height:18px; accent-color:var(--accent);">
+          <div>
+            <div id="lblStatsTitle" style="font-weight:600;">Statistics & Settings</div>
+            <div id="lblStatsDesc" style="font-size:11px; color:#5b6b86;">Device preferences and lifetime totals</div>
+          </div>
+        </label>
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="selHistory" checked style="width:18px; height:18px; accent-color:var(--accent);">
+          <div>
+            <div id="lblHistoryTitle" style="font-weight:600;">History</div>
+            <div id="lblHistoryDesc" style="font-size:11px; color:#5b6b86;">Prayer logs and charts data</div>
+          </div>
+        </label>
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="selIntentions" checked
+            style="width:18px; height:18px; accent-color:var(--accent);">
+          <div>
+            <div id="lblIntentionsTitle" style="font-weight:600;">Intentions Schedule</div>
+            <div id="lblIntentionsDesc" style="font-size:11px; color:#5b6b86;">Future prayer intentions</div>
+          </div>
+        </label>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button id="dialogCancelBtn" value="cancel"
+          style="background:transparent; border:1px solid #2a3442;">Cancel</button>
+        <button id="dialogConfirmBtn" value="confirm" style="background:var(--accent); color:white;">Confirm</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- Debug log stub (define early so modules can log into it) -->
   <script>
-    (function(){
+    (function () {
       if (!window.__dbgBuffer) window.__dbgBuffer = [];
       if (!window.__dbg) {
-        window.__dbg = function(msg){ try { window.__dbgBuffer.push(String(msg)); } catch(_){} };
+        window.__dbg = function (msg) { try { window.__dbgBuffer.push(String(msg)); } catch (_) { } };
       }
       try {
         const fmt = (args) => Array.from(args).map((arg) => {
@@ -323,135 +397,137 @@
         const _log = console.log.bind(console);
         const _warn = console.warn.bind(console);
         const _err = console.error.bind(console);
-        console.log = function(){ try { window.__dbg(fmt(arguments)); } catch(_){}; _log.apply(console, arguments); };
-        console.warn = function(){ try { window.__dbg('[warn] ' + fmt(arguments)); } catch(_){}; _warn.apply(console, arguments); };
-        console.error = function(){ try { window.__dbg('[error] ' + fmt(arguments)); } catch(_){}; _err.apply(console, arguments); };
-      } catch(_){}
+        console.log = function () { try { window.__dbg(fmt(arguments)); } catch (_) { }; _log.apply(console, arguments); };
+        console.warn = function () { try { window.__dbg('[warn] ' + fmt(arguments)); } catch (_) { }; _warn.apply(console, arguments); };
+        console.error = function () { try { window.__dbg('[error] ' + fmt(arguments)); } catch (_) { }; _err.apply(console, arguments); };
+      } catch (_) { }
     })();
   </script>
 
   <!-- Your modules -->
   <script type="module" src="./js/main.js"></script>
- <script src="https://lib.arvancloud.ir/nosleep/0.9.0/NoSleep.min.js"></script>
-<script>
-  let wakeLock = null;
-  const noSleep = new NoSleep();
+  <script src="https://lib.arvancloud.ir/nosleep/0.9.0/NoSleep.min.js"></script>
+  <script>
+    let wakeLock = null;
+    const noSleep = new NoSleep();
 
-  async function requestWakeLock() {
-    try {
-      if ('wakeLock' in navigator) {
-        wakeLock = await navigator.wakeLock.request('screen');
-        wakeLock.addEventListener('release', () => {
-          console.log('Wake Lock released');
-        });
-        console.log('Wake Lock active');
-      } else {
-        // Fallback to NoSleep
-        noSleep.enable();
-        console.log('NoSleep fallback active');
-      }
-    } catch (err) {
-      console.warn('WakeLock error:', err);
-      try { noSleep.enable(); } catch {}
-    }
-  }
-
-  function releaseWakeLock() {
-    if (wakeLock) {
-      wakeLock.release();
-      wakeLock = null;
-    }
-    try { noSleep.disable(); } catch {}
-  }
-
-  // Re-request on visibility change (when user switches tab or screen locks)
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      requestWakeLock();
-    } else {
-      releaseWakeLock();
-    }
-  });
-
-  // You must call this from a user action (button click, etc.)
-  function preventStandby() {
-    requestWakeLock();
-  }
-</script>
-
-<!-- Debug log panel -->
-<div id="debugPanel" style="position:fixed;left:0;right:0;bottom:0;max-height:36vh;background:#111827;color:#d1fae5;font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;border-top:1px solid #374151;box-shadow:0 -4px 12px rgba(0,0,0,0.35);display:none;z-index:9999;">
-  <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid #374151;">
-    <strong style="font-weight:600;color:#a7f3d0;">Debug Log</strong>
-    <button id="dbgCopyBtn" class="pill">Copy</button>
-    <button id="dbgHideBtn" class="pill" style="margin-left:auto;">Hide</button>
-    <button id="dbgClearBtn" class="pill">Clear</button>
-  </div>
-  <pre id="debugOut" style="margin:0;padding:8px;white-space:pre-wrap;overflow:auto;max-height:28vh;"></pre>
-</div>
-<button id="dbgShowBtn" class="pill" style="position:fixed;right:10px;bottom:10px;z-index:9999;">Debug</button>
-<script>
-  (function(){
-    const panel = document.getElementById('debugPanel');
-    const out = document.getElementById('debugOut');
-    const showBtn = document.getElementById('dbgShowBtn');
-    const hideBtn = document.getElementById('dbgHideBtn');
-    const clrBtn = document.getElementById('dbgClearBtn');
-    const copyBtn = document.getElementById('dbgCopyBtn');
-    function timestamp(){
-      try { return new Date().toISOString().split('T')[1].replace('Z',''); }
-      catch { return ''; }
-    }
-    function append(msg){
-      if (!out) return;
-      out.textContent += `[${timestamp()}] ${msg}\n`;
-      out.scrollTop = out.scrollHeight;
-    }
-    const buffered = Array.isArray(window.__dbgBuffer) ? window.__dbgBuffer.slice() : [];
-    window.__dbg = function(msg){ try { append(String(msg)); } catch(_){} };
-    if (buffered.length) {
-      buffered.forEach((line) => append(line));
-      try { window.__dbgBuffer.length = 0; } catch(_){}
-    }
-    showBtn?.addEventListener('click', () => {
-      panel.style.display = 'block';
-      showBtn.style.display = 'none';
-    });
-    hideBtn?.addEventListener('click', () => {
-      panel.style.display = 'none';
-      showBtn.style.display = 'inline-block';
-    });
-    clrBtn?.addEventListener('click', () => { if (out) out.textContent = ''; });
-    copyBtn?.addEventListener('click', async () => {
-      const text = out?.textContent || '';
-      const fallbackCopy = () => {
-        try {
-          const ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.position = 'fixed';
-          ta.style.top = '-1000px';
-          document.body.appendChild(ta);
-          ta.focus();
-          ta.select();
-          const ok = document.execCommand('copy');
-          document.body.removeChild(ta);
-          return ok;
-        } catch { return false; }
-      };
-      let ok = false;
+    async function requestWakeLock() {
       try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(text);
-          ok = true;
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => {
+            console.log('Wake Lock released');
+          });
+          console.log('Wake Lock active');
+        } else {
+          // Fallback to NoSleep
+          noSleep.enable();
+          console.log('NoSleep fallback active');
         }
-      } catch {}
-      if (!ok) ok = fallbackCopy();
-      const prev = copyBtn.textContent;
-      copyBtn.textContent = ok ? 'Copied' : 'Copy failed';
-      setTimeout(() => { copyBtn.textContent = prev; }, 1200);
+      } catch (err) {
+        console.warn('WakeLock error:', err);
+        try { noSleep.enable(); } catch { }
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock) {
+        wakeLock.release();
+        wakeLock = null;
+      }
+      try { noSleep.disable(); } catch { }
+    }
+
+    // Re-request on visibility change (when user switches tab or screen locks)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      } else {
+        releaseWakeLock();
+      }
     });
-  })();
-</script>
+
+    // You must call this from a user action (button click, etc.)
+    function preventStandby() {
+      requestWakeLock();
+    }
+  </script>
+
+  <!-- Debug log panel -->
+  <div id="debugPanel"
+    style="position:fixed;left:0;right:0;bottom:0;max-height:36vh;background:#111827;color:#d1fae5;font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;border-top:1px solid #374151;box-shadow:0 -4px 12px rgba(0,0,0,0.35);display:none;z-index:9999;">
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid #374151;">
+      <strong style="font-weight:600;color:#a7f3d0;">Debug Log</strong>
+      <button id="dbgCopyBtn" class="pill">Copy</button>
+      <button id="dbgHideBtn" class="pill" style="margin-left:auto;">Hide</button>
+      <button id="dbgClearBtn" class="pill">Clear</button>
+    </div>
+    <pre id="debugOut" style="margin:0;padding:8px;white-space:pre-wrap;overflow:auto;max-height:28vh;"></pre>
+  </div>
+  <button id="dbgShowBtn" class="pill" style="position:fixed;right:10px;bottom:10px;z-index:9999;">Debug</button>
+  <script>
+    (function () {
+      const panel = document.getElementById('debugPanel');
+      const out = document.getElementById('debugOut');
+      const showBtn = document.getElementById('dbgShowBtn');
+      const hideBtn = document.getElementById('dbgHideBtn');
+      const clrBtn = document.getElementById('dbgClearBtn');
+      const copyBtn = document.getElementById('dbgCopyBtn');
+      function timestamp() {
+        try { return new Date().toISOString().split('T')[1].replace('Z', ''); }
+        catch { return ''; }
+      }
+      function append(msg) {
+        if (!out) return;
+        out.textContent += `[${timestamp()}] ${msg}\n`;
+        out.scrollTop = out.scrollHeight;
+      }
+      const buffered = Array.isArray(window.__dbgBuffer) ? window.__dbgBuffer.slice() : [];
+      window.__dbg = function (msg) { try { append(String(msg)); } catch (_) { } };
+      if (buffered.length) {
+        buffered.forEach((line) => append(line));
+        try { window.__dbgBuffer.length = 0; } catch (_) { }
+      }
+      showBtn?.addEventListener('click', () => {
+        panel.style.display = 'block';
+        showBtn.style.display = 'none';
+      });
+      hideBtn?.addEventListener('click', () => {
+        panel.style.display = 'none';
+        showBtn.style.display = 'inline-block';
+      });
+      clrBtn?.addEventListener('click', () => { if (out) out.textContent = ''; });
+      copyBtn?.addEventListener('click', async () => {
+        const text = out?.textContent || '';
+        const fallbackCopy = () => {
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.top = '-1000px';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return ok;
+          } catch { return false; }
+        };
+        let ok = false;
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+            ok = true;
+          }
+        } catch { }
+        if (!ok) ok = fallbackCopy();
+        const prev = copyBtn.textContent;
+        copyBtn.textContent = ok ? 'Copied' : 'Copy failed';
+        setTimeout(() => { copyBtn.textContent = prev; }, 1200);
+      });
+    })();
+  </script>
 
 </body>
+
 </html>

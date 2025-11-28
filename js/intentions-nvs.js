@@ -51,6 +51,7 @@ class CRC32 {
 }
 
 const crc32 = new CRC32();
+const sharedEnc = new TextEncoder();
 
 class NvsBuilder {
   constructor({ totalBytes = 20480, version = CONSTS.VERSION2, activePages = 4 }) {
@@ -115,8 +116,8 @@ class NvsBuilder {
     e[0] = 0; // nsIdx
     e[1] = TYPES.U8;
     e[2] = 1; // span
-    const enc = new TextEncoder().encode(name);
-    e.set(enc.slice(0, 15), 8);
+    // Optimization: encode directly to entry buffer
+    sharedEnc.encodeInto(name, e.subarray(8, 23));
     e[24] = this.pageIndex; // assign idx
     this._setHeaderCrc(e);
     this._ensureSpace(1);
@@ -131,8 +132,8 @@ class NvsBuilder {
     e[0] = nsIdx;
     e[1] = TYPES.I32;
     e[2] = 1;
-    const enc = new TextEncoder().encode(key);
-    e.set(enc.slice(0, 15), 8);
+    // Optimization: encode directly to entry buffer
+    sharedEnc.encodeInto(key, e.subarray(8, 23));
     new DataView(e.buffer, e.byteOffset, e.byteLength).setInt32(24, value | 0, true);
     this._setHeaderCrc(e);
     this._ensureSpace(1);
@@ -148,7 +149,7 @@ class NvsBuilder {
     const cnt = rounded / 32;
     this._ensureSpace(cnt);
     for (let i = 0; i < cnt; i++) {
-      const block = tmp.slice(i * 32, (i + 1) * 32);
+      const block = tmp.subarray(i * 32, (i + 1) * 32); // subarray is cheaper than slice
       this._writeBitmapBit();
       this._writeEntryBytes(block);
     }
@@ -160,7 +161,7 @@ class NvsBuilder {
     const chunkStart = 0;
 
     for (let ci = 0; ci < chunkCount; ci++) {
-      const slice = bytes.slice(ci * chunkSize, (ci + 1) * chunkSize);
+      const slice = bytes.subarray(ci * chunkSize, (ci + 1) * chunkSize); // subarray is cheaper
       const e = new Uint8Array(CONSTS.ENTRY_SIZE);
       e.fill(0xFF);
       e[0] = nsIdx;
@@ -181,8 +182,8 @@ class NvsBuilder {
     idxE[0] = nsIdx;
     idxE[1] = TYPES.BLOB_IDX;
     idxE[2] = 1;
-    const encK = new TextEncoder().encode(key);
-    idxE.set(encK.slice(0, 15), 8);
+    // Optimization: encode directly to entry buffer
+    sharedEnc.encodeInto(key, idxE.subarray(8, 23));
     const dvIdx = new DataView(idxE.buffer, idxE.byteOffset, idxE.byteLength);
     dvIdx.setUint32(24, bytes.length, true);
     idxE[28] = chunkCount & 0xFF;
@@ -206,7 +207,7 @@ class NvsBuilder {
   }
 }
 
-function utf8Encode(s) { return new TextEncoder().encode(s || ''); }
+function utf8Encode(s) { return sharedEnc.encode(s || ''); }
 
 export function buildIntentionsBin({ numIntentions = 0, iS = '', titles = [], descs = [], totalBytes = 20480 } = {}) {
   const b = new NvsBuilder({ totalBytes, version: CONSTS.VERSION2 });

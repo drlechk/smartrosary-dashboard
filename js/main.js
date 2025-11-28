@@ -8,8 +8,10 @@ import { requestKeysConsent, backupKeys, restoreKeys } from './auth.js';
 import { initRemote } from './remote.js';
 import { i18n } from './i18n.js';
 import { attachWallpaperFS, resetWallpaperFS, setWallpaperConsent } from './wallpaper.js';
-import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetHistoryCard, refreshHistory, primeHistoryServer, setHistoryProgressDelegated, setHistoryProgressReporter } from './history.js';
+import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetHistoryCard, refreshHistory, primeHistoryServer, setHistoryProgressDelegated, setHistoryProgressReporter, getHistoryData, restoreHistoryData, resetHistoryData } from './history.js';
 import { initIntentions } from './intentions.js';
+import { initUnifiedBackup } from './unified-backup.js';
+import { getBackupData } from './backup.js';
 
 const client = new BleClient();
 
@@ -44,7 +46,7 @@ function standaloneProgressUpdate(value, label) {
   const safeLabel = label || standaloneProgress.label || 'Working…';
   const safeMax = standaloneProgress.max || 100;
   const clamped = Math.max(0, Math.min(Number(value) || 0, safeMax));
-  try { globalProgressSet(clamped, safeLabel); } catch {}
+  try { globalProgressSet(clamped, safeLabel); } catch { }
 }
 
 function standaloneProgressComplete(delayMs = 400, finalValue) {
@@ -55,8 +57,8 @@ function standaloneProgressComplete(delayMs = 400, finalValue) {
     const finalVal = finalValue != null
       ? Math.max(0, Math.min(Number(finalValue) || 0, safeMax))
       : safeMax;
-    try { globalProgressSet(finalVal, safeLabel); } catch {}
-    try { globalProgressDone(delayMs); } catch {}
+    try { globalProgressSet(finalVal, safeLabel); } catch { }
+    try { globalProgressDone(delayMs); } catch { }
   }
   standaloneProgress.active = false;
   standaloneProgress.label = null;
@@ -65,6 +67,46 @@ function standaloneProgressComplete(delayMs = 400, finalValue) {
 
 initHistory();
 const intentions = initIntentions({ client, setStatus: status });
+
+const unifiedBackup = initUnifiedBackup({
+  getStatsData: async () => getBackupData({
+    chSettings: client.chSettings,
+    chParts: client.chParts,
+    chStats: client.chStats,
+    robustRead: client.robustRead.bind(client)
+  }),
+  restoreStatsData: async (data) => {
+    await restoreFromJson(data, {
+      chCtrl: client.chCtrl,
+      waitReady: client.waitReady.bind(client),
+      writePrefKey,
+      writeStatKey,
+      onProgress: (step, total) => {
+        const pct = Math.round((step / total) * 100);
+        try { globalProgressSet(pct, 'Restoring Stats...'); } catch { }
+      }
+    });
+    setTimeout(refreshOnce, 500);
+  },
+  resetStatsData: async () => {
+    await client.chCtrl.writeValue(new Uint8Array([0x01]));
+    await client.waitReady();
+    setTimeout(refreshOnce, 500);
+  },
+  getHistoryData,
+  restoreHistoryData,
+  resetHistoryData,
+  getIntentionsData: intentions.getIntentionsData,
+  restoreIntentionsData: async (data) => {
+    await intentions.restoreIntentionsData(data);
+    await intentions.refresh();
+  },
+  resetIntentionsData: async () => {
+    await intentions.resetIntentionsData();
+    await intentions.refresh();
+  },
+  setStatus: status
+});
 
 const CARD_SELECTOR = '.card';
 function setCardsMuted(muted) {
@@ -75,7 +117,7 @@ function setCardsMuted(muted) {
 
 setCardsMuted(true);
 
-function status(value){
+function status(value) {
   let resolver = null;
   let text = '';
   if (typeof value === 'function') {
@@ -95,7 +137,7 @@ function status(value){
     text = String(value);
   }
   try { setStatusText(text, resolver); } catch { $('status').textContent = text; }
-  try { setGlobalStatus(text); } catch {}
+  try { setGlobalStatus(text); } catch { }
 }
 
 function isJsonWhitespace(ch) {
@@ -342,12 +384,12 @@ async function refreshOnce() {
     }
 
     const rawSettings = u8ToStr(vSettings);
-    const rawParts    = vPartsMaybe ? u8ToStr(vPartsMaybe) : null;
+    const rawParts = vPartsMaybe ? u8ToStr(vPartsMaybe) : null;
     console.debug('Raw settings text', rawSettings);
     if (rawParts != null) console.debug('Raw parts text', rawParts);
     const cleanedSettings = rawSettings ? rawSettings.split('\0')[0] : '';
-    const cleanedParts    = rawParts   ? rawParts.split('\0')[0]   : null;
-    if (!cleanedSettings?.trim() || cleanedSettings.trim()==='{}') return false;
+    const cleanedParts = rawParts ? rawParts.split('\0')[0] : null;
+    if (!cleanedSettings?.trim() || cleanedSettings.trim() === '{}') return false;
 
     try { jsSettings = parseJsonWithFallback(cleanedSettings, 'Settings', { dropEntries: true }); }
     catch (parseErr) { console.warn('Settings JSON failed after recovery', parseErr); return false; }
@@ -367,25 +409,25 @@ async function refreshOnce() {
     } catch (statsReadErr) {
       console.warn('[stats] Stats characteristic read failed; applying settings-only update', statsReadErr);
       if (jsSettings) {
-        try { updateSettingsOnly(jsSettings); } catch {}
+        try { updateSettingsOnly(jsSettings); } catch { }
       }
       return false;
     }
 
     console.debug('Raw stats text', rawStats);
-    const cleanedStats    = rawStats    ? rawStats.split('\0')[0]    : '';
-    if (!cleanedStats?.trim()    || cleanedStats.trim()==='{}') {
+    const cleanedStats = rawStats ? rawStats.split('\0')[0] : '';
+    if (!cleanedStats?.trim() || cleanedStats.trim() === '{}') {
       if (jsSettings) {
-        try { updateSettingsOnly(jsSettings); } catch {}
+        try { updateSettingsOnly(jsSettings); } catch { }
       }
       return false;
     }
 
-    try { jsStats    = parseJsonWithFallback(cleanedStats, 'Stats'); }
+    try { jsStats = parseJsonWithFallback(cleanedStats, 'Stats'); }
     catch (parseErr) {
       console.warn('Stats JSON failed after recovery', parseErr);
       if (jsSettings) {
-        try { updateSettingsOnly(jsSettings); } catch {}
+        try { updateSettingsOnly(jsSettings); } catch { }
       }
       return false;
     }
@@ -430,23 +472,23 @@ async function refreshOnce() {
   }
 }
 
-async function refreshUntilValid({ tries=8, delay=250 } = {}) {
-  for (let i=0;i<tries;i++){
+async function refreshUntilValid({ tries = 8, delay = 250 } = {}) {
+  for (let i = 0; i < tries; i++) {
     const ok = await refreshOnce();
     if (ok) return true;
     await sleep(delay * Math.pow(1.4, i));
-    if (i === 2) { try { await client.reacquire(); } catch {} }
+    if (i === 2) { try { await client.reacquire(); } catch { } }
   }
   return false;
 }
 
 // Pref/stat writers using pacing
-async function writePrefKey(key, type, value){
+async function writePrefKey(key, type, value) {
   let valBytes;
-  switch (type){
-    case 0x01: valBytes = new Uint8Array([value?1:0]); break;
-    case 0x11: valBytes = new Uint8Array([Number(value)&0xff]); break;
-    case 0x12: { const v=Number(value)>>>0; valBytes=new Uint8Array([v&0xff,(v>>8)&0xff]); } break;
+  switch (type) {
+    case 0x01: valBytes = new Uint8Array([value ? 1 : 0]); break;
+    case 0x11: valBytes = new Uint8Array([Number(value) & 0xff]); break;
+    case 0x12: { const v = Number(value) >>> 0; valBytes = new Uint8Array([v & 0xff, (v >> 8) & 0xff]); } break;
     case 0x14: valBytes = le32(value); break;
     case 0x21: valBytes = le32(value); break;
     case 0x18: valBytes = le32(value).concat(le32(0)); break; // not used here; kept simple
@@ -457,18 +499,18 @@ async function writePrefKey(key, type, value){
   await client.chCtrl.writeValue(payload);
   await client.waitReady();
 }
-async function writeStatKey(key, type, value){
+async function writeStatKey(key, type, value) {
   let valBytes;
-  switch (type){
-    case 0x11: valBytes = new Uint8Array([Number(value)&0xff]); break;
-    case 0x12: { const v=Number(value)>>>0; valBytes=new Uint8Array([v&0xff,(v>>8)&0xff]); } break;
+  switch (type) {
+    case 0x11: valBytes = new Uint8Array([Number(value) & 0xff]); break;
+    case 0x12: { const v = Number(value) >>> 0; valBytes = new Uint8Array([v & 0xff, (v >> 8) & 0xff]); } break;
     case 0x14: valBytes = le32(value); break;
     case 0x18: { // u64
       const hi = (BigInt(value) >> 32n) & 0xffffffffn;
       const lo = BigInt(value) & 0xffffffffn;
       const b = new Uint8Array(8);
-      const le32x = (n) => { const a=new Uint8Array(4); const x=Number(n)&0xffffffff; a[0]=x&255;a[1]=(x>>8)&255;a[2]=(x>>16)&255;a[3]=(x>>24)&255; return a; };
-      b.set(le32x(lo),0); b.set(le32x(hi),4);
+      const le32x = (n) => { const a = new Uint8Array(4); const x = Number(n) & 0xffffffff; a[0] = x & 255; a[1] = (x >> 8) & 255; a[2] = (x >> 16) & 255; a[3] = (x >> 24) & 255; return a; };
+      b.set(le32x(lo), 0); b.set(le32x(hi), 4);
       valBytes = b;
     } break;
     default: throw new Error('bad type');
@@ -487,13 +529,13 @@ async function handleConnect() {
     // --- Overall progress across connection + sync steps ---
     // Plan weights sum to ~100; adjust as needed.
     const PLAN = [
-      { id: 'connect',    weight: 20 },
-      { id: 'wallpaper',  weight: 20 },
-      { id: 'overview',   weight: 20 },
+      { id: 'connect', weight: 20 },
+      { id: 'wallpaper', weight: 20 },
+      { id: 'overview', weight: 20 },
       { id: 'intentions', weight: 20 },
-      { id: 'history',    weight: 20 },
+      { id: 'history', weight: 20 },
     ];
-    try { globalProgressStart('Syncing…', 100); } catch {}
+    try { globalProgressStart('Syncing…', 100); } catch { }
     progAggregateStart(PLAN);
     aggStarted = true;
     const updateSegment = (id, value) => {
@@ -591,9 +633,7 @@ async function handleConnect() {
 
     // 4) Enable controls
     $('refreshBtn').disabled = false;
-    $('resetBtn').disabled = false;
-    $('backupBtn').disabled = false;
-    $('restoreBtn').disabled = false;
+    unifiedBackup.updateButtons(false, true);
     $('disconnectBtn').disabled = true;
     $('slDispBright').disabled = false;
     $('slWallBright').disabled = false;
@@ -635,7 +675,7 @@ async function handleConnect() {
     const isBluefy = /bluefy/i.test(ua);
     const shouldAutoHistory = true;
     if (client.consentOk) {
-      try { primeHistoryServer(client.server); } catch {}
+      try { primeHistoryServer(client.server); } catch { }
       try {
         if (shouldAutoHistory) {
           setStatusKey('statusLoadingHistory', 'Loading history…');
@@ -712,8 +752,8 @@ async function handleConnect() {
     setCardsMuted(true);
     setHistoryConsent(false);
     intentions.onDisconnected();
-    try { await resetHistoryCard(); } catch {}
-    try { globalProgressDone(400); } catch {}
+    try { await resetHistoryCard(); } catch { }
+    try { globalProgressDone(400); } catch { }
   } finally {
     if (!client.consentOk) {
       progAggregateSet('history', 100);
@@ -731,8 +771,8 @@ async function handleConnect() {
 }
 
 async function handleDisconnect() {
-  try { resetWallpaperFS(); } catch {}
-  try { await resetHistoryCard(); } catch {}
+  try { resetWallpaperFS(); } catch { }
+  try { await resetHistoryCard(); } catch { }
   stopSettingsPolling();
   await client.disconnect();
   intentions.onDisconnected();
@@ -745,16 +785,14 @@ async function handleDisconnect() {
     });
   }
   $('refreshBtn').disabled = true;
-  $('resetBtn').disabled   = true;
+  unifiedBackup.updateButtons(false, false);
   $('disconnectBtn').disabled = true;
-  $('backupBtn').disabled  = true;
-  $('restoreBtn').disabled = true;
-  $('swHaptic').disabled   = true;
+  $('swHaptic').disabled = true;
   $('swAutosave').disabled = true;
-  $('swPreset').disabled   = true;
+  $('swPreset').disabled = true;
   $('slDispBright').disabled = true;
   $('slWallBright').disabled = true;
-  remoteAPI.onRemoteAvailability({ touch:false, keys:false });
+  remoteAPI.onRemoteAvailability({ touch: false, keys: false });
   setHistoryConsent(false);
 }
 
@@ -840,8 +878,8 @@ function wireControls() {
 
     const L = i18n[getLang()];
     const plan = [
-      { id: 'stats',      weight: 45 },
-      { id: 'history',    weight: 35 },
+      { id: 'stats', weight: 45 },
+      { id: 'history', weight: 35 },
       { id: 'intentions', weight: 20 },
     ];
     const segTimers = new Map();
@@ -889,15 +927,15 @@ function wireControls() {
         seg.timer = null;
       }
       if (id === 'history') {
-        try { setHistoryProgressReporter(null); } catch {}
-        try { setHistoryProgressDelegated(false); } catch {}
+        try { setHistoryProgressReporter(null); } catch { }
+        try { setHistoryProgressDelegated(false); } catch { }
       }
       segTimers.delete(id);
       progAggregateLeave(id);
       progAggregateSet(id, Math.max(0, Math.min(100, Number(finalValue) || 0)));
     };
 
-    try { globalProgressStart(L?.statusRefreshing || 'Refreshing…', 100); } catch {}
+    try { globalProgressStart(L?.statusRefreshing || 'Refreshing…', 100); } catch { }
     progAggregateStart(plan);
 
     try {
@@ -955,8 +993,8 @@ function wireControls() {
 
       if (statsError) throw statsError;
     } finally {
-      try { setHistoryProgressReporter(null); } catch {}
-      try { setHistoryProgressDelegated(false); } catch {}
+      try { setHistoryProgressReporter(null); } catch { }
+      try { setHistoryProgressDelegated(false); } catch { }
       for (const [id, seg] of segTimers) {
         if (seg.timer) clearInterval(seg.timer);
         progAggregateLeave(id);
@@ -967,105 +1005,7 @@ function wireControls() {
     }
   });
 
-  $('resetBtn').addEventListener('click', async () => {
-    const L = i18n[getLang()];
-    try{
-      if (!client.chCtrl) return;
-      if (!confirm(L.confirmReset)) return;
-      await client.chCtrl.writeValue(new Uint8Array([0x01]));
-      await client.waitReady();
-      setTimeout(refreshOnce, 300);
-      try { setStatusKey('statusResetReq', L?.statusResetReq); } catch {
-        status(() => {
-          const Ln = i18n[getLang()] || i18n.en;
-          return Ln.statusResetReq || 'Reset requested…';
-        });
-      }
-    } catch(err){
-      console.error(err);
-      const errMsg = err?.message || String(err);
-      status(() => {
-        const Ln = i18n[getLang()] || i18n.en;
-        const formatter = Ln.statusResetFailed || ((msg) => `Reset failed: ${msg}`);
-        return formatter(errMsg);
-      });
-    }
-  });
 
-  $('backupBtn').addEventListener('click', async () => {
-    try {
-      await doBackup({
-        chSettings: client.chSettings,
-        chParts: client.chParts,
-        chStats: client.chStats,
-        statusEl: $('status'),
-        i18nL: i18n[getLang()],
-        robustRead: (ch) => client.robustRead(ch),
-      });
-    } catch (e) {
-      console.error(e);
-      const errMsg = e?.message || String(e);
-      status(() => {
-        const Ln = i18n[getLang()] || i18n.en;
-        const formatter = Ln.statusBackupFailed || ((msg) => `Backup failed: ${msg}`);
-        return formatter(errMsg);
-      });
-    }
-  });
-
-  $('restoreBtn').addEventListener('click', () => $('restoreFile').click());
-  $('restoreFile').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const L = i18n[getLang()];
-    const prog = $('restoreProg'); if (prog) { prog.hidden = false; prog.value = 0; }
-    try {
-      const Ln = i18n[getLang()] || i18n.en;
-      globalProgressStart(Ln.restoreStart || 'Restoring…', 100);
-    } catch {}
-    try {
-      const js = JSON.parse(await file.text());
-      status(() => {
-        const Ln = i18n[getLang()] || i18n.en;
-        return Ln.restoreStart || 'Restoring…';
-      });
-      const onProgress = (step,total)=>{
-        const pct = Math.floor(step*100/total);
-        if (prog) prog.value = pct;
-        try {
-          const Ln = i18n[getLang()] || i18n.en;
-          globalProgressSet(pct, Ln.restoreStart || 'Restoring…');
-        } catch {}
-      };
-      await restoreFromJson(js, {
-        chCtrl: client.chCtrl,
-        waitReady: (...a)=>client.waitReady(...a),
-        writePrefKey,
-        writeStatKey,
-        onProgress
-      });
-      await refreshUntilValid({ tries: 12, delay: 250 });
-      try { setStatusKey('statusUpdated', L?.restoreDone); } catch {
-        status(() => {
-          const Ln = i18n[getLang()] || i18n.en;
-          return Ln.restoreDone || 'Restore complete.';
-        });
-      }
-      try { globalProgressDone(800); } catch {}
-    } catch (err) {
-      console.error(err);
-      const errMsg = err?.message || String(err);
-      status(() => {
-        const Ln = i18n[getLang()] || i18n.en;
-        const formatter = Ln.statusRestoreFailed || ((msg) => `Restore failed: ${msg}`);
-        return formatter(errMsg);
-      });
-    } finally {
-      if (prog) setTimeout(()=>{ prog.hidden = true; }, 600);
-      try { globalProgressDone(600); } catch {}
-      e.target.value = '';
-    }
-  });
 
   // Settings switches and sliders
   $('swPreset').addEventListener('change', async (e) => {
@@ -1129,7 +1069,7 @@ function wireControls() {
   $('slDispBright').addEventListener('input', (e) => {
     $('slDispBrightVal').textContent = e.target.value + '%';
     if (updatingFromDevice) return;
-    const val = Math.max(0, Math.min(100, Number(e.target.value|0)));
+    const val = Math.max(0, Math.min(100, Number(e.target.value | 0)));
     if (brDebounce) clearTimeout(brDebounce);
     brDebounce = setTimeout(async () => {
       try {
@@ -1154,7 +1094,7 @@ function wireControls() {
   $('slWallBright').addEventListener('input', (e) => {
     $('wallBrightVal').textContent = e.target.value + '%';
     if (updatingFromDevice) return;
-    const val = Math.max(0, Math.min(100, Number(e.target.value|0)));
+    const val = Math.max(0, Math.min(100, Number(e.target.value | 0)));
     if (wbDebounce) clearTimeout(wbDebounce);
     wbDebounce = setTimeout(async () => {
       try {
@@ -1182,7 +1122,7 @@ function wireControls() {
   if (keysBackupBtn && keysRestoreBtn && keysRestoreFile) {
     keysBackupBtn.addEventListener('click', async () => {
       try {
-        await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode:'export' });
+        await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode: 'export' });
         await backupKeys({ chAuthInfo: client.chAuthInfo, statusEl: $('status'), i18nL: i18n[getLang()] });
       } catch (e) {
         console.error(e);
@@ -1201,10 +1141,10 @@ function wireControls() {
       if (!f) return;
       try {
         const js = JSON.parse(await f.text());
-        const id  = js.id, pub = js.pubKey, priv = js.privKey;
+        const id = js.id, pub = js.pubKey, priv = js.privKey;
         if (!id || !pub || !priv) throw new Error('File must contain {id, pubKey, privKey}');
-        await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode:'restore' });
-        await restoreKeys({ chAuthCtrl: client.chAuthCtrl, statusEl: $('status'), waitReady: (...a)=>client.waitReady(...a), id, pubKey:pub, privKey:priv, i18nL: i18n[getLang()] });
+        await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode: 'restore' });
+        await restoreKeys({ chAuthCtrl: client.chAuthCtrl, statusEl: $('status'), waitReady: (...a) => client.waitReady(...a), id, pubKey: pub, privKey: priv, i18nL: i18n[getLang()] });
       } catch (e2) {
         console.error(e2);
         const errMsg = e2?.message || String(e2);
@@ -1226,13 +1166,13 @@ function wireControls() {
 }
 
 // Remote control init (needs to read chars on connection)
-const remoteAPI = (function(){
-  let api = { onRemoteAvailability: ()=>{} };
+const remoteAPI = (function () {
+  let api = { onRemoteAvailability: () => { } };
   return api;
 })();
 
 // Boot
-(function init(){
+(function init() {
   initThemeToggle();
   initCharts();
   setLang('pl'); // default
@@ -1241,7 +1181,7 @@ const remoteAPI = (function(){
   // remote module setup
   const r = initRemote({
     getTouchChar: () => client.touchChar,
-    getKeysChar:  () => client.keysChar,
+    getKeysChar: () => client.keysChar,
     i18nL: i18n[getLang()],
   });
   remoteAPI.onRemoteAvailability = r.onRemoteAvailability;

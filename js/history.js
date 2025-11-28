@@ -29,8 +29,8 @@ const dom = {
   bucketLabel: $('histBucketLabel'),
 };
 
-const FALLBACK_LEGEND_SETS = ['None','Joyful','Sorrowful','Glorious','Luminous','Chaplet'];
-const FALLBACK_LEGEND_ROMAN = ['I','II','III','IV','V'];
+const FALLBACK_LEGEND_SETS = ['None', 'Joyful', 'Sorrowful', 'Glorious', 'Luminous', 'Chaplet'];
+const FALLBACK_LEGEND_ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 
 let legendSets = [...FALLBACK_LEGEND_SETS];
 let legendIntentLabel = 'Intention';
@@ -81,7 +81,7 @@ function historyProgressEnsure(label, max, currentValue = 0) {
       try {
         globalProgressStart(historyGlobalProgress.label, safeMax);
         globalProgressSet(safeValue, historyGlobalProgress.label);
-      } catch {}
+      } catch { }
     }
   }
   return true;
@@ -92,15 +92,15 @@ function historyProgressUpdate(value, label) {
   const safeLabel = historyGlobalProgress.label || label || 'Working…';
   const safeMax = historyGlobalProgress.max || 100;
   const clamped = Math.max(0, Math.min(Number(value) || 0, safeMax));
-  try { globalProgressSet(clamped, safeLabel); } catch {}
+  try { globalProgressSet(clamped, safeLabel); } catch { }
 }
 
 function historyProgressComplete(defaultLabel) {
   const label = defaultLabel || historyGlobalProgress.label || 'Working…';
   const max = historyGlobalProgress.max || 100;
   if (historyGlobalProgress.active && !progAggregateActive()) {
-    try { globalProgressSet(max, historyGlobalProgress.label || label); } catch {}
-    try { globalProgressDone(350); } catch {}
+    try { globalProgressSet(max, historyGlobalProgress.label || label); } catch { }
+    try { globalProgressDone(350); } catch { }
   }
   historyGlobalProgress.active = false;
   historyGlobalProgress.label = null;
@@ -144,24 +144,24 @@ const hiddenRestoreInput = (() => {
 })();
 
 // Dedicated History FS service (separate from wallpaper FS)
-const FS_SVC_UUID   = '12345678-1234-5678-1234-56789abcf100';
-const FS_CTRL_UUID  = '12345678-1234-5678-1234-56789abcf101';
-const FS_INFO_UUID  = '12345678-1234-5678-1234-56789abcf102';
-const FS_DATA_UUID  = '12345678-1234-5678-1234-56789abcf103';
-const FS_STAT_UUID  = '12345678-1234-5678-1234-56789abcf104';
+const FS_SVC_UUID = '12345678-1234-5678-1234-56789abcf100';
+const FS_CTRL_UUID = '12345678-1234-5678-1234-56789abcf101';
+const FS_INFO_UUID = '12345678-1234-5678-1234-56789abcf102';
+const FS_DATA_UUID = '12345678-1234-5678-1234-56789abcf103';
+const FS_STAT_UUID = '12345678-1234-5678-1234-56789abcf104';
 
 const OPC = {
-  LIST:          0x70,
-  SEND_OPEN:     0x71,
-  SEND_NEXT:     0x72,
-  SEND_CLOSE:    0x73,
-  DELETE:        0x74,
-  DELETE_LOG:    0x75,
-  CREATE_NEW:    0x76,
+  LIST: 0x70,
+  SEND_OPEN: 0x71,
+  SEND_NEXT: 0x72,
+  SEND_CLOSE: 0x73,
+  DELETE: 0x74,
+  DELETE_LOG: 0x75,
+  CREATE_NEW: 0x76,
   RESTORE_BEGIN: 0x77,
-  RESTORE_DATA:  0x78,
-  RESTORE_DONE:  0x79,
-  SET_RTC:       0x7A,
+  RESTORE_DATA: 0x78,
+  RESTORE_DONE: 0x79,
+  SET_RTC: 0x7A,
 };
 
 let serverRef = null;
@@ -210,18 +210,18 @@ const RETRY_MAX = 6;
 const RETRY_DELAY_MS = 90;
 
 const shades = {
-  none:['#9e9e9e','#8f8f8f','#808080','#717171','#626262'],
-  joyful:['#99ccff','#66b2ff','#3399ff','#1a7fd6','#0066cc'],
-  sorrowful:['#ff6666','#ff3333','#cc0000','#990000','#730000'],
-  glorious:['#66ff66','#33e633','#00cc00','#00a300','#007a00'],
-  luminous:['#ffe680','#ffdb4d','#ffcc00','#e6b800','#cc9a00'],
-  chaplet:'#8B4513'
+  none: ['#9e9e9e', '#8f8f8f', '#808080', '#717171', '#626262'],
+  joyful: ['#99ccff', '#66b2ff', '#3399ff', '#1a7fd6', '#0066cc'],
+  sorrowful: ['#ff6666', '#ff3333', '#cc0000', '#990000', '#730000'],
+  glorious: ['#66ff66', '#33e633', '#00cc00', '#00a300', '#007a00'],
+  luminous: ['#ffe680', '#ffdb4d', '#ffcc00', '#e6b800', '#cc9a00'],
+  chaplet: '#8B4513'
 };
-const PK_NAME = ['NONE','JOYFUL','LUMINOUS','SORROWFUL','GLORIOUS','DIVINE_MERCY'];
+const PK_NAME = ['NONE', 'JOYFUL', 'LUMINOUS', 'SORROWFUL', 'GLORIOUS', 'DIVINE_MERCY'];
 const PK_NAME_INTL = {
-  en: ['None','Joyful','Luminous','Sorrowful','Glorious','Chaplet'],
-  pl: ['Brak','Radosne','Tajemnice Światła','Bolesne','Chwalebne','Koronka'],
-  de: ['Keins','Freudenreicher','Lichtreicher','Schmerzhafter','Glorreicher','Korone']
+  en: ['None', 'Joyful', 'Luminous', 'Sorrowful', 'Glorious', 'Chaplet'],
+  pl: ['Brak', 'Radosne', 'Tajemnice Światła', 'Bolesne', 'Chwalebne', 'Koronka'],
+  de: ['Keins', 'Freudenreicher', 'Lichtreicher', 'Schmerzhafter', 'Glorreicher', 'Korone']
 };
 
 let gRows = [];
@@ -455,8 +455,8 @@ function appendFile(name, size) {
 function formatRtcNowForDevice() {
   const now = new Date();
   const month = now.toLocaleString('en-US', { month: 'short' });
-  const day   = String(now.getDate()).padStart(2, '0');
-  const year  = now.getFullYear();
+  const day = String(now.getDate()).padStart(2, '0');
+  const year = now.getFullYear();
 
   const hh = String(now.getHours()).padStart(2, '0');
   const mm = String(now.getMinutes()).padStart(2, '0');
@@ -586,7 +586,7 @@ async function openAndRead() {
 
   try {
     await writeCtrl(new Uint8Array([OPC.SEND_CLOSE]), 'SEND_CLOSE');
-  } catch {}
+  } catch { }
   log('openAndRead: loop exit guard=', guard, 'idleRounds=', idleRounds, 'downloadSoFar=', downloadSoFar, 'total=', downloadTotal);
 }
 
@@ -707,7 +707,7 @@ async function doRestoreFromFile(file) {
     return;
   }
 
-  for (let off = 0; off < bytes.length; ) {
+  for (let off = 0; off < bytes.length;) {
     let waited = 0;
     while (upCredits <= 0) {
       if (performance.now() - lastCreditTs > CREDIT_STALL_MS) {
@@ -760,7 +760,7 @@ async function doRestoreFromFile(file) {
 
   try {
     await writeCtrl(new Uint8Array([OPC.RESTORE_DONE]), 'RESTORE_DONE');
-  } catch {}
+  } catch { }
   uploading = false;
   showUploadProgress();
 
@@ -768,19 +768,83 @@ async function doRestoreFromFile(file) {
   await doList();
 }
 
-// Defaults (English); mutable so i18n can override
-const MONTH_SHORT_DEFAULT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const WEEK_DOW_DEFAULT    = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+// ... existing code ...
+
+export async function getHistoryData() {
+  if (!lastBlob || !lastBlob.blob) {
+    // If not loaded, maybe try to download?
+    // For now, return null if not available.
+    // Or better, trigger a download if connected?
+    if (chCtrl) {
+      // Trigger download? That's async and takes time.
+      // Maybe just warn?
+      console.warn('History not loaded yet for backup.');
+      return null;
+    }
+    return null;
+  }
+  return lastBlob.blob;
+}
+
+export async function restoreHistoryData(data) {
+  // data is Uint8Array from JSZip
+  const blob = new Blob([data], { type: 'application/octet-stream' });
+  await doRestoreFromFile(blob);
+}
+
+async function resetHistoryCard(skipConfirm = false) {
+  if (!consentOk || !connected) {
+    alert('Connect first.');
+    return;
+  }
+  const strings = historyStrings || getHistoryStrings();
+  if (!skipConfirm) {
+    const confirmMsg =
+      strings?.confirmDeleteAll ||
+      'Delete all history records on the device? This cannot be undone.';
+    if (!confirm(confirmMsg)) return;
+  }
+
+  await new Promise((resolve, reject) => {
+    enqueue(async () => {
+      try {
+        log('deleteBtn: sending DELETE_LOG');
+        await writeCtrl(new Uint8Array([OPC.DELETE_LOG]), 'DELETE_LOG');
+        // Clear local cache and refresh UI
+        gRows = [];
+        lastSummary = { nrec: 0, decades: 0, chaplets: 0, intentions: 0 };
+        updateParseSummaryDisplay();
+        renderChart();
+        await doList();
+        resolve();
+      } catch (err) {
+        console.error('History delete failed', err);
+        const stringsNow = historyStrings || getHistoryStrings();
+        const errMsg = stringsNow?.deleteFailed || 'Delete history failed on device.';
+        alert(errMsg + (err?.message ? `: ${err.message}` : ''));
+        reject(err);
+      }
+    });
+  });
+}
+
+export async function resetHistoryData() {
+  await resetHistoryCard(true);
+}
+
+// ... existing code ...
+const MONTH_SHORT_DEFAULT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const WEEK_DOW_DEFAULT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 let MONTH_SHORT = [...MONTH_SHORT_DEFAULT];
-let WEEK_DOW    = [...WEEK_DOW_DEFAULT];
+let WEEK_DOW = [...WEEK_DOW_DEFAULT];
 
 function startOfTodayUTC() {
   const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0,0,0,0));
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
 }
 
 function startOfISOWeekUTC(d) {
-  const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0,0,0,0));
+  const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0, 0));
   const dow = (dt.getUTCDay() + 6) % 7;
   dt.setUTCDate(dt.getUTCDate() - dow);
   return dt;
@@ -910,7 +974,7 @@ function buildDatasetsFixed(mode) {
   const labels = fixedLabels(mode);
   const L = labels.length;
   const datasets = [];
-  const PKS = [0,1,2,3,4,5];
+  const PKS = [0, 1, 2, 3, 4, 5];
 
   log('buildDatasetsFixed: inputs', { mode, records: gRows.length, startUTC, endUTC });
 
@@ -1225,7 +1289,7 @@ function onStat(ev) {
       log('onStat: deleteLog failed', aux);
       const strings = historyStrings || getHistoryStrings();
       const msg = strings?.deleteFailed || 'Delete history failed on device.';
-      try { alert(msg); } catch {}
+      try { alert(msg); } catch { }
       break;
     }
     default:
@@ -1279,33 +1343,7 @@ function wireUi() {
   });
 
   dom.deleteBtn?.addEventListener('click', () => {
-    if (!consentOk || !connected) {
-      alert('Connect first.');
-      return;
-    }
-    const strings = historyStrings || getHistoryStrings();
-    const confirmMsg =
-      strings?.confirmDeleteAll ||
-      'Delete all history records on the device? This cannot be undone.';
-    if (!confirm(confirmMsg)) return;
-
-    enqueue(async () => {
-      try {
-        log('deleteBtn: sending DELETE_LOG');
-        await writeCtrl(new Uint8Array([OPC.DELETE_LOG]), 'DELETE_LOG');
-        // Clear local cache and refresh UI
-        gRows = [];
-        lastSummary = { nrec: 0, decades: 0, chaplets: 0, intentions: 0 };
-        updateParseSummaryDisplay();
-        renderChart();
-        await doList();
-      } catch (err) {
-        console.error('History delete failed', err);
-        const stringsNow = historyStrings || getHistoryStrings();
-        const errMsg = stringsNow?.deleteFailed || 'Delete history failed on device.';
-        alert(errMsg + (err?.message ? `: ${err.message}` : ''));
-      }
-    });
+    resetHistoryCard();
   });
 
   dom.bucketSel?.addEventListener('change', () => {
@@ -1337,12 +1375,12 @@ function bootDefaults() {
 }
 
 async function cleanupCharacteristics() {
-  try { chInfo?.removeEventListener('characteristicvaluechanged', infoListener); } catch {}
-  try { chData?.removeEventListener('characteristicvaluechanged', dataListener); } catch {}
-  try { chStat?.removeEventListener('characteristicvaluechanged', statListener); } catch {}
-  try { chInfo?.stopNotifications(); } catch {}
-  try { chData?.stopNotifications(); } catch {}
-  try { chStat?.stopNotifications(); } catch {}
+  try { chInfo?.removeEventListener('characteristicvaluechanged', infoListener); } catch { }
+  try { chData?.removeEventListener('characteristicvaluechanged', dataListener); } catch { }
+  try { chStat?.removeEventListener('characteristicvaluechanged', statListener); } catch { }
+  try { chInfo?.stopNotifications(); } catch { }
+  try { chData?.stopNotifications(); } catch { }
+  try { chStat?.stopNotifications(); } catch { }
 }
 
 export function initHistory() {
@@ -1367,10 +1405,10 @@ export function applyHistoryI18n(dict) {
   if (dom.bucketSel && dict.bucketOptions) {
     const opts = dom.bucketSel.options;
     if (opts && opts.length >= 4) {
-      if (dict.bucketOptions.day)   opts[0].textContent = dict.bucketOptions.day;
-      if (dict.bucketOptions.week)  opts[1].textContent = dict.bucketOptions.week;
+      if (dict.bucketOptions.day) opts[0].textContent = dict.bucketOptions.day;
+      if (dict.bucketOptions.week) opts[1].textContent = dict.bucketOptions.week;
       if (dict.bucketOptions.month) opts[2].textContent = dict.bucketOptions.month;
-      if (dict.bucketOptions.year)  opts[3].textContent = dict.bucketOptions.year;
+      if (dict.bucketOptions.year) opts[3].textContent = dict.bucketOptions.year;
     }
   }
   if (Array.isArray(dict.legendSets) && dict.legendSets.length >= 6) {
@@ -1468,7 +1506,7 @@ export async function attachHistoryFS(server, { autoFetch = true } = {}) {
     }
 
     enqueue(async () => {
-      try { await sleep(200); } catch {}
+      try { await sleep(200); } catch { }
       try {
         await setRtcNow();
       } catch (e) {
@@ -1523,7 +1561,7 @@ export async function resetHistory() {
 }
 
 export function onHistoryDisconnected() {
-  resetHistory().catch(() => {});
+  resetHistory().catch(() => { });
 }
 
 export function refreshHistory() {

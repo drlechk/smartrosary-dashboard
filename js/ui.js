@@ -5,7 +5,7 @@ import { applyHistoryI18n, applyHistoryTheme } from './history.js';
 import { i18n } from './i18n.js';
 
 let lang = 'pl';
-try { if (typeof window !== 'undefined') window.currentLang = lang; } catch {}
+try { if (typeof window !== 'undefined') window.currentLang = lang; } catch { }
 let lastStats = null;
 let lastSettings = null;
 let lastStatusKey = null; // i18n key of last status (if set via key)
@@ -45,9 +45,9 @@ function cacheSettings(patch) {
 }
 
 export function getLang() { return lang; }
-export function setLang(v){
+export function setLang(v) {
   lang = v;
-  try { if (typeof window !== 'undefined') window.currentLang = v; } catch {}
+  try { if (typeof window !== 'undefined') window.currentLang = v; } catch { }
   applyI18n();
 }
 
@@ -76,6 +76,13 @@ export function applyI18n() {
   setTxt('disconnectBtn', L.disconnect);
   setTxt('backupBtn', L.backup);
   setTxt('restoreBtn', L.restore);
+
+  // Unified Backup
+  if (L.unified) {
+    setTxt('backupAllBtn', L.unified.backupAll);
+    setTxt('restoreAllBtn', L.unified.restoreAll);
+    setTxt('resetAllBtn', L.unified.resetAll);
+  }
   // Update status: if we have a tracked last key, re-localize it.
   // Otherwise, if status is empty or shows a default from another language, set localized default.
   const statusEl = $('status');
@@ -198,7 +205,7 @@ export function initThemeToggle() {
   };
 
   const writeStoredTheme = (value) => {
-    try { localStorage.setItem(THEME_KEY, value); } catch {}
+    try { localStorage.setItem(THEME_KEY, value); } catch { }
   };
 
   const applyTheme = (mode) => {
@@ -206,8 +213,8 @@ export function initThemeToggle() {
     btn.textContent = mode === 'light' ? 'Dark' : 'Light';
     btn.title = mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
     btn.setAttribute('aria-pressed', String(mode === 'light'));
-    try { applyChartTheme(mode); } catch {}
-    try { applyHistoryTheme(mode); } catch {}
+    try { applyChartTheme(mode); } catch { }
+    try { applyHistoryTheme(mode); } catch { }
   };
 
   let theme = readStoredTheme() ?? (prefersLight ? 'light' : 'light');
@@ -220,33 +227,33 @@ export function initThemeToggle() {
   });
 }
 
-function fmtMs(ms){
+function fmtMs(ms) {
   if (ms == null || isNaN(ms)) return '—';
   ms = Math.max(0, Math.round(ms));
   if (ms < 1000) return `${ms} ms`;
-  let s = Math.floor(ms/1000);
+  let s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
-  let m = Math.floor(s/60); s = s % 60;
+  let m = Math.floor(s / 60); s = s % 60;
   if (m < 60) return `${m}m ${s}s`;
-  let h = Math.floor(m/60); m = m % 60;
+  let h = Math.floor(m / 60); m = m % 60;
   return `${h}h ${m}m ${s}s`;
 }
 
-function localizeSetName(enName, langCode = lang){
-  const idxMap = { None:0, Joyful:1, Sorrowful:2, Glorious:3, Luminous:4, Chaplet:5 };
+function localizeSetName(enName, langCode = lang) {
+  const idxMap = { None: 0, Joyful: 1, Sorrowful: 2, Glorious: 3, Luminous: 4, Chaplet: 5 };
   const idx = idxMap[enName];
   if (idx == null) return enName;
   const L = i18n[langCode] || i18n.en;
   return (L.lastsets && L.lastsets[idx]) ? L.lastsets[idx] : enName;
 }
 
-export function renderPillsFromCache(){
+export function renderPillsFromCache() {
   const deviceName = lastSettings?.device ?? lastStats?.device ?? '—';
   $('valDevice').textContent = deviceName;
-  $('valFW').textContent     = lastSettings?.fwVersion ?? '—';
+  $('valFW').textContent = lastSettings?.fwVersion ?? '—';
 
-  const lastSetEN  = lastStats?.lastMystery?.set;
-  const lastIndex  = lastStats?.lastMystery?.index;
+  const lastSetEN = lastStats?.lastMystery?.set;
+  const lastIndex = lastStats?.lastMystery?.index;
   const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
   const suffix = lastIndex ? ` #${lastIndex}` : '';
   $('valLastMystery').textContent = `${lastSetLOC}${suffix}`;
@@ -255,53 +262,53 @@ export function renderPillsFromCache(){
 export function updateFromJson({ jsStats, jsSettings, jsParts }) {
   lastStats = jsStats;
   const mergedSettings = cacheSettings(jsSettings) || {};
-  $('kpiBeads').textContent    = (jsStats.totals?.beads ?? '—');
-  $('kpiDecades').textContent  = (jsStats.totals?.decades ?? '—');
+  $('kpiBeads').textContent = (jsStats.totals?.beads ?? '—');
+  $('kpiDecades').textContent = (jsStats.totals?.decades ?? '—');
   $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
   $('kpiChaplets').textContent = (jsStats.totals?.chaplets ?? '—');
 
   $('valDevice').textContent = mergedSettings.device || jsStats.device || '—';
-  $('valFW').textContent     = mergedSettings.fwVersion || '—';
+  $('valFW').textContent = mergedSettings.fwVersion || '—';
 
-  const lastSetEN  = jsStats.lastMystery?.set;
-  const lastIndex  = jsStats.lastMystery?.index;
+  const lastSetEN = jsStats.lastMystery?.set;
+  const lastIndex = jsStats.lastMystery?.index;
   const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
   $('valLastMystery').textContent = `${lastSetLOC}${lastIndex ? ` #${lastIndex}` : ''}`;
 
   const d = jsStats.durations || {};
-  const avgBeadMs     = safeNum(d.avgBeadMs,     0);
-  const avgDecadeMs   = safeNum(d.avgDecadeMs,   0);
-  const avgRosaryMs   = safeNum(d.avgRosaryMs,   0);
-  const avgChapletMs  = safeNum(d.avgChapletMs,  0);
-  const totBeadMs     = safeNum(d.totalBeadMs,     0);
-  const totDecadeMs   = safeNum(d.totalDecadeMs,   0);
-  const totRosaryMs   = safeNum(d.totalRosaryMs,   0);
-  const totChapletMs  = safeNum(d.totalChapletMs,  0);
+  const avgBeadMs = safeNum(d.avgBeadMs, 0);
+  const avgDecadeMs = safeNum(d.avgDecadeMs, 0);
+  const avgRosaryMs = safeNum(d.avgRosaryMs, 0);
+  const avgChapletMs = safeNum(d.avgChapletMs, 0);
+  const totBeadMs = safeNum(d.totalBeadMs, 0);
+  const totDecadeMs = safeNum(d.totalDecadeMs, 0);
+  const totRosaryMs = safeNum(d.totalRosaryMs, 0);
+  const totChapletMs = safeNum(d.totalChapletMs, 0);
 
-  $('kpiAvgBead').textContent     = fmtMs(avgBeadMs);
-  $('kpiAvgDecade').textContent   = fmtMs(avgDecadeMs);
-  $('kpiAvgRosary').textContent   = fmtMs(avgRosaryMs);
-  $('kpiAvgChaplet').textContent  = fmtMs(avgChapletMs);
+  $('kpiAvgBead').textContent = fmtMs(avgBeadMs);
+  $('kpiAvgDecade').textContent = fmtMs(avgDecadeMs);
+  $('kpiAvgRosary').textContent = fmtMs(avgRosaryMs);
+  $('kpiAvgChaplet').textContent = fmtMs(avgChapletMs);
 
-  $('totRosary').textContent  = fmtMs(totRosaryMs);
-  $('totDecade').textContent  = fmtMs(totDecadeMs);
-  $('totBead').textContent    = fmtMs(totBeadMs);
+  $('totRosary').textContent = fmtMs(totRosaryMs);
+  $('totDecade').textContent = fmtMs(totDecadeMs);
+  $('totBead').textContent = fmtMs(totBeadMs);
   $('totChaplet').textContent = fmtMs(totChapletMs);
 
   updateAverages({ avgBeadMs, avgDecadeMs, avgRosaryMs, avgChapletMs });
 
   const totalDec = (jsStats.totals?.decades ?? 0);
-  const joyful   = (jsStats.sets?.joyful ?? 0);
-  const sorrow   = (jsStats.sets?.sorrowful ?? 0);
-  const glor     = (jsStats.sets?.glorious ?? 0);
-  const lumi     = (jsStats.sets?.luminous ?? 0);
-  const chap     = (jsStats.totals?.chaplets ?? 0);
-  let none       = jsStats.sets?.none;
+  const joyful = (jsStats.sets?.joyful ?? 0);
+  const sorrow = (jsStats.sets?.sorrowful ?? 0);
+  const glor = (jsStats.sets?.glorious ?? 0);
+  const lumi = (jsStats.sets?.luminous ?? 0);
+  const chap = (jsStats.totals?.chaplets ?? 0);
+  let none = jsStats.sets?.none;
   if (none == null) {
     const sumKnown = joyful + sorrow + glor + lumi;
     none = Math.max(0, totalDec - sumKnown);
   }
-  updateDonut({ none, joyful, sorrowful:sorrow, glorious:glor, luminous:lumi, chaplet:chap });
+  updateDonut({ none, joyful, sorrowful: sorrow, glorious: glor, luminous: lumi, chaplet: chap });
 
   if (jsParts) {
     updateParts(jsParts.setsParts || {});
@@ -351,7 +358,7 @@ function applySettingsUi(settings) {
 
   const wb = Math.max(0, Math.min(100, Number(settings.wallpaper?.brightness ?? 0)));
   const slw = document.getElementById('slWallBright');
-  const wv  = document.getElementById('wallBrightVal');
+  const wv = document.getElementById('wallBrightVal');
   if (slw && wv) { slw.value = wb; wv.textContent = wb + '%'; }
 
   const fwEl = document.getElementById('valFW');
