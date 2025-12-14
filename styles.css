@@ -421,6 +421,18 @@
     align-items: center;
   }
 
+  .deploy-info {
+    position: absolute;
+    left: 12px;
+    top: 6px;
+    font-size: 10px;
+    letter-spacing: 0.2px;
+    color: #95a7ba;
+    opacity: 0.8;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
   #themeToggle {
     padding: 8px 14px;
     border-radius: 10px;
@@ -1702,6 +1714,10 @@
 
   body.theme-light .intentions-display {
     color: #0f172a;
+  }
+
+  body.theme-light .deploy-info {
+    color: #64748b;
   }
 
   body.theme-light .intentions-toggle {

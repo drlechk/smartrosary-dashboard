@@ -77,6 +77,19 @@ export function applyI18n() {
   setTxt('backupBtn', L.backup);
   setTxt('restoreBtn', L.restore);
 
+  // Last deploy (from document timestamp)
+  const deployEl = $('deployInfo');
+  if (deployEl) {
+    const stamp = new Date(document.lastModified);
+    let formatted = '—';
+    if (!Number.isNaN(stamp.getTime())) {
+      const date = stamp.toLocaleDateString(lang);
+      const time = stamp.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+      formatted = `${date} ${time}`;
+    }
+    deployEl.textContent = `${L.lastDeploy || 'Last deploy:'} ${formatted}`;
+  }
+
   // Unified Backup
   if (L.unified) {
     setTxt('backupAllBtn', L.unified.backupAll);
