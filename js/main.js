@@ -1162,6 +1162,7 @@ function wireControls() {
   // Lang selector
   wireLangSelector(() => {
     // refresh labels + charts when language changes
+    try { intentions.onLangChange(); } catch { }
   });
 }
 

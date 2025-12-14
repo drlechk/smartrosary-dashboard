@@ -133,7 +133,9 @@ export const i18n = {
       restoreNoEntries: "No intentions found in file.",
       connectFirst: "Connect to the rosary first.",
       summaryMissing: "Intentions summary characteristic missing",
-      entryMissing: "Intentions entry characteristic missing"
+      entryMissing: "Intentions entry characteristic missing",
+      editEntry: "Edit",
+      collapseEdit: "Collapse"
     },
     history: {
       title: "History",
@@ -394,7 +396,9 @@ export const i18n = {
       restoreNoEntries: "W pliku nie znaleziono intencji.",
       connectFirst: "Najpierw połącz się z różańcem.",
       summaryMissing: "Brak charakterystyki podsumowania intencji",
-      entryMissing: "Brak charakterystyki wpisu intencji"
+      entryMissing: "Brak charakterystyki wpisu intencji",
+      editEntry: "Edytuj",
+      collapseEdit: "Zwiń"
     },
     history: {
       title: "Historia",
@@ -656,7 +660,9 @@ export const i18n = {
       restoreNoEntries: "In der Datei wurden keine Intentionen gefunden.",
       connectFirst: "Bitte zuerst den Rosenkranz verbinden.",
       summaryMissing: "Zusammenfassungs-Charakteristik für Intentionen fehlt",
-      entryMissing: "Eintrags-Charakteristik für Intentionen fehlt"
+      entryMissing: "Eintrags-Charakteristik für Intentionen fehlt",
+      editEntry: "Bearbeiten",
+      collapseEdit: "Einklappen"
     },
     history: {
       title: "Historie",

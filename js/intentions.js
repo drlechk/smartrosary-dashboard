@@ -205,7 +205,11 @@ export function initIntentions({ client, setStatus }) {
     showTable();
 
     state.entries.forEach((entry) => {
+      let updateDisplays = () => { };
+
       const tr = document.createElement('tr');
+      tr.className = 'intentions-row';
+      tr.classList.toggle('editing', !!entry.editing);
 
       const tdIndex = document.createElement('td');
       tdIndex.dataset.label = tableLabels.index ?? '#';
@@ -215,6 +219,21 @@ export function initIntentions({ client, setStatus }) {
       indexNumber.className = 'intentions-index';
       indexNumber.textContent = String(entry.index + 1);
       indexWrap.appendChild(indexNumber);
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'intentions-toggle';
+      const updateToggleLabel = () => {
+        toggleBtn.textContent = entry.editing ? (strings.collapseEdit || 'Collapse') : (strings.editEntry || 'Edit');
+        toggleBtn.setAttribute('aria-expanded', entry.editing ? 'true' : 'false');
+      };
+      updateToggleLabel();
+      toggleBtn.addEventListener('click', () => {
+        entry.editing = !entry.editing;
+        tr.classList.toggle('editing', entry.editing);
+        updateToggleLabel();
+      });
+      indexWrap.appendChild(toggleBtn);
       tdIndex.appendChild(indexWrap);
       tr.appendChild(tdIndex);
 
@@ -289,6 +308,7 @@ export function initIntentions({ client, setStatus }) {
       inputDate.addEventListener('change', () => {
         entry.start = dateInputToEpoch(inputDate.value);
         markDirty();
+        updateDisplays();
       });
       const showDatePicker = () => {
         try {
@@ -301,7 +321,13 @@ export function initIntentions({ client, setStatus }) {
       };
       inputDate.addEventListener('focus', showDatePicker);
       inputDate.addEventListener('click', showDatePicker);
-      tdDate.appendChild(inputDate);
+      const dateDisplay = document.createElement('div');
+      dateDisplay.className = 'intentions-display';
+      const dateEdit = document.createElement('div');
+      dateEdit.className = 'intentions-edit';
+      dateEdit.appendChild(inputDate);
+      tdDate.appendChild(dateDisplay);
+      tdDate.appendChild(dateEdit);
       tr.appendChild(tdDate);
 
       const tdSet = document.createElement('td');
@@ -315,11 +341,13 @@ export function initIntentions({ client, setStatus }) {
         if (opt.value === entry.set) option.selected = true;
         selectSet.appendChild(option);
       });
-      selectSet.addEventListener('change', () => {
-        entry.set = Number(selectSet.value) || 0;
-        markDirty();
-      });
-      tdSet.appendChild(selectSet);
+      const setDisplay = document.createElement('div');
+      setDisplay.className = 'intentions-display';
+      const setEdit = document.createElement('div');
+      setEdit.className = 'intentions-edit';
+      setEdit.appendChild(selectSet);
+      tdSet.appendChild(setDisplay);
+      tdSet.appendChild(setEdit);
       tr.appendChild(tdSet);
 
       const tdPart = document.createElement('td');
@@ -337,14 +365,45 @@ export function initIntentions({ client, setStatus }) {
         selectPart.appendChild(option);
       }
       selectPart.value = String(entry.part || 0);
+      const partDisplay = document.createElement('div');
+      partDisplay.className = 'intentions-display';
+      const partEdit = document.createElement('div');
+      partEdit.className = 'intentions-edit';
+      partEdit.appendChild(selectPart);
+      tdPart.appendChild(partDisplay);
+      tdPart.appendChild(partEdit);
+      tr.appendChild(tdPart);
+
+      updateDisplays = () => {
+        dateDisplay.textContent = inputDate.value || '—';
+        const selectedSet = selectSet.options[selectSet.selectedIndex];
+        setDisplay.textContent = selectedSet ? selectedSet.textContent : '—';
+        const partVal = Number(selectPart.value) || 0;
+        partDisplay.textContent = partVal ? String(partVal) : '—';
+      };
+      updateDisplays();
+
+      selectSet.addEventListener('change', () => {
+        entry.set = Number(selectSet.value) || 0;
+        markDirty();
+        updateDisplays();
+      });
+
       selectPart.addEventListener('change', () => {
         entry.part = Number(selectPart.value) || 0;
         markDirty();
+        updateDisplays();
       });
-      tdPart.appendChild(selectPart);
-      tr.appendChild(tdPart);
 
-      entry.controls = { dateInput: inputDate, setSelect: selectSet, partSelect: selectPart };
+      entry.controls = {
+        dateInput: inputDate,
+        setSelect: selectSet,
+        partSelect: selectPart,
+        dateDisplay,
+        setDisplay,
+        partDisplay,
+        row: tr,
+      };
 
       tbody.appendChild(tr);
       if (descRow) {
@@ -1002,6 +1061,11 @@ export function initIntentions({ client, setStatus }) {
     onConnected,
     onDisconnected,
     refresh,
+    onLangChange: () => {
+      // Re-render with current language strings without refetching data.
+      renderTable();
+      updateActions();
+    },
     getIntentionsData: async () => {
       if (!state.available || !state.entries.length) return null;
       return buildExportPayload();
