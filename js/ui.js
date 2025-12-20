@@ -160,6 +160,8 @@ export function applyI18n() {
   if (intentionsResetBtn && IL.resetBtn) intentionsResetBtn.textContent = IL.resetBtn;
   const intentionsDeleteBtn = $('intentionsDeleteBtn');
   if (intentionsDeleteBtn && IL.deleteBtn) intentionsDeleteBtn.textContent = IL.deleteBtn;
+  const intentionsEraseBtn = $('intentionsEraseBtn');
+  if (intentionsEraseBtn && IL.eraseBtn) intentionsEraseBtn.textContent = IL.eraseBtn;
   setTxt('intentionsAutoLabel', IL.autoLabel || '');
   const intentionsHint = $('intentionsHint');
   if (intentionsHint && IL.hint) intentionsHint.textContent = IL.hint;

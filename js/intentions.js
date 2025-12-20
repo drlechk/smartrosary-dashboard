@@ -113,6 +113,7 @@ export function initIntentions({ client, setStatus }) {
   const restoreInput = $('intentionsRestoreInput');
   const resetBtn = $('intentionsResetBtn');
   const deleteBtn = $('intentionsDeleteBtn');
+  const eraseBtn = $('intentionsEraseBtn');
   const autoToggle = $('intentionsAuto');
   const table = $('intentionsTable');
   const tbody = table ? table.querySelector('tbody') : null;
@@ -134,6 +135,7 @@ export function initIntentions({ client, setStatus }) {
     if (restoreBtn) restoreBtn.disabled = state.busy || !state.available;
     if (resetBtn) resetBtn.disabled = state.busy || !state.available;
     if (deleteBtn) deleteBtn.disabled = state.busy || !state.available;
+    if (eraseBtn) eraseBtn.disabled = state.busy || !state.available;
     if (autoToggle) autoToggle.disabled = state.busy || !hasEntries || !state.available;
   }
 
@@ -523,10 +525,11 @@ export function initIntentions({ client, setStatus }) {
     await client.waitReady();
   }
 
-  async function save() {
+  async function save({ ignoreBusy = false } = {}) {
     if (!state.available || !state.entries.length) return;
-    if (state.busy) return;
-    setBusy(true);
+    if (state.busy && !ignoreBusy) return;
+    const alreadyBusy = state.busy;
+    if (!alreadyBusy) setBusy(true);
     const strings = IL();
     const progressLabel = strings.statusSaving || 'Saving intentions schedule…';
     const useStandaloneProgress = !progAggregateActive();
@@ -592,7 +595,7 @@ export function initIntentions({ client, setStatus }) {
         return `${base}: ${errMsg}`;
       });
     } finally {
-      setBusy(false);
+      if (!alreadyBusy) setBusy(false);
       if (standaloneProgressActive) {
         try { globalProgressDone(450); } catch {}
       }
@@ -815,10 +818,11 @@ export function initIntentions({ client, setStatus }) {
     state.summary.auto = false;
     if (autoToggle) autoToggle.checked = false;
     markDirty();
-    setBusy(true);
+    const alreadyBusy = state.busy;
+    if (!alreadyBusy) setBusy(true);
     try {
       setStatus(() => strings.statusResetting || 'Resetting intentions…');
-      await save();
+      await save({ ignoreBusy: true });
       setStatus(() => strings.statusResetDone || strings.statusUpdated || 'Intentions reset.');
     } catch (err) {
       console.error(err);
@@ -828,7 +832,7 @@ export function initIntentions({ client, setStatus }) {
         return `${base}: ${errMsg}`;
       });
     } finally {
-      setBusy(false);
+      if (!alreadyBusy) setBusy(false);
       updateActions();
     }
   }
@@ -856,6 +860,38 @@ export function initIntentions({ client, setStatus }) {
       const errMsg = err?.message || String(err);
       setStatus(() => {
         const base = strings.statusDeleteFailed || 'Intentions delete failed';
+        return `${base}: ${errMsg}`;
+      });
+    } finally {
+      setBusy(false);
+      updateActions();
+    }
+  }
+
+  async function eraseIntentionsPartition() {
+    if (!state.available || state.busy) return;
+    const strings = IL();
+    const confirmMsg = strings.confirmErase || 'Delete the entire intentions partition (schedule and entries)? This cannot be undone.';
+    if (!confirm(confirmMsg)) return;
+    setBusy(true);
+    try {
+      setStatus(() => strings.statusErasing || 'Erasing intentions partition…');
+      const blank = buildIntentionsBin({ numIntentions: 0, iS: '', titles: [], descs: [] });
+      await uploadIntentionsBin(blank, { statusLabel: strings.statusErasing });
+      await writePref('i-cnt', TYPE_U8, u8(0));
+      await writePref('i-auto', TYPE_BOOL, u8(0));
+      state.summary = null;
+      state.entries = [];
+      renderTable();
+      clearDirty();
+      showEmpty(strings.emptySchedule || 'No intentions stored on the device.');
+      if (autoToggle) autoToggle.checked = false;
+      setStatus(() => strings.statusEraseDone || strings.statusUpdated || 'Intentions partition erased.');
+    } catch (err) {
+      console.error(err);
+      const errMsg = err?.message || String(err);
+      setStatus(() => {
+        const base = strings.statusEraseFailed || 'Intentions partition erase failed';
         return `${base}: ${errMsg}`;
       });
     } finally {
@@ -943,6 +979,12 @@ export function initIntentions({ client, setStatus }) {
   if (deleteBtn) {
     deleteBtn.addEventListener('click', () => {
       deleteIntentions();
+    });
+  }
+
+  if (eraseBtn) {
+    eraseBtn.addEventListener('click', () => {
+      eraseIntentionsPartition();
     });
   }
 
