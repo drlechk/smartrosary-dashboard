@@ -5,7 +5,7 @@ import { buildIntentionsBin, crc32Bytes } from './intentions-nvs.js';
 import { UUID } from './ble.js';
 
 const log = (...args) => {
-  try { console.log('[intentions]', ...args); } catch {}
+  try { console.log('[intentions]', ...args); } catch { }
 };
 
 const OP_SET_PREF = 0x50;
@@ -207,7 +207,11 @@ export function initIntentions({ client, setStatus }) {
     showTable();
 
     state.entries.forEach((entry) => {
+      let updateDisplays = () => { };
+
       const tr = document.createElement('tr');
+      tr.className = 'intentions-row';
+      tr.classList.toggle('editing', !!entry.editing);
 
       const tdIndex = document.createElement('td');
       tdIndex.dataset.label = tableLabels.index ?? '#';
@@ -217,6 +221,21 @@ export function initIntentions({ client, setStatus }) {
       indexNumber.className = 'intentions-index';
       indexNumber.textContent = String(entry.index + 1);
       indexWrap.appendChild(indexNumber);
+
+      const toggleBtn = document.createElement('button');
+      toggleBtn.type = 'button';
+      toggleBtn.className = 'intentions-toggle';
+      const updateToggleLabel = () => {
+        toggleBtn.textContent = entry.editing ? (strings.collapseEdit || 'Collapse') : (strings.editEntry || 'Edit');
+        toggleBtn.setAttribute('aria-expanded', entry.editing ? 'true' : 'false');
+      };
+      updateToggleLabel();
+      toggleBtn.addEventListener('click', () => {
+        entry.editing = !entry.editing;
+        tr.classList.toggle('editing', entry.editing);
+        updateToggleLabel();
+      });
+      indexWrap.appendChild(toggleBtn);
       tdIndex.appendChild(indexWrap);
       tr.appendChild(tdIndex);
 
@@ -283,6 +302,7 @@ export function initIntentions({ client, setStatus }) {
       tr.appendChild(tdTitle);
 
       const tdDate = document.createElement('td');
+      tdDate.className = 'intentions-date-cell';
       tdDate.dataset.label = tableLabels.start ?? 'Start Date';
       const inputDate = document.createElement('input');
       inputDate.type = 'date';
@@ -290,6 +310,7 @@ export function initIntentions({ client, setStatus }) {
       inputDate.addEventListener('change', () => {
         entry.start = dateInputToEpoch(inputDate.value);
         markDirty();
+        updateDisplays();
       });
       const showDatePicker = () => {
         try {
@@ -302,10 +323,17 @@ export function initIntentions({ client, setStatus }) {
       };
       inputDate.addEventListener('focus', showDatePicker);
       inputDate.addEventListener('click', showDatePicker);
-      tdDate.appendChild(inputDate);
+      const dateDisplay = document.createElement('div');
+      dateDisplay.className = 'intentions-display';
+      const dateEdit = document.createElement('div');
+      dateEdit.className = 'intentions-edit';
+      dateEdit.appendChild(inputDate);
+      tdDate.appendChild(dateDisplay);
+      tdDate.appendChild(dateEdit);
       tr.appendChild(tdDate);
 
       const tdSet = document.createElement('td');
+      tdSet.className = 'intentions-set-cell';
       tdSet.dataset.label = tableLabels.set ?? 'Mystery';
       const selectSet = document.createElement('select');
       getMysteryOptions().forEach((opt) => {
@@ -315,14 +343,17 @@ export function initIntentions({ client, setStatus }) {
         if (opt.value === entry.set) option.selected = true;
         selectSet.appendChild(option);
       });
-      selectSet.addEventListener('change', () => {
-        entry.set = Number(selectSet.value) || 0;
-        markDirty();
-      });
-      tdSet.appendChild(selectSet);
+      const setDisplay = document.createElement('div');
+      setDisplay.className = 'intentions-display';
+      const setEdit = document.createElement('div');
+      setEdit.className = 'intentions-edit';
+      setEdit.appendChild(selectSet);
+      tdSet.appendChild(setDisplay);
+      tdSet.appendChild(setEdit);
       tr.appendChild(tdSet);
 
       const tdPart = document.createElement('td');
+      tdPart.className = 'intentions-part-cell';
       tdPart.dataset.label = tableLabels.part ?? 'Part';
       const selectPart = document.createElement('select');
       const blank = document.createElement('option');
@@ -336,14 +367,45 @@ export function initIntentions({ client, setStatus }) {
         selectPart.appendChild(option);
       }
       selectPart.value = String(entry.part || 0);
+      const partDisplay = document.createElement('div');
+      partDisplay.className = 'intentions-display';
+      const partEdit = document.createElement('div');
+      partEdit.className = 'intentions-edit';
+      partEdit.appendChild(selectPart);
+      tdPart.appendChild(partDisplay);
+      tdPart.appendChild(partEdit);
+      tr.appendChild(tdPart);
+
+      updateDisplays = () => {
+        dateDisplay.textContent = inputDate.value || '—';
+        const selectedSet = selectSet.options[selectSet.selectedIndex];
+        setDisplay.textContent = selectedSet ? selectedSet.textContent : '—';
+        const partVal = Number(selectPart.value) || 0;
+        partDisplay.textContent = partVal ? String(partVal) : '—';
+      };
+      updateDisplays();
+
+      selectSet.addEventListener('change', () => {
+        entry.set = Number(selectSet.value) || 0;
+        markDirty();
+        updateDisplays();
+      });
+
       selectPart.addEventListener('change', () => {
         entry.part = Number(selectPart.value) || 0;
         markDirty();
+        updateDisplays();
       });
-      tdPart.appendChild(selectPart);
-      tr.appendChild(tdPart);
 
-      entry.controls = { dateInput: inputDate, setSelect: selectSet, partSelect: selectPart };
+      entry.controls = {
+        dateInput: inputDate,
+        setSelect: selectSet,
+        partSelect: selectPart,
+        dateDisplay,
+        setDisplay,
+        partDisplay,
+        row: tr,
+      };
 
       tbody.appendChild(tr);
       if (descRow) {
@@ -386,7 +448,7 @@ export function initIntentions({ client, setStatus }) {
     let standaloneProgressActive = false;
     const updateStandaloneProgress = (pct) => {
       if (!standaloneProgressActive) return;
-      try { globalProgressSet(Math.max(0, Math.min(100, pct)), progressLabel); } catch {}
+      try { globalProgressSet(Math.max(0, Math.min(100, pct)), progressLabel); } catch { }
     };
     if (useStandaloneProgress) {
       try {
@@ -512,7 +574,7 @@ export function initIntentions({ client, setStatus }) {
     } finally {
       if (!alreadyBusy) setBusy(false);
       if (standaloneProgressActive) {
-        try { globalProgressDone(400); } catch {}
+        try { globalProgressDone(400); } catch { }
       }
       log('refresh: end');
     }
@@ -536,7 +598,7 @@ export function initIntentions({ client, setStatus }) {
     let standaloneProgressActive = false;
     const updateStandaloneProgress = (pct) => {
       if (!standaloneProgressActive) return;
-      try { globalProgressSet(Math.max(0, Math.min(100, pct)), progressLabel); } catch {}
+      try { globalProgressSet(Math.max(0, Math.min(100, pct)), progressLabel); } catch { }
     };
     if (useStandaloneProgress) {
       try {
@@ -597,7 +659,7 @@ export function initIntentions({ client, setStatus }) {
     } finally {
       if (!alreadyBusy) setBusy(false);
       if (standaloneProgressActive) {
-        try { globalProgressDone(450); } catch {}
+        try { globalProgressDone(450); } catch { }
       }
       log('save: end');
     }
@@ -695,23 +757,13 @@ export function initIntentions({ client, setStatus }) {
     }
   }
 
-  async function restoreFromFile(file) {
-    if (!file) return;
+  async function restoreFromData(data) {
     if (!state.available) {
       alert(IL().connectFirst || 'Connect to the rosary first.');
       return;
     }
     if (state.busy) return;
     const strings = IL();
-    let data = null;
-    try {
-      const text = await file.text();
-      data = JSON.parse(text);
-    } catch (err) {
-      console.error(err);
-      alert(strings.invalidJson || 'Invalid JSON payload');
-      return;
-    }
 
     let parsed = null;
     try {
@@ -722,8 +774,9 @@ export function initIntentions({ client, setStatus }) {
       return;
     }
 
-    if (state.dirty && !confirm(strings.confirmDiscard || 'Discard unsaved intention edits?')) return;
-    if (!confirm(strings.confirmRestore || 'Restore and overwrite the intentions schedule from this file?')) return;
+    // Unified restore handles confirmation
+    // if (state.dirty && !confirm(strings.confirmDiscard || 'Discard unsaved intention edits?')) return;
+    // if (!confirm(strings.confirmRestore || 'Restore and overwrite the intentions schedule from this file?')) return;
 
     state.entries = parsed.entries;
     state.summary = state.summary || {};
@@ -749,6 +802,61 @@ export function initIntentions({ client, setStatus }) {
     }
   }
 
+  async function restoreFromFile(file) {
+    if (!file) return;
+    const strings = IL();
+    let data = null;
+    try {
+      const text = await file.text();
+      data = JSON.parse(text);
+    } catch (err) {
+      console.error(err);
+      alert(strings.invalidJson || 'Invalid JSON payload');
+      return;
+    }
+    // Legacy button flow needs confirmation
+    if (state.dirty && !confirm(strings.confirmDiscard || 'Discard unsaved intention edits?')) return;
+    if (!confirm(strings.confirmRestore || 'Restore and overwrite the intentions schedule from this file?')) return;
+
+    await restoreFromData(data);
+  }
+
+  // ... existing uploadIntentionsBin ...
+
+  async function deleteIntentions(skipConfirm = false) {
+    if (!state.available || state.busy) return;
+    const strings = IL();
+    if (!skipConfirm && !confirm(strings.confirmDelete || 'Delete all intentions from the device? This cannot be undone.')) return;
+    setBusy(true);
+    try {
+      setStatus(() => strings.statusDeleting || 'Deleting intentions…');
+      const blank = buildIntentionsBin({ numIntentions: 0, iS: '', titles: [], descs: [] });
+      await uploadIntentionsBin(blank, { statusLabel: strings.statusDeleting });
+      await writePref('i-cnt', TYPE_U8, u8(0));
+      await writePref('i-auto', TYPE_BOOL, u8(0));
+      state.summary = null;
+      state.entries = [];
+      renderTable();
+      clearDirty();
+      showEmpty(strings.emptySchedule || 'No intentions stored on the device.');
+      if (autoToggle) autoToggle.checked = false;
+      setStatus(() => strings.statusDeleteDone || strings.statusUpdated || 'Intentions deleted.');
+    } catch (err) {
+      console.error(err);
+      const errMsg = err?.message || String(err);
+      setStatus(() => {
+        const base = strings.statusDeleteFailed || 'Intentions delete failed';
+        return `${base}: ${errMsg}`;
+      });
+    } finally {
+      setBusy(false);
+      updateActions();
+    }
+  }
+
+
+
+
   async function uploadIntentionsBin(data, { statusLabel }) {
     const ch = await getIntentionsWriteChar(client);
     if (!ch) throw new Error('Intentions upload characteristic missing');
@@ -758,7 +866,7 @@ export function initIntentions({ client, setStatus }) {
     let standaloneProgressActive = false;
     const updateStandaloneProgress = (pct) => {
       if (!standaloneProgressActive) return;
-      try { globalProgressSet(Math.max(0, Math.min(100, pct)), label); } catch {}
+      try { globalProgressSet(Math.max(0, Math.min(100, pct)), label); } catch { }
     };
     if (useStandaloneProgress) {
       try {
@@ -790,15 +898,15 @@ export function initIntentions({ client, setStatus }) {
       updateStandaloneProgress(100);
     } finally {
       if (standaloneProgressActive) {
-        try { globalProgressDone(400); } catch {}
+        try { globalProgressDone(400); } catch { }
       }
     }
   }
 
-  async function resetSchedule() {
+  async function resetSchedule(skipConfirm = false) {
     if (!state.available || state.busy) return;
     const strings = IL();
-    if (!confirm(strings.confirmReset || 'Reset the intentions schedule on the device?')) return;
+    if (!skipConfirm && !confirm(strings.confirmReset || 'Reset the intentions schedule on the device?')) return;
     if (!state.entries.length) {
       alert(strings.emptyList || 'No intentions found on the device.');
       return;
@@ -995,5 +1103,16 @@ export function initIntentions({ client, setStatus }) {
     onConnected,
     onDisconnected,
     refresh,
+    onLangChange: () => {
+      // Re-render with current language strings without refetching data.
+      renderTable();
+      updateActions();
+    },
+    getIntentionsData: async () => {
+      if (!state.available || !state.entries.length) return null;
+      return buildExportPayload();
+    },
+    restoreIntentionsData: restoreFromData,
+    resetIntentionsData: () => resetSchedule(true),
   };
 }
