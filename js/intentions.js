@@ -988,12 +988,20 @@ export function initIntentions({ client, setStatus }) {
       await uploadIntentionsBin(blank, { statusLabel: strings.statusErasing });
       await writePref('i-cnt', TYPE_U8, u8(0));
       await writePref('i-auto', TYPE_BOOL, u8(0));
+      // Clear scheduler slots so firmware doesn't retain stale selections.
+      for (let idx = 0; idx < ROW_LIMIT; idx++) {
+        const id = pad2(idx);
+        await writePref(`i${id}s`, TYPE_U32, le32(0));
+        await writePref(`i${id}m`, TYPE_U8, u8(0));
+        await writePref(`i${id}p`, TYPE_U8, u8(0));
+      }
       state.summary = null;
       state.entries = [];
       renderTable();
       clearDirty();
       showEmpty(strings.emptySchedule || 'No intentions stored on the device.');
       if (autoToggle) autoToggle.checked = false;
+      await refresh({ silent: true, ignoreBusy: true });
       setStatus(() => strings.statusEraseDone || strings.statusUpdated || 'Intentions partition erased.');
     } catch (err) {
       console.error(err);
