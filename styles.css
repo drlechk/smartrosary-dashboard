@@ -422,15 +422,20 @@
   }
 
   .deploy-info {
-    position: absolute;
-    left: 12px;
-    top: 6px;
     font-size: 10px;
     letter-spacing: 0.2px;
     color: #95a7ba;
     opacity: 0.8;
     pointer-events: none;
     white-space: nowrap;
+  }
+  
+  .footer {
+    max-width: 1400px;
+    margin: 10px auto 18px;
+    padding: 0 12px 18px;
+    display: flex;
+    justify-content: center;
   }
 
   #themeToggle {

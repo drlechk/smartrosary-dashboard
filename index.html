@@ -12,19 +12,18 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 
-<body>
-  <header class="header-with-lang">
-    <div id="deployInfo" class="deploy-info" aria-label="Last deploy"></div>
-    <h1 id="titleTxt">SmartRosary — Dashboard</h1>
-    <div class="header-controls">
-      <button id="themeToggle" type="button" aria-pressed="false" title="Switch to light mode">Light</button>
-      <select id="langSelect" aria-label="Language">
-        <option value="pl">PL</option>
-        <option value="en">EN</option>
-        <option value="de">DE</option>
-      </select>
-    </div>
-  </header>
+	<body>
+	  <header class="header-with-lang">
+	    <h1 id="titleTxt">SmartRosary — Dashboard</h1>
+	    <div class="header-controls">
+	      <button id="themeToggle" type="button" aria-pressed="false" title="Switch to light mode">Light</button>
+	      <select id="langSelect" aria-label="Language">
+	        <option value="pl">PL</option>
+	        <option value="en">EN</option>
+	        <option value="de">DE</option>
+	      </select>
+	    </div>
+	  </header>
 
   <div class="toolbar-wrap">
     <div class="toolbar">
@@ -340,6 +339,10 @@
       </div>
     </div>
   </section>
+
+  <footer class="footer" aria-label="Footer">
+    <div id="deployInfo" class="deploy-info" aria-label="Last deploy"></div>
+  </footer>
 
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
