@@ -1499,6 +1499,7 @@ const PRESETS = [
   { id: "fatima",      label: "Matka Boska Fatimska",   url: "presets/fatima.png",      type: "image/png" },
   { id: "czestochowa", label: "Matka Boska Częstochowa",url: "presets/czestochowa.png", type: "image/png" },
   { id: "guadalupe",   label: "Matka Boska z Guadalupe",url: "presets/guadalupe.png",   type: "image/png" },
+  { id: "zywyrozaniec", label: "Żywy Różaniec",         url: "presets/zywyrozaniec.png", type: "image/png" },
 ];
 
 function _initPresetsUI() {
