@@ -2,10 +2,14 @@
 
 // --- import i18n dictionary (ESM) ---
 import { i18n } from './i18n.js';
-import { downloadBlob, openFilePicker, loadImageSource, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive, platformFlags } from './utils.js';
+import { downloadBlob, openFilePicker, loadImageSource, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive, platformFlags, isLikelyGattError } from './utils.js';
+import { makeLogger } from './debug-log.js';
 
 const log = (...args) => console.log('[wallpaper]', ...args);
+const dbg = makeLogger('wallpaper');
 const isBluefyClient = !!(platformFlags && platformFlags.isBluefy);
+const isChromeFamily = !!(platformFlags && platformFlags.isChromeFamily);
+const isAndroidChrome = !!(platformFlags && platformFlags.isAndroidChrome);
 const CANVAS_BG = '#2f3642';
 const BLUEFY_FLUSH_ROWS = 24;
 const BLUEFY_FLUSH_INTERVAL_MS = 140;
@@ -175,6 +179,7 @@ function _canDelete() {
 const _norm = (s) => (s && s.startsWith('/') ? s : '/' + s);
 const _toKiB = (n) => (n/1024).toFixed(1)+' KiB';
 const _sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
+const WRITE_GAP_MS = isAndroidChrome ? 18 : (isChromeFamily ? 6 : 0);
 
 function _cleanName(name) {
   let base = (name||'image').replace(/^.*[\\/]/,'').replace(/\s+/g,'');
@@ -419,16 +424,28 @@ async function _ensureFsService() {
 
 async function _writeFs(buf) {
   await _ensureFsService();
-  try {
-    await fsCtrl.writeValue(buf);
-  } catch (err) {
-    if (_isInvalidCharError(err)) {
-      connected = false;
-      await _rebindFsService();
+  let attempts = 0;
+  while (true) {
+    try {
       await fsCtrl.writeValue(buf);
+      if (WRITE_GAP_MS) await _sleep(WRITE_GAP_MS);
       return;
+    } catch (err) {
+      if (_isInvalidCharError(err)) {
+        dbg.error('write:invalidChar', err, { len: buf?.byteLength ?? buf?.length ?? 0 });
+        connected = false;
+        await _rebindFsService();
+        continue;
+      }
+      if (isChromeFamily && isLikelyGattError(err) && attempts < 2) {
+        attempts++;
+        dbg.error('write:gattRetry', err, { attempt: attempts, len: buf?.byteLength ?? buf?.length ?? 0 });
+        await _sleep(60 * attempts);
+        continue;
+      }
+      dbg.error('write:fail', err, { len: buf?.byteLength ?? buf?.length ?? 0 });
+      throw err;
     }
-    throw err;
   }
 }
 
@@ -813,6 +830,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
     if (typeof preventStandby === 'function') preventStandby();
 
     fsLastError = null;
+    dbg.log('upload:begin', { filename, size: bytes?.length ?? 0, w, h, pixelOffset, isChromeFamily, isAndroidChrome });
 
     // --- WRITE_BEGIN header ---
     const enc = new TextEncoder();
@@ -861,6 +879,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
     let payload  = (mtu >= 23) ? (mtu - 3) : 20;  // ATT header
     let baseChunk = payload - 1 /*tag*/ - 4 /*CRC*/;
     let dynChunk  = Math.min(CHUNK_MAX, Math.max(CHUNK_MIN, baseChunk));
+    dbg.log('upload:chunkInit', { mtu, payload, baseChunk, dynChunk, CHUNK_MIN, CHUNK_MAX });
 
     // --- Progress UI / overlay ---
     _showProgress(sz, WP().uploading || 'Uploading…');
@@ -894,6 +913,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
         _throwIfFsError();
         const now = performance.now();
         if (now - lastCreditTs > CREDIT_STALL_MS) {
+          dbg.log('upload:creditStall', { dynChunk, CREDIT_STALL_MS });
           dynChunk = Math.max(CHUNK_MIN, (dynChunk / 2) | 0); // backoff
           lastCreditTs = now;
         }
@@ -925,6 +945,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
           wrote = true;
         } catch (err) {
           tries++;
+          dbg.error('upload:chunkRetry', err, { tries, off, n, dynChunk });
           await _sleep(20);
           if (tries >= 3) throw err;
         }
@@ -977,6 +998,7 @@ async function _uploadBytes(bytes, filename, w, h, pixelOffset = 4) {
   } finally {
     busy.uploading = false;
     if (typeof releaseWakeLock === 'function') releaseWakeLock();
+    dbg.log('upload:end', {});
   }
 }
 
@@ -1007,6 +1029,7 @@ function _recordFsError(code, aux) {
   const previous = fsLastError?.code;
   const message = _fsStatusMessage(code) || `Device reported error (0x${code.toString(16)})`;
   fsLastError = { code, aux, message };
+  dbg.log('fsStat:error', { code, aux, message });
   console.warn('[WallpaperFS] status 0x' + code.toString(16) + ' aux=' + aux);
   if (ui.prog) ui.prog.style.display = 'none';
   if (ui.progText) ui.progText.textContent = message;
@@ -1036,6 +1059,7 @@ function _onFsStat(e){
    }
  }
  if (added) lastCreditTs = performance.now();
+ if (added && debugWallpaperChunks) dbg.log('fsStat:credit', { added, fsCredits });
 }
 let listChunks = [];
 function _onFsInfo(e){

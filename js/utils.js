@@ -13,6 +13,9 @@ const navUA = (typeof navigator !== 'undefined') ? (navigator.userAgent || '') :
 const navPlatform = (typeof navigator !== 'undefined') ? (navigator.platform || '') : '';
 const navTouchPoints = (typeof navigator !== 'undefined') ? (Number(navigator.maxTouchPoints) || 0) : 0;
 const isBluefy = /Bluefy/i.test(navUA);
+const isAndroid = /Android/i.test(navUA);
+const isChromeLike = /Chrome\//i.test(navUA) || /Chromium\//i.test(navUA);
+const isChromeFamily = isChromeLike && !/(EdgA|EdgiOS|OPR|SamsungBrowser|YaBrowser|DuckDuckGo)/i.test(navUA);
 const isLikelyIOS = (() => {
   if (typeof navigator === 'undefined') return false;
   if (/iPad|iPhone|iPod/.test(navUA)) return true;
@@ -22,6 +25,9 @@ const isLikelyIOS = (() => {
 export const platformFlags = {
   isBluefy,
   isLikelyIOS,
+  isAndroid,
+  isChromeFamily,
+  isAndroidChrome: isAndroid && isChromeFamily,
 };
 
 function restoreInlineStyles(node, snapshot) {
@@ -213,6 +219,21 @@ export async function withRetry(fn, { tries = 5, base = 120 } = {}) {
 
 export async function readWithRetry(ch, tries = 5) {
   return withRetry(() => ch.readValue(), { tries, base: 150 });
+}
+
+export function isLikelyGattError(err) {
+  if (!err) return false;
+  const name = String(err.name || '').toLowerCase();
+  const msg = String(err.message || '').toLowerCase();
+  return (
+    name.includes('networkerror') ||
+    msg.includes('gatt') ||
+    msg.includes('att') ||
+    msg.includes('operation failed') ||
+    msg.includes('unknown') ||
+    msg.includes('not permitted') ||
+    msg.includes('disconnected')
+  );
 }
 
 export const u8ToStr = (u8) => {

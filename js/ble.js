@@ -1,8 +1,10 @@
 import { withRetry, readWithRetry, sleep } from './utils.js';
+import { makeLogger } from './debug-log.js';
 
 const log = (...args) => {
   try { console.log('[ble]', ...args); } catch {}
 };
+const dbg = makeLogger('ble');
 
 // UUIDs (unchanged; must match firmware)
 export const UUID = {
@@ -55,12 +57,14 @@ export class BleClient extends EventTarget {
     let dev;
     try {
       log('requestDevice with services filter', { service: UUID.OTA_SVC });
+      dbg.log('requestDevice', { mode: 'filter', service: UUID.OTA_SVC });
       dev = await navigator.bluetooth.requestDevice({
         filters: [{ services: [UUID.OTA_SVC] }],
         optionalServices: [UUID.OTA_SVC, UUID.FS_SVC, UUID.FS_HIST_SVC],
       });
     } catch {
       log('requestDevice fallback acceptAllDevices');
+      dbg.log('requestDevice', { mode: 'acceptAllDevices' });
       dev = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: [UUID.OTA_SVC, UUID.FS_SVC, UUID.FS_HIST_SVC],
@@ -71,10 +75,15 @@ export class BleClient extends EventTarget {
     }
 
     this.device = dev;
-    this.device.addEventListener('gattserverdisconnected', () => this._onDisconnected());
+    this.device.addEventListener('gattserverdisconnected', () => {
+      dbg.log('gattserverdisconnected', { name: this.device?.name || '', id: this.device?.id || '' });
+      this._onDisconnected();
+    });
 
     log('Connecting GATT server', { name: dev.name || '', id: dev.id || '' });
+    dbg.log('connect', { name: dev.name || '', id: dev.id || '' });
     this.server = await dev.gatt.connect();
+    dbg.log('connected', { connected: !!this.server?.connected });
     await this._helloAndConsent();
 
     // settle for Android
@@ -87,8 +96,10 @@ export class BleClient extends EventTarget {
     try {
       await this.statusChar.startNotifications();
       log('STATUS characteristic notifications enabled');
+      dbg.log('statusNotifications', { ok: true });
     } catch (err) {
       console.warn('[ble] STATUS startNotifications failed', err?.message || err);
+      dbg.error('statusNotifications', err, { ok: false });
     }
     this.statusChar.addEventListener('characteristicvaluechanged', (ev) => {
       const v = new Uint8Array(ev.target.value.buffer)[0];
@@ -122,11 +133,13 @@ export class BleClient extends EventTarget {
   async _helloAndConsent() {
     const svc  = await this.server.getPrimaryService(UUID.OTA_SVC);
     log('OTA service acquired for consent handshake');
+    dbg.log('hello:svc', { uuid: UUID.OTA_SVC });
     const ctrl = await svc.getCharacteristic(UUID.INFO_CTRL);
     const stat = await svc.getCharacteristic(UUID.STATUS);
 
     await stat.startNotifications();
     log('STATUS notifications started (consent flow)');
+    dbg.log('hello:statusNotifications', { ok: true });
 
     const ok = await new Promise(async (resolve) => {
       const onStatus = (ev) => {
@@ -136,11 +149,13 @@ export class BleClient extends EventTarget {
       };
       stat.addEventListener('characteristicvaluechanged', onStatus);
       log('Sending HELLO_WEB');
+      dbg.log('hello:write', { op: 'HELLO_WEB' });
       await ctrl.writeValue(Uint8Array.from([0x41])); // HELLO_WEB
       setTimeout(()=>resolve(false), 25000);
     });
 
     log('Consent status', ok ? 'granted' : 'denied or timeout');
+    dbg.log('hello:result', { ok });
     if (!ok) throw new Error('Device denied consent or timed out.');
     this.consentOk = true;
   }
@@ -204,6 +219,7 @@ export class BleClient extends EventTarget {
 
   async reacquire() {
     log('Reacquiring OTA characteristics');
+    dbg.log('reacquire', {});
     await sleep(200);
     await this._getAllChars();
   }
@@ -211,11 +227,14 @@ export class BleClient extends EventTarget {
   async robustRead(ch) {
     try { return await readWithRetry(ch); }
     catch (e1) {
+      dbg.error('robustRead:read1', e1);
       await this.reacquire();
       try { return await readWithRetry(ch); }
       catch (e2) {
+        dbg.error('robustRead:read2', e2);
         try { if (this.device?.gatt?.connected) this.device.gatt.disconnect(); } catch {}
         await sleep(250);
+        dbg.log('robustRead:reconnect', {});
         this.server = await this.device.gatt.connect();
         await sleep(300);
         await this._getAllChars();
@@ -227,7 +246,11 @@ export class BleClient extends EventTarget {
   async waitReady(timeoutMs = 4000) {
     const start = Date.now();
     while (!this.readyFlag) {
-      if (Date.now() - start > timeoutMs) throw new Error('BLE pacing timeout');
+      if (Date.now() - start > timeoutMs) {
+        const err = new Error('BLE pacing timeout');
+        dbg.error('waitReady:timeout', err, { timeoutMs });
+        throw err;
+      }
       await sleep(30);
     }
     this.readyFlag = false; // consume a permit
@@ -237,6 +260,7 @@ export class BleClient extends EventTarget {
     try {
       if (this.device && this.device.gatt.connected) {
         log('Disconnecting GATT', { name: this.device.name || '', id: this.device.id || '' });
+        dbg.log('disconnect', { name: this.device?.name || '', id: this.device?.id || '' });
         await this.device.gatt.disconnect();
       }
     }
@@ -257,6 +281,7 @@ export class BleClient extends EventTarget {
 
   _onDisconnected() {
     log('GATT disconnected');
+    dbg.log('disconnected', {});
     this.dispatchEvent(new CustomEvent('disconnected'));
   }
 }

@@ -1,12 +1,14 @@
-import { $, enc, dec, packKV, le32, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive, downloadBlob, openFilePicker } from './utils.js';
+import { $, enc, dec, packKV, le32, sleep, platformFlags, isLikelyGattError, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateActive, downloadBlob, openFilePicker } from './utils.js';
 import { i18n } from './i18n.js';
 import { getLang } from './ui.js';
 import { buildIntentionsBin, crc32Bytes } from './intentions-nvs.js';
 import { UUID } from './ble.js';
+import { makeLogger } from './debug-log.js';
 
 const log = (...args) => {
   try { console.log('[intentions]', ...args); } catch { }
 };
+const dbg = makeLogger('intentions');
 
 const OP_SET_PREF = 0x50;
 const TYPE_BOOL = 0x01;
@@ -19,6 +21,30 @@ const ROW_LIMIT = 32;
 const EXPORT_VERSION = 1;
 const NVS_FILENAME = 'nvs-intentions.bin';
 const NVS_CHUNK_SIZE = 320;
+
+const isChromeFamily = !!platformFlags?.isChromeFamily;
+const isAndroidChrome = !!platformFlags?.isAndroidChrome;
+const WRITE_GAP_MS = isAndroidChrome ? 15 : (isChromeFamily ? 5 : 0);
+
+async function writeValuePaced(ch, payload) {
+  let attempts = 0;
+  while (true) {
+    try {
+      await ch.writeValue(payload);
+      if (WRITE_GAP_MS) await sleep(WRITE_GAP_MS);
+      return;
+    } catch (err) {
+      if (isChromeFamily && isLikelyGattError(err) && attempts < 2) {
+        attempts++;
+        dbg.error('write:gattRetry', err, { attempt: attempts, len: payload?.byteLength ?? payload?.length ?? 0 });
+        await sleep(80 * attempts);
+        continue;
+      }
+      dbg.error('write:fail', err, { len: payload?.byteLength ?? payload?.length ?? 0 });
+      throw err;
+    }
+  }
+}
 
 function toUint8(view) {
   if (!view) return new Uint8Array();
@@ -428,7 +454,7 @@ export function initIntentions({ client, setStatus }) {
     if (!client.chIntentEntry) throw new Error(IL().entryMissing);
     log('readEntry: request', index);
     const buf = new Uint8Array([index & 0xff, (index >> 8) & 0xff]);
-    await client.chIntentEntry.writeValue(buf);
+    await writeValuePaced(client.chIntentEntry, buf);
     await client.waitReady();
     const value = await client.chIntentEntry.readValue();
     const text = dec.decode(toUint8(value));
@@ -583,7 +609,7 @@ export function initIntentions({ client, setStatus }) {
   async function writePref(key, type, valueBytes) {
     if (!client.chCtrl) throw new Error('Control characteristic missing');
     const payload = packKV(OP_SET_PREF, type, key, valueBytes);
-    await client.chCtrl.writeValue(payload);
+    await writeValuePaced(client.chCtrl, payload);
     await client.waitReady();
   }
 
@@ -611,6 +637,7 @@ export function initIntentions({ client, setStatus }) {
     }
     setStatus(() => IL().statusSaving);
     log('save: begin', { entries: state.entries.length });
+    dbg.log('save:begin', { entries: state.entries.length, isChromeFamily, isAndroidChrome });
     try {
       const total = state.entries.length || 1;
       let index = 0;
@@ -647,9 +674,11 @@ export function initIntentions({ client, setStatus }) {
       setStatus(() => IL().statusUpdated);
       updateStandaloneProgress(100);
       log('save: completed');
+      dbg.log('save:completed', {});
     } catch (err) {
       console.error(err);
       log('save: error', err?.message || err);
+      dbg.error('save:error', err);
       const errMsg = err?.message || String(err);
       setStatus(() => {
         const s = IL();
@@ -662,6 +691,7 @@ export function initIntentions({ client, setStatus }) {
         try { globalProgressDone(450); } catch { }
       }
       log('save: end');
+      dbg.log('save:end', {});
     }
   }
 
@@ -878,24 +908,30 @@ export function initIntentions({ client, setStatus }) {
       }
     }
     try {
-      await ch.writeValue(enc.encode(NVS_FILENAME));
+      const chunkSize = isAndroidChrome ? 160 : NVS_CHUNK_SIZE;
+      dbg.log('uploadBin:begin', { size: data?.length ?? 0, chunkSize, isChromeFamily, isAndroidChrome });
+      await writeValuePaced(ch, enc.encode(NVS_FILENAME));
       await client.waitReady(8000);
       let offset = 0;
+      let chunkIdx = 0;
       while (offset < data.length) {
-        const len = Math.min(NVS_CHUNK_SIZE, data.length - offset);
+        const len = Math.min(chunkSize, data.length - offset);
         const chunk = data.slice(offset, offset + len);
         const pkt = new Uint8Array(len + 4);
         pkt.set(chunk);
         const crc = crc32Bytes(chunk);
         const dv = new DataView(pkt.buffer, pkt.byteOffset, pkt.byteLength);
         dv.setUint32(len, crc, true);
-        await ch.writeValue(pkt);
+        await writeValuePaced(ch, pkt);
         await client.waitReady(8000);
         offset += len;
+        chunkIdx++;
+        if ((chunkIdx % 8) === 0) dbg.log('uploadBin:progress', { chunkIdx, offset, total: data.length, len });
         const pct = Math.min(95, Math.round((offset / data.length) * 100));
         updateStandaloneProgress(pct);
       }
       updateStandaloneProgress(100);
+      dbg.log('uploadBin:completed', { total: data.length, chunks: chunkIdx });
     } finally {
       if (standaloneProgressActive) {
         try { globalProgressDone(400); } catch { }
