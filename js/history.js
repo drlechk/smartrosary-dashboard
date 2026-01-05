@@ -278,14 +278,29 @@ function updateParseSummaryDisplay() {
 
 const PK_LABEL_CACHE = new Map();
 
+// UI translations provide legendSets in the "display" order:
+//   [None, Joyful, Sorrowful, Glorious, Luminous, Chaplet]
+// Device/history records use pk values in the "device" order:
+//   0 None, 1 Joyful, 2 Luminous, 3 Sorrowful, 4 Glorious, 5 Chaplet
+// Map pk -> index within legendSets display order.
+const LEGEND_SET_INDEX_FOR_PK = [0, 1, 4, 2, 3, 5];
+
+function legendSetLabelForPk(sets, pk) {
+  if (!Array.isArray(sets)) return null;
+  const idx = LEGEND_SET_INDEX_FOR_PK[pk];
+  if (typeof idx !== 'number') return null;
+  const label = sets[idx];
+  return typeof label === 'string' && label ? label : null;
+}
+
 function lookupPkLabel(pk) {
   const key = `${historyStrings?.lang || 'fallback'}:${pk}`;
   if (PK_LABEL_CACHE.has(key)) return PK_LABEL_CACHE.get(key);
 
   let label = null;
   const strings = historyStrings;
-  if (strings?.legendSets && Array.isArray(strings.legendSets) && strings.legendSets[pk]) {
-    label = strings.legendSets[pk];
+  if (strings?.legendSets && Array.isArray(strings.legendSets)) {
+    label = legendSetLabelForPk(strings.legendSets, pk);
   } else {
     const lang = strings?.lang;
     if (lang && PK_NAME_INTL[lang] && PK_NAME_INTL[lang][pk]) {
