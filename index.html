@@ -411,39 +411,60 @@
     })();
   </script>
 
-  <!-- Your modules -->
-  <script type="module" src="./js/main.js"></script>
-  <script src="https://lib.arvancloud.ir/nosleep/0.9.0/NoSleep.min.js"></script>
-  <script>
-    let wakeLock = null;
-    const noSleep = new NoSleep();
+	  <!-- Your modules -->
+	  <script type="module" src="./js/main.js"></script>
+	  <script src="https://cdn.jsdelivr.net/npm/nosleep.js@0.12.0/dist/NoSleep.min.js"
+	    onerror="this.onerror=null;this.src='https://unpkg.com/nosleep.js@0.12.0/dist/NoSleep.min.js'"></script>
+	  <script>
+	    let wakeLock = null;
+	    let noSleep = null;
 
-    async function requestWakeLock() {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
+	    function getNoSleep() {
+	      if (noSleep) return noSleep;
+	      if (window.NoSleep) {
+	        noSleep = new window.NoSleep();
+	        return noSleep;
+	      }
+	      return null;
+	    }
+
+	    async function requestWakeLock() {
+	      try {
+	        if ('wakeLock' in navigator) {
+	          wakeLock = await navigator.wakeLock.request('screen');
           wakeLock.addEventListener('release', () => {
             console.log('Wake Lock released');
           });
-          console.log('Wake Lock active');
-        } else {
-          // Fallback to NoSleep
-          noSleep.enable();
-          console.log('NoSleep fallback active');
-        }
-      } catch (err) {
-        console.warn('WakeLock error:', err);
-        try { noSleep.enable(); } catch { }
-      }
-    }
+	          console.log('Wake Lock active');
+	        } else {
+	          // Fallback to NoSleep
+	          const ns = getNoSleep();
+	          if (ns) {
+	            ns.enable();
+	            console.log('NoSleep fallback active');
+	          } else {
+	            console.warn('NoSleep.js failed to load; standby prevention unavailable on this browser.');
+	          }
+	        }
+	      } catch (err) {
+	        console.warn('WakeLock error:', err);
+	        try {
+	          const ns = getNoSleep();
+	          if (ns) ns.enable();
+	        } catch { }
+	      }
+	    }
 
-    function releaseWakeLock() {
-      if (wakeLock) {
-        wakeLock.release();
-        wakeLock = null;
-      }
-      try { noSleep.disable(); } catch { }
-    }
+	    function releaseWakeLock() {
+	      if (wakeLock) {
+	        wakeLock.release();
+	        wakeLock = null;
+	      }
+	      try {
+	        const ns = getNoSleep();
+	        if (ns) ns.disable();
+	      } catch { }
+	    }
 
     // Re-request on visibility change (when user switches tab or screen locks)
     document.addEventListener('visibilitychange', () => {
