@@ -6,6 +6,7 @@ export function initUnifiedBackup({
     getStatsData, restoreStatsData, resetStatsData,
     getHistoryData, restoreHistoryData, resetHistoryData,
     getIntentionsData, restoreIntentionsData, resetIntentionsData,
+    getIntentionsBinData, restoreIntentionsBinData,
     setStatus
 }) {
     const backupBtn = document.getElementById('backupAllBtn');
@@ -19,8 +20,9 @@ export function initUnifiedBackup({
     const selStats = document.getElementById('selStats');
     const selHistory = document.getElementById('selHistory');
     const selIntentions = document.getElementById('selIntentions');
+    const selIntentionsBin = document.getElementById('selIntentionsBin');
 
-    let currentAction = null; // 'restore' or 'reset'
+    let currentAction = null; // 'backup' | 'restore' | 'reset'
     let pendingRestoreFile = null;
 
     const IL = () => {
@@ -36,8 +38,18 @@ export function initUnifiedBackup({
 
     function updateDialogText() {
         const U = IL().unified;
-        if (dialogTitle) dialogTitle.textContent = currentAction === 'restore' ? U.dialogTitleRestore : U.dialogTitleReset;
-        if (dialogDesc) dialogDesc.textContent = currentAction === 'restore' ? U.dialogDescRestore : U.dialogDescReset;
+        if (dialogTitle) {
+            dialogTitle.textContent =
+                currentAction === 'restore' ? U.dialogTitleRestore :
+                    currentAction === 'reset' ? U.dialogTitleReset :
+                        U.dialogTitleBackup;
+        }
+        if (dialogDesc) {
+            dialogDesc.textContent =
+                currentAction === 'restore' ? U.dialogDescRestore :
+                    currentAction === 'reset' ? U.dialogDescReset :
+                        U.dialogDescBackup;
+        }
 
         const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
         setTxt('lblStatsTitle', U.statsTitle);
@@ -46,11 +58,34 @@ export function initUnifiedBackup({
         setTxt('lblHistoryDesc', U.historyDesc);
         setTxt('lblIntentionsTitle', U.intentionsTitle);
         setTxt('lblIntentionsDesc', U.intentionsDesc);
+        setTxt('lblIntentionsBinTitle', U.intentionsBinTitle);
+        setTxt('lblIntentionsBinDesc', U.intentionsBinDesc);
         setTxt('dialogCancelBtn', U.cancel);
         setTxt('dialogConfirmBtn', U.confirm);
     }
 
-    async function performBackup() {
+    function handleBackup() {
+        currentAction = 'backup';
+        pendingRestoreFile = null;
+        updateDialogText();
+
+        selStats.disabled = false;
+        selStats.checked = true;
+        selHistory.disabled = false;
+        selHistory.checked = true;
+        selIntentions.disabled = false;
+        selIntentions.checked = true;
+
+        if (selIntentionsBin) {
+            const supported = typeof getIntentionsBinData === 'function';
+            selIntentionsBin.disabled = !supported;
+            selIntentionsBin.checked = false;
+        }
+
+        dialog.showModal();
+    }
+
+    async function performBackup({ doStats, doHistory, doIntentions, doIntentionsBin }) {
         const U = IL().unified;
         if (!window.JSZip) {
             alert(U.jszipMissing);
@@ -61,17 +96,29 @@ export function initUnifiedBackup({
         const stamp = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`;
 
         try {
-            setStatus(U.backupProgressStats);
-            const stats = await getStatsData();
-            if (stats) zip.file('stats.json', JSON.stringify(stats, null, 2));
+            if (doStats) {
+                setStatus(U.backupProgressStats);
+                const stats = await getStatsData();
+                if (stats) zip.file('stats.json', JSON.stringify(stats, null, 2));
+            }
 
-            setStatus(U.backupProgressHistory);
-            const history = await getHistoryData(); // Expecting Blob or Uint8Array
-            if (history) zip.file('history.bin', history);
+            if (doHistory) {
+                setStatus(U.backupProgressHistory);
+                const history = await getHistoryData(); // Expecting Blob or Uint8Array
+                if (history) zip.file('history.bin', history);
+            }
 
-            setStatus(U.backupProgressIntentions);
-            const intentions = await getIntentionsData();
-            if (intentions) zip.file('intentions.json', JSON.stringify(intentions, null, 2));
+            if (doIntentions) {
+                setStatus(U.backupProgressIntentions);
+                const intentions = await getIntentionsData();
+                if (intentions) zip.file('intentions.json', JSON.stringify(intentions, null, 2));
+            }
+
+            if (doIntentionsBin) {
+                setStatus(U.backupProgressIntentionsBin);
+                const bin = await getIntentionsBinData?.();
+                if (bin) zip.file('nvs-intentions.bin', bin);
+            }
 
             setStatus(U.backupProgressCompress);
             const content = await zip.generateAsync({ type: 'blob' });
@@ -94,8 +141,9 @@ export function initUnifiedBackup({
             const hasStats = !!contents.file('stats.json');
             const hasHistory = !!contents.file('history.bin');
             const hasIntentions = !!contents.file('intentions.json');
+            const hasIntentionsBin = !!(contents.file('nvs-intentions.bin') || contents.file('intentions.bin'));
 
-            if (!hasStats && !hasHistory && !hasIntentions) {
+            if (!hasStats && !hasHistory && !hasIntentions && !hasIntentionsBin) {
                 if (file.name.endsWith('.json')) {
                     alert(U.invalidZip);
                     return;
@@ -114,6 +162,12 @@ export function initUnifiedBackup({
 
             selIntentions.disabled = !hasIntentions;
             selIntentions.checked = hasIntentions;
+
+            if (selIntentionsBin) {
+                const supported = typeof restoreIntentionsBinData === 'function';
+                selIntentionsBin.disabled = !supported || !hasIntentionsBin;
+                selIntentionsBin.checked = supported && hasIntentionsBin;
+            }
 
             dialog.showModal();
         } catch (err) {
@@ -134,6 +188,11 @@ export function initUnifiedBackup({
         selIntentions.disabled = false;
         selIntentions.checked = false;
 
+        if (selIntentionsBin) {
+            selIntentionsBin.disabled = true;
+            selIntentionsBin.checked = false;
+        }
+
         dialog.showModal();
     }
 
@@ -142,10 +201,16 @@ export function initUnifiedBackup({
         const doStats = selStats.checked && !selStats.disabled;
         const doHistory = selHistory.checked && !selHistory.disabled;
         const doIntentions = selIntentions.checked && !selIntentions.disabled;
+        const doIntentionsBin = !!(selIntentionsBin && selIntentionsBin.checked && !selIntentionsBin.disabled);
 
         dialog.close();
 
-        if (!doStats && !doHistory && !doIntentions) return;
+        if (!doStats && !doHistory && !doIntentions && !doIntentionsBin) return;
+
+        if (currentAction === 'backup') {
+            await performBackup({ doStats, doHistory, doIntentions, doIntentionsBin });
+            return;
+        }
 
         if (currentAction === 'restore' && pendingRestoreFile) {
             try {
@@ -162,6 +227,14 @@ export function initUnifiedBackup({
                     }
                     if (binary) {
                         await restoreHistoryData(binary);
+                    }
+                }
+                if (doIntentionsBin && restoreIntentionsBinData) {
+                    setStatus(U.restoreProgressIntentionsBin);
+                    const fileRef = pendingRestoreFile.file('nvs-intentions.bin') || pendingRestoreFile.file('intentions.bin');
+                    const binary = fileRef ? await fileRef.async('uint8array') : null;
+                    if (binary) {
+                        await restoreIntentionsBinData(binary);
                     }
                 }
                 if (doIntentions) {
@@ -197,7 +270,7 @@ export function initUnifiedBackup({
         }
     }
 
-    if (backupBtn) backupBtn.addEventListener('click', performBackup);
+    if (backupBtn) backupBtn.addEventListener('click', handleBackup);
 
     if (restoreBtn) restoreBtn.addEventListener('click', () => {
         if (restoreInput) openFilePicker(restoreInput);

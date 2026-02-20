@@ -1156,7 +1156,45 @@ export function initIntentions({ client, setStatus }) {
       if (!state.available || !state.entries.length) return null;
       return buildExportPayload();
     },
+    getIntentionsBinData: async () => {
+      if (!state.available || !state.entries.length) return null;
+      const scheduleFromSummary = typeof state.summary?.entries === 'string' ? state.summary.entries.trim() : '';
+      const schedule = scheduleFromSummary || state.entries.map((entry) => {
+        const startEpoch = dateInputToEpoch(entry.controls?.dateInput?.value) || entry.start || 0;
+        const setVal = Number(entry.controls?.setSelect?.value ?? entry.set ?? 0) || 0;
+        const partVal = Number(entry.controls?.partSelect?.value ?? entry.part ?? 0) || 0;
+        return `${startEpoch}|${setVal}|${partVal}`;
+      }).join(',');
+      const titles = state.entries.map((entry) => entry.title || '');
+      const descs = state.entries.map((entry) => entry.desc || '');
+      return buildIntentionsBin({
+        numIntentions: state.entries.length,
+        iS: schedule,
+        titles,
+        descs,
+      });
+    },
     restoreIntentionsData: restoreFromData,
+    restoreIntentionsBinData: async (bin) => {
+      if (!state.available) {
+        alert(IL().connectFirst || 'Connect to the rosary first.');
+        return;
+      }
+      if (state.busy) return;
+      const strings = IL();
+      const bytes = bin instanceof Uint8Array ? bin : new Uint8Array(bin || []);
+      if (!bytes.length) throw new Error(strings.invalidBin || 'Invalid intentions partition file.');
+      setBusy(true);
+      try {
+        setStatus(() => strings.statusRestoring || 'Restoring intentions…');
+        await uploadIntentionsBin(bytes, { statusLabel: strings.statusRestoring || 'Restoring intentions…' });
+        await refresh({ silent: true, ignoreBusy: true });
+        setStatus(() => strings.statusRestoreDone || strings.statusUpdated || 'Intentions restored.');
+      } finally {
+        setBusy(false);
+        updateActions();
+      }
+    },
     resetIntentionsData: () => resetSchedule(true),
   };
 }
