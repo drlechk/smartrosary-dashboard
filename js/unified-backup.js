@@ -229,6 +229,12 @@ export function initUnifiedBackup({
                         await restoreHistoryData(binary);
                     }
                 }
+                if (doIntentions) {
+                    setStatus(U.restoreProgressIntentions);
+                    const text = await pendingRestoreFile.file('intentions.json').async('string');
+                    await restoreIntentionsData(JSON.parse(text));
+                }
+                // Must be last: firmware may reboot after restoring the raw partition.
                 if (doIntentionsBin && restoreIntentionsBinData) {
                     setStatus(U.restoreProgressIntentionsBin);
                     const fileRef = pendingRestoreFile.file('nvs-intentions.bin') || pendingRestoreFile.file('intentions.bin');
@@ -236,11 +242,6 @@ export function initUnifiedBackup({
                     if (binary) {
                         await restoreIntentionsBinData(binary);
                     }
-                }
-                if (doIntentions) {
-                    setStatus(U.restoreProgressIntentions);
-                    const text = await pendingRestoreFile.file('intentions.json').async('string');
-                    await restoreIntentionsData(JSON.parse(text));
                 }
                 setStatus(U.restoreComplete);
             } catch (err) {
