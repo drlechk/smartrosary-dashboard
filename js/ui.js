@@ -3,6 +3,7 @@ import { setChartLabels, updateAverages, updateDonut, updateParts, applyChartThe
 import { applyWallpaperI18n, setWallpaperLang } from './wallpaper.js';
 import { applyHistoryI18n, applyHistoryTheme } from './history.js';
 import { i18n } from './i18n.js';
+import { isUpdateAvailable } from './firmware-update.js';
 
 let lang = 'pl';
 try { if (typeof window !== 'undefined') window.currentLang = lang; } catch { }
@@ -71,6 +72,11 @@ function renderFwUpdateBanner() {
   if (!banner) return;
 
   if (!fwUpdateState?.currentVersion || !fwUpdateState?.latestVersion || !fwUpdateState?.installerUrl) {
+    banner.hidden = true;
+    return;
+  }
+
+  if (!isUpdateAvailable(fwUpdateState.currentVersion, fwUpdateState.latestVersion)) {
     banner.hidden = true;
     return;
   }
