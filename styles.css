@@ -96,7 +96,6 @@
 
   .fw-update-banner {
     width: min(980px, 100%);
-    display: flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
@@ -108,6 +107,10 @@
     color: #cde3ff;
     font-size: 12px;
     line-height: 1.25;
+  }
+
+  .fw-update-banner:not([hidden]) {
+    display: flex;
   }
 
   .fw-update-banner a {
