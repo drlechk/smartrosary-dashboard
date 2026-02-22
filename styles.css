@@ -94,6 +94,33 @@
     width: 100%;
   }
 
+  .fw-update-banner {
+    width: min(980px, 100%);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(13, 32, 48, 0.85);
+    border: 1px solid rgba(29, 53, 81, 0.95);
+    color: #cde3ff;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .fw-update-banner a {
+    color: #cfe4ff;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: 600;
+  }
+
+  .fw-update-banner a:hover {
+    text-decoration-thickness: 2px;
+  }
+
   .global-progress {
     display: none;
   }

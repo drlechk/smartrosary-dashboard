@@ -10,6 +10,7 @@ let lastStats = null;
 let lastSettings = null;
 let lastStatusKey = null; // i18n key of last status (if set via key)
 let lastStatusResolver = null;
+let fwUpdateState = null; // { currentVersion, latestVersion, installerUrl }
 
 const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
@@ -63,6 +64,44 @@ export function setStatusText(text, resolver) {
   lastStatusKey = null;
   lastStatusResolver = typeof resolver === 'function' ? resolver : null;
   const el = $('status'); if (el) el.textContent = text ?? '';
+}
+
+function renderFwUpdateBanner() {
+  const banner = document.getElementById('fwUpdateBanner');
+  if (!banner) return;
+
+  if (!fwUpdateState?.currentVersion || !fwUpdateState?.latestVersion || !fwUpdateState?.installerUrl) {
+    banner.hidden = true;
+    return;
+  }
+
+  const L = i18n[lang] || i18n.en;
+  const textEl = document.getElementById('fwUpdateText');
+  const linkEl = document.getElementById('fwUpdateLink');
+  const current = fwUpdateState.currentVersion;
+  const latest = fwUpdateState.latestVersion;
+
+  const msg = typeof L.fwUpdateAvailable === 'function'
+    ? L.fwUpdateAvailable({ current, latest })
+    : (L.fwUpdateAvailable || `Firmware update available: ${current} → ${latest}`);
+
+  if (textEl) textEl.textContent = msg;
+  if (linkEl) {
+    linkEl.href = fwUpdateState.installerUrl;
+    linkEl.textContent = L.fwUpdateOpenInstaller || 'Open installer';
+    linkEl.title = L.fwUpdateOpenInstaller || 'Open installer';
+  }
+  banner.hidden = false;
+}
+
+export function setFwUpdateBanner({ currentVersion, latestVersion, installerUrl }) {
+  fwUpdateState = { currentVersion, latestVersion, installerUrl };
+  renderFwUpdateBanner();
+}
+
+export function clearFwUpdateBanner() {
+  fwUpdateState = null;
+  renderFwUpdateBanner();
 }
 
 export function applyI18n() {
@@ -198,6 +237,7 @@ export function applyI18n() {
 
   setChartLabels(L);
   renderPillsFromCache();
+  renderFwUpdateBanner();
   setWallpaperLang(lang);
   applyWallpaperI18n();
   applyHistoryI18n({ ...L.history, calendar: L.calendar, lang });

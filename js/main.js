@@ -1,7 +1,7 @@
 import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateStart, progAggregateSet, progAggregateEnter, progAggregateLeave, progAggregateDone, progAggregateActive, platformFlags } from './utils.js';
 import { BleClient } from './ble.js';
 import { initCharts } from './charts.js';
-import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText, initThemeToggle } from './ui.js';
+import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText, initThemeToggle, setFwUpdateBanner, clearFwUpdateBanner } from './ui.js';
 import { doBackup } from './backup.js';
 import { restoreFromJson } from './restore.js';
 import { requestKeysConsent, backupKeys, restoreKeys } from './auth.js';
@@ -12,6 +12,7 @@ import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetH
 import { initIntentions } from './intentions.js';
 import { initUnifiedBackup } from './unified-backup.js';
 import { getBackupData } from './backup.js';
+import { getInstallerUrl, getLatestFirmwareVersion, isUpdateAvailable, normalizeVersionString } from './firmware-update.js';
 
 const client = new BleClient();
 
@@ -63,6 +64,62 @@ function standaloneProgressComplete(delayMs = 400, finalValue) {
   standaloneProgress.active = false;
   standaloneProgress.label = null;
   standaloneProgress.max = 100;
+}
+
+let fwCheckInFlight = false;
+let fwLastDeviceVersion = null;
+let fwPendingDeviceVersion = null;
+
+async function runFwUpdateCheck(deviceFwVersionRaw) {
+  const installerUrl = getInstallerUrl();
+  const current = normalizeVersionString(deviceFwVersionRaw);
+  if (!current) {
+    try { clearFwUpdateBanner(); } catch { }
+    return;
+  }
+
+  try {
+    const { version: latest } = await getLatestFirmwareVersion();
+    if (latest && isUpdateAvailable(current, latest)) {
+      setFwUpdateBanner({ currentVersion: current, latestVersion: latest, installerUrl });
+    } else {
+      clearFwUpdateBanner();
+    }
+  } catch (err) {
+    // If the installer manifest can't be reached/parsed, keep the UI quiet.
+    console.warn('[fw] update check failed', err?.message || err);
+  }
+}
+
+function scheduleFwUpdateCheck(deviceFwVersionRaw) {
+  const current = normalizeVersionString(deviceFwVersionRaw);
+  if (!current) {
+    fwLastDeviceVersion = null;
+    fwPendingDeviceVersion = null;
+    try { clearFwUpdateBanner(); } catch { }
+    return;
+  }
+  if (current === fwLastDeviceVersion) return;
+  fwLastDeviceVersion = current;
+
+  if (fwCheckInFlight) {
+    fwPendingDeviceVersion = current;
+    return;
+  }
+
+  fwCheckInFlight = true;
+  (async () => {
+    let next = current;
+    try {
+      while (next) {
+        fwPendingDeviceVersion = null;
+        await runFwUpdateCheck(next);
+        next = fwPendingDeviceVersion;
+      }
+    } finally {
+      fwCheckInFlight = false;
+    }
+  })();
 }
 
 initHistory();
@@ -399,6 +456,9 @@ async function refreshOnce() {
     try { jsSettings = parseJsonWithFallback(cleanedSettings, 'Settings', { dropEntries: true }); }
     catch (parseErr) { console.warn('Settings JSON failed after recovery', parseErr); return false; }
 
+    // Firmware update info (non-blocking UI banner)
+    try { scheduleFwUpdateCheck(jsSettings?.fwVersion); } catch { }
+
     if (cleanedParts != null) {
       try { jsParts = parseJsonWithFallback(cleanedParts, 'Parts'); }
       catch (parseErr) { console.warn('Parts JSON failed after recovery', parseErr); jsParts = null; }
@@ -531,6 +591,9 @@ async function handleConnect() {
   let aggStarted = false;
   try {
     stopSettingsPolling();
+    fwLastDeviceVersion = null;
+    fwPendingDeviceVersion = null;
+    try { clearFwUpdateBanner(); } catch { }
     // --- Overall progress across connection + sync steps ---
     // Plan weights sum to ~100; adjust as needed.
     const PLAN = [
@@ -779,6 +842,9 @@ async function handleDisconnect() {
   try { resetWallpaperFS(); } catch { }
   try { await resetHistoryCard(); } catch { }
   stopSettingsPolling();
+  fwLastDeviceVersion = null;
+  fwPendingDeviceVersion = null;
+  try { clearFwUpdateBanner(); } catch { }
   await client.disconnect();
   intentions.onDisconnected();
   setCardsMuted(true);
@@ -814,6 +880,7 @@ function applySettingsPayload(textPayload, contextLabel) {
     const js = parseJsonWithFallback(trimmed, contextLabel, { dropEntries: true });
     updatingFromDevice = true;
     updateSettingsOnly(js);
+    try { scheduleFwUpdateCheck(js?.fwVersion); } catch { }
   } catch (err) {
     console.warn(`${contextLabel} parse failed`, err);
   } finally {
