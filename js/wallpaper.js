@@ -813,6 +813,10 @@ async function _read(name) {
   const buf = new Uint8Array(2 + nm.length);
   buf[0]=0x11; buf[1]=nm.length; buf.set(nm,2);
   if (isBluefyClient) await _armBluefyReadGate();
+  readState = {
+    name, header:false, size:0, off:0, w:0, h:0, offset:4, rowsDrawn:0, bigEndian:true, buf:null,
+    firstDataTs:0, dataChunks:0, headerTs:0, noDataWarnTimer:null
+  };
   log('_read begin', {
     name,
     bluefy:isBluefyClient,
@@ -822,10 +826,6 @@ async function _read(name) {
     fsStatBound: !!fsStat
   });
   await _writeFs(buf);
-  readState = {
-    name, header:false, size:0, off:0, w:0, h:0, offset:4, rowsDrawn:0, bigEndian:true, buf:null,
-    firstDataTs:0, dataChunks:0, headerTs:0, noDataWarnTimer:null
-  };
 }
 async function _show(name) {
   const enc = new TextEncoder();
