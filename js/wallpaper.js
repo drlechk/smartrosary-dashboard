@@ -171,6 +171,21 @@ let currentGlobalProgressLabel = null;
 let currentGlobalProgressMax = null;
 
 // ---------- Utils ----------
+function _gattPropsSnapshot(char) {
+  try {
+    const p = char?.properties;
+    if (!p) return null;
+    return {
+      notify: !!p.notify,
+      indicate: !!p.indicate,
+      read: !!p.read,
+      write: !!p.write,
+      writeWithoutResponse: !!p.writeWithoutResponse
+    };
+  } catch {
+    return null;
+  }
+}
 
 function _canDelete() {
   return Array.isArray(files) && files.length > 1;
@@ -276,7 +291,7 @@ export async function attachWallpaperFS(server) {
     const fss = await server.getPrimaryService(FS_SVC_UUID);
     fsCtrl = await fss.getCharacteristic(FS_CTRL_UUID); log('attachWallpaperFS: CTRL ready');
     fsInfo = await fss.getCharacteristic(FS_INFO_UUID); log('attachWallpaperFS: INFO ready');
-    fsData = await fss.getCharacteristic(FS_DATA_UUID); log('attachWallpaperFS: DATA ready');
+    fsData = await fss.getCharacteristic(FS_DATA_UUID); log('attachWallpaperFS: DATA ready', { props: _gattPropsSnapshot(fsData) });
     fsStat = await fss.getCharacteristic(FS_STAT_UUID); log('attachWallpaperFS: STAT ready');
 
     const safeStart = async (char, name) => {
@@ -301,6 +316,11 @@ export async function attachWallpaperFS(server) {
     fsInfo.addEventListener('characteristicvaluechanged', _onFsInfo);
     fsData.addEventListener('characteristicvaluechanged', _onFsData);
     fsStat.addEventListener('characteristicvaluechanged', _onFsStat);
+    log('attachWallpaperFS: listeners attached', {
+      info: !!fsInfo,
+      data: !!fsData,
+      stat: !!fsStat
+    });
 
     connected = true;
     _updateMuted();
@@ -389,6 +409,9 @@ async function _rebindFsService() {
     fsInfo = info;
     fsData = data;
     fsStat = stat;
+    log('_rebindFsService: characteristics rebound', {
+      dataProps: _gattPropsSnapshot(fsData)
+    });
 
     connected = true;
     fsLastError = null;
@@ -790,9 +813,19 @@ async function _read(name) {
   const buf = new Uint8Array(2 + nm.length);
   buf[0]=0x11; buf[1]=nm.length; buf.set(nm,2);
   if (isBluefyClient) await _armBluefyReadGate();
-  log('_read begin', { name, bluefy:isBluefyClient });
+  log('_read begin', {
+    name,
+    bluefy:isBluefyClient,
+    fsDataBound: !!fsData,
+    fsDataProps: _gattPropsSnapshot(fsData),
+    fsInfoBound: !!fsInfo,
+    fsStatBound: !!fsStat
+  });
   await _writeFs(buf);
-  readState = { name, header:false, size:0, off:0, w:0, h:0, offset:4, rowsDrawn:0, bigEndian:true, buf:null };
+  readState = {
+    name, header:false, size:0, off:0, w:0, h:0, offset:4, rowsDrawn:0, bigEndian:true, buf:null,
+    firstDataTs:0, dataChunks:0, headerTs:0, noDataWarnTimer:null
+  };
 }
 async function _show(name) {
   const enc = new TextEncoder();
@@ -1076,7 +1109,8 @@ function _onFsInfo(e){
       h: dv.getUint16(3, true),
       size: dv.getUint32(6, true),
       off: 0, rowsDrawn: 0, offset: 4, bigEndian:true, buf:null, imgData:null,
-      pendingRows:0, lastFlushTs: performance.now(), lightPreview:isBluefyClient
+      pendingRows:0, lastFlushTs: performance.now(), lightPreview:isBluefyClient,
+      firstDataTs:0, dataChunks:0, headerTs: performance.now(), noDataWarnTimer:null
     };
     workCanvas.width = readState.w; workCanvas.height = readState.h;
     readState.imgData = workCtx.createImageData(readState.w, readState.h);
@@ -1105,6 +1139,17 @@ function _onFsInfo(e){
       viewCtx.restore();
     };
     _drawBadge(0, 0, redrawBase0);
+    readState.noDataWarnTimer = setTimeout(() => {
+      if (!readState || !readState.header) return;
+      if (readState.off > 0) return;
+      log('READ waiting for FS_DATA', {
+        name: readState.name,
+        size: readState.size,
+        fsDataBound: !!fsData,
+        fsDataProps: _gattPropsSnapshot(fsData),
+        reading: busy.reading
+      });
+    }, 1500);
     if (isBluefyClient) {
       _releaseBluefyReadGate('header ready');
     }
@@ -1215,6 +1260,29 @@ function _onFsData(e){
   const dv = e.target.value;
   const tag = dv.getUint8(0);
   const last = (tag & 1) === 1;
+  const now = performance.now();
+  if (!readState.firstDataTs) {
+    readState.firstDataTs = now;
+    log('FS_DATA first packet', {
+      name: readState.name,
+      delayMs: Math.round(now - (readState.headerTs || now)),
+      len: dv.byteLength,
+      tag,
+      last
+    });
+  }
+  readState.dataChunks = (readState.dataChunks || 0) + 1;
+  if (readState.dataChunks <= 3 || last) {
+    log('FS_DATA packet', {
+      name: readState.name,
+      chunkIndex: readState.dataChunks,
+      len: dv.byteLength,
+      tag,
+      last,
+      offBefore: readState.off,
+      expected: readState.size
+    });
+  }
   logChunk('_onFsData chunk', {
     tag,
     last,
@@ -1291,6 +1359,10 @@ function _onFsData(e){
 
   // done
   if (last && readState.off >= readState.size) {
+    if (readState.noDataWarnTimer) {
+      clearTimeout(readState.noDataWarnTimer);
+      readState.noDataWarnTimer = null;
+    }
     if (readState.lightPreview) {
       readState.pendingRows = Math.max(readState.pendingRows || 0, readState.h);
       _maybeFlushBluefyRows(true);
@@ -1300,7 +1372,8 @@ function _onFsData(e){
       rows: finalRows,
       bytes: readState.off,
       size: readState.size,
-      bluefyMode: !!readState.lightPreview
+      bluefyMode: !!readState.lightPreview,
+      chunks: readState.dataChunks || 0
     });
     _blit();
     if (!readState.lightPreview) {
