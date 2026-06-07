@@ -1,11 +1,12 @@
 const INSTALLER_URL = 'https://drlechk.github.io/smartrosary-web-installer/';
 
-const CANDIDATE_URLS = [
-  new URL('manifest.json', INSTALLER_URL).toString(),
-  new URL('esp-web-tools-manifest.json', INSTALLER_URL).toString(),
-  new URL('firmware/manifest.json', INSTALLER_URL).toString(),
-  new URL('version.json', INSTALLER_URL).toString(),
-  new URL('latest.json', INSTALLER_URL).toString(),
+const CANDIDATE_SOURCES = [
+  { url: INSTALLER_URL, kind: 'html' },
+  { url: new URL('manifest.json', INSTALLER_URL).toString(), kind: 'json' },
+  { url: new URL('esp-web-tools-manifest.json', INSTALLER_URL).toString(), kind: 'json' },
+  { url: new URL('firmware/manifest.json', INSTALLER_URL).toString(), kind: 'json' },
+  { url: new URL('version.json', INSTALLER_URL).toString(), kind: 'json' },
+  { url: new URL('latest.json', INSTALLER_URL).toString(), kind: 'json' },
 ];
 
 let latestCache = null; // { atMs, value: { version, sourceUrl } }
@@ -75,10 +76,30 @@ function extractVersionFromManifest(json) {
   return null;
 }
 
+function extractVersionFromHtml(html) {
+  if (!html || typeof html !== 'string') return null;
+
+  const scripted = html.match(/\bFW_VERSION\s*=\s*["'`]([^"'`]+)["'`]/i);
+  const scriptedNorm = normalizeVersionString(scripted?.[1]);
+  if (scriptedNorm) return scriptedNorm;
+
+  const heading = html.match(/Upload firmware\s+v?(\d+(?:\.\d+){0,3})/i);
+  const headingNorm = normalizeVersionString(heading?.[1]);
+  if (headingNorm) return headingNorm;
+
+  return null;
+}
+
 async function fetchJson(url) {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
+}
+
+async function fetchText(url) {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.text();
 }
 
 export async function getLatestFirmwareVersion({ maxAgeMs = 10 * 60 * 1000 } = {}) {
@@ -87,19 +108,27 @@ export async function getLatestFirmwareVersion({ maxAgeMs = 10 * 60 * 1000 } = {
   if (latestInFlight) return await latestInFlight;
 
   latestInFlight = (async () => {
+    let best = null;
     let lastErr = null;
-    for (const url of CANDIDATE_URLS) {
+    for (const source of CANDIDATE_SOURCES) {
       try {
-        const json = await fetchJson(url);
-        const version = extractVersionFromManifest(json);
+        const version = source.kind === 'html'
+          ? extractVersionFromHtml(await fetchText(source.url))
+          : extractVersionFromManifest(await fetchJson(source.url));
+
         if (version) {
-          const value = { version, sourceUrl: url };
-          latestCache = { atMs: Date.now(), value };
-          return value;
+          const value = { version, sourceUrl: source.url };
+          if (!best || compareVersions(best.version, version) < 0) {
+            best = value;
+          }
         }
       } catch (err) {
         lastErr = err;
       }
+    }
+    if (best) {
+      latestCache = { atMs: Date.now(), value: best };
+      return best;
     }
     throw lastErr || new Error('No firmware version found');
   })();
@@ -110,4 +139,3 @@ export async function getLatestFirmwareVersion({ maxAgeMs = 10 * 60 * 1000 } = {
     latestInFlight = null;
   }
 }
-
