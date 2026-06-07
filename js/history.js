@@ -221,7 +221,10 @@ const PK_NAME = ['NONE', 'JOYFUL', 'LUMINOUS', 'SORROWFUL', 'GLORIOUS', 'DIVINE_
 const PK_NAME_INTL = {
   en: ['None', 'Joyful', 'Luminous', 'Sorrowful', 'Glorious', 'Chaplet'],
   pl: ['Brak', 'Radosne', 'Tajemnice Światła', 'Bolesne', 'Chwalebne', 'Koronka'],
-  de: ['Keins', 'Freudenreicher', 'Lichtreicher', 'Schmerzhafter', 'Glorreicher', 'Korone']
+  de: ['Keins', 'Freudenreicher', 'Lichtreicher', 'Schmerzhafter', 'Glorreicher', 'Korone'],
+  fr: ['Aucun', 'Joyeux', 'Lumineux', 'Douloureux', 'Glorieux', 'Chapelet'],
+  es: ['Ninguno', 'Gozosos', 'Luminosos', 'Dolorosos', 'Gloriosos', 'Coronilla'],
+  pt: ['Nenhum', 'Gozosos', 'Luminosos', 'Dolorosos', 'Gloriosos', 'Terço']
 };
 
 let gRows = [];

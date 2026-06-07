@@ -156,7 +156,7 @@ export function applyI18n() {
     statusEl.textContent = i18n[lang][lastStatusKey];
   } else if (statusEl) {
     const current = (statusEl.textContent || '').trim();
-    const defaults = [i18n.en.statusNot, i18n.pl.statusNot, i18n.de.statusNot].filter(Boolean);
+    const defaults = [i18n.en.statusNot, i18n.pl.statusNot, i18n.de.statusNot, i18n.fr?.statusNot, i18n.es?.statusNot, i18n.pt?.statusNot].filter(Boolean);
     if (!current || defaults.includes(current)) {
       statusEl.textContent = L.statusNot;
       lastStatusKey = 'statusNot';
