@@ -2,6 +2,7 @@ const INSTALLER_URL = 'https://drlechk.github.io/smartrosary-web-installer/';
 
 const CANDIDATE_SOURCES = [
   { url: INSTALLER_URL, kind: 'html' },
+  { url: new URL('version.js', INSTALLER_URL).toString(), kind: 'js' },
   { url: new URL('manifest.json', INSTALLER_URL).toString(), kind: 'json' },
   { url: new URL('esp-web-tools-manifest.json', INSTALLER_URL).toString(), kind: 'json' },
   { url: new URL('firmware/manifest.json', INSTALLER_URL).toString(), kind: 'json' },
@@ -76,14 +77,18 @@ function extractVersionFromManifest(json) {
   return null;
 }
 
-function extractVersionFromHtml(html) {
-  if (!html || typeof html !== 'string') return null;
+function extractVersionFromText(text) {
+  if (!text || typeof text !== 'string') return null;
 
-  const scripted = html.match(/\bFW_VERSION\s*=\s*["'`]([^"'`]+)["'`]/i);
+  const smartRosaryVersion = text.match(/\bSMARTROSARY_VERSION\s*=\s*["'`]([^"'`]+)["'`]/i);
+  const smartRosaryVersionNorm = normalizeVersionString(smartRosaryVersion?.[1]);
+  if (smartRosaryVersionNorm) return smartRosaryVersionNorm;
+
+  const scripted = text.match(/\bFW_VERSION\s*=\s*["'`]([^"'`]+)["'`]/i);
   const scriptedNorm = normalizeVersionString(scripted?.[1]);
   if (scriptedNorm) return scriptedNorm;
 
-  const heading = html.match(/Upload firmware\s+v?(\d+(?:\.\d+){0,3})/i);
+  const heading = text.match(/Upload firmware\s+v?(\d+(?:\.\d+){0,3})/i);
   const headingNorm = normalizeVersionString(heading?.[1]);
   if (headingNorm) return headingNorm;
 
@@ -112,9 +117,12 @@ export async function getLatestFirmwareVersion({ maxAgeMs = 10 * 60 * 1000 } = {
     let lastErr = null;
     for (const source of CANDIDATE_SOURCES) {
       try {
-        const version = source.kind === 'html'
-          ? extractVersionFromHtml(await fetchText(source.url))
-          : extractVersionFromManifest(await fetchJson(source.url));
+        let version = null;
+        if (source.kind === 'json') {
+          version = extractVersionFromManifest(await fetchJson(source.url));
+        } else {
+          version = extractVersionFromText(await fetchText(source.url));
+        }
 
         if (version) {
           const value = { version, sourceUrl: source.url };
