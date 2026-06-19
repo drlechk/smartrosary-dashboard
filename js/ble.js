@@ -20,8 +20,6 @@ export const UUID = {
   INFO_INTENT_ENTRY:'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1011',
   TOUCH_CHAR:       '12345678-1234-5678-1234-56789abcdea1',
   KEYS_CHAR:        '12345678-1234-5678-1234-56789abcdea2',
-  AUTH_INFO:        '8b40f200-78e7-4a6b-b1d3-6b5f3a10a201',
-  AUTH_CTRL:        '8b40f201-78e7-4a6b-b1d3-6b5f3a10a201',
   STATUS:           '12345678-1234-5678-1234-56789abcdef2',
 };
 
@@ -40,9 +38,6 @@ export class BleClient extends EventTarget {
     this.chIntentEntry = null;
     this.chIntentionsBin = null;
     this.statusChar = null;
-
-    this.chAuthInfo = null;
-    this.chAuthCtrl = null;
 
     this.touchChar = null;
     this.keysChar = null;
@@ -198,22 +193,6 @@ export class BleClient extends EventTarget {
     } catch (err) {
       this.chIntentionsBin = null;
       log('INTENTIONS_BIN characteristic missing', err?.message || err);
-    }
-
-    // auth (optional)
-    try {
-      this.chAuthInfo = await withRetry(() => this.service.getCharacteristic(UUID.AUTH_INFO));
-      log('AUTH_INFO characteristic ready');
-    } catch (err) {
-      this.chAuthInfo = null;
-      log('AUTH_INFO characteristic missing', err?.message || err);
-    }
-    try {
-      this.chAuthCtrl = await withRetry(() => this.service.getCharacteristic(UUID.AUTH_CTRL));
-      log('AUTH_CTRL characteristic ready');
-    } catch (err) {
-      this.chAuthCtrl = null;
-      log('AUTH_CTRL characteristic missing', err?.message || err);
     }
   }
 

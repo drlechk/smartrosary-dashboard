@@ -4,7 +4,6 @@ import { initCharts } from './charts.js';
 import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText, initThemeToggle, setFwUpdateBanner, clearFwUpdateBanner } from './ui.js';
 import { doBackup } from './backup.js';
 import { restoreFromJson } from './restore.js';
-import { requestKeysConsent, backupKeys, restoreKeys } from './auth.js';
 import { initRemote } from './remote.js';
 import { i18n } from './i18n.js';
 import { attachWallpaperFS, resetWallpaperFS, setWallpaperConsent } from './wallpaper.js';
@@ -1186,50 +1185,6 @@ function wireControls() {
       }
     }, 140);
   });
-
-  // Keys backup/restore
-  const keysBackupBtn = $('keysBackupBtn');
-  const keysRestoreBtn = $('keysRestoreBtn');
-  const keysRestoreFile = $('keysRestoreFile');
-  if (keysBackupBtn && keysRestoreBtn && keysRestoreFile) {
-    keysBackupBtn.addEventListener('click', async () => {
-      try {
-        await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode: 'export' });
-        await backupKeys({ chAuthInfo: client.chAuthInfo, statusEl: $('status'), i18nL: i18n[getLang()] });
-      } catch (e) {
-        console.error(e);
-        const errMsg = e?.message || String(e);
-        status(() => {
-          const Ln = i18n[getLang()] || i18n.en;
-          const formatter = Ln.statusKeysBackupFailed || ((msg) => `Keys backup failed: ${msg}`);
-          return formatter(errMsg);
-        });
-      }
-    });
-
-    keysRestoreBtn.addEventListener('click', () => keysRestoreFile.click());
-    keysRestoreFile.addEventListener('change', async (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
-      try {
-        const js = JSON.parse(await f.text());
-        const id = js.id, pub = js.pubKey, priv = js.privKey;
-        if (!id || !pub || !priv) throw new Error('File must contain {id, pubKey, privKey}');
-        await requestKeysConsent({ chCtrl: client.chCtrl, statusChar: client.statusChar, mode: 'restore' });
-        await restoreKeys({ chAuthCtrl: client.chAuthCtrl, statusEl: $('status'), waitReady: (...a) => client.waitReady(...a), id, pubKey: pub, privKey: priv, i18nL: i18n[getLang()] });
-      } catch (e2) {
-        console.error(e2);
-        const errMsg = e2?.message || String(e2);
-        status(() => {
-          const Ln = i18n[getLang()] || i18n.en;
-          const formatter = Ln.statusKeysRestoreCancelled || ((msg) => `Keys restore cancelled: ${msg}`);
-          return formatter(errMsg);
-        });
-      } finally {
-        e.target.value = '';
-      }
-    });
-  }
 
   // Lang selector
   wireLangSelector(() => {

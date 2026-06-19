@@ -208,9 +208,6 @@ export function applyI18n() {
   setTxt('rcTitle', L.rcTitle);
   setTxt('rcStatus', L.rcInactive);
 
-  setTxt('keysBackupBtn', L.keysBackupBtn);
-  setTxt('keysRestoreBtn', L.keysRestoreBtn);
-
   const IL = L.intentions || {};
   setTxt('intentionsTitle', IL.title || 'Intentions Scheduler');
   const intentionsIntro = $('intentionsIntro');
