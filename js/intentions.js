@@ -1152,6 +1152,7 @@ export function initIntentions({ client, setStatus }) {
       renderTable();
       updateActions();
     },
+    isAvailable: () => state.available,
     getIntentionsData: async () => {
       if (!state.available || !state.entries.length) return null;
       return buildExportPayload();
@@ -1169,7 +1170,8 @@ export function initIntentions({ client, setStatus }) {
       const descs = state.entries.map((entry) => entry.desc || '');
       return buildIntentionsBin({
         numIntentions: state.entries.length,
-        iS: schedule,
+        iS: titles.join('\n'),
+        iSched: schedule,
         titles,
         descs,
       });

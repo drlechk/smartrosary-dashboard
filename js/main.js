@@ -154,6 +154,7 @@ const unifiedBackup = initUnifiedBackup({
   resetHistoryData,
   getIntentionsData: intentions.getIntentionsData,
   getIntentionsBinData: intentions.getIntentionsBinData,
+  isIntentionsAvailable: intentions.isAvailable,
   restoreIntentionsData: async (data) => {
     await intentions.restoreIntentionsData(data);
     await intentions.refresh();

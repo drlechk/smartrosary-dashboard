@@ -39,7 +39,7 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   sumKV("disp-bright",   0x21, prefs.display?.brightness ?? 0);
   sumKV("disp-rot",      0x21, prefs.display?.rotation ?? 0);
   sumKV("wall-bright",   0x21, prefs.wallpaper?.brightness ?? 0);
-  sumKV("ImageIndex",    0x21, prefs.wallpaper?.imageIndex ?? 0);
+  sumKV("ImageIndex",    0x14, prefs.wallpaper?.imageIndex ?? 0);
   sumKV("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);
   sumKV("m-pos",         0x21, prefs.mystery?.pos ?? 0);
   sumKV("m-part",        0x21, prefs.mystery?.part ?? 0);
@@ -104,7 +104,7 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   await writePrefKey("disp-bright",   0x21, prefs.display?.brightness ?? 0);     tick();
   await writePrefKey("disp-rot",      0x21, prefs.display?.rotation ?? 0);       tick();
   await writePrefKey("wall-bright",   0x21, prefs.wallpaper?.brightness ?? 0);   tick();
-  await writePrefKey("ImageIndex",    0x21, prefs.wallpaper?.imageIndex ?? 0);   tick();
+  await writePrefKey("ImageIndex",    0x14, prefs.wallpaper?.imageIndex ?? 0);   tick();
   await writePrefKey("beadIndex",     0x21, prefs.mystery?.beadIndex ?? -1);     tick();
   await writePrefKey("m-pos",         0x21, prefs.mystery?.pos ?? 0);            tick();
   await writePrefKey("m-part",        0x21, prefs.mystery?.part ?? 0);           tick();

@@ -253,11 +253,12 @@ class NvsBuilder {
 
 function utf8Encode(s) { return sharedEnc.encode(s || ''); }
 
-export function buildIntentionsBin({ numIntentions = 0, iS = '', titles = [], descs = [], totalBytes = 20480 } = {}) {
+export function buildIntentionsBin({ numIntentions = 0, iS = '', iSched = '', titles = [], descs = [], totalBytes = 20480 } = {}) {
   const b = new NvsBuilder({ totalBytes, version: CONSTS.VERSION2 });
   const nsIdx = b.writeNamespace('intentions');
   b.writeI32(nsIdx, 'numIntentions', numIntentions | 0);
   b.writeBlob(nsIdx, 'iS', utf8Encode(iS));
+  if (iSched) b.writeBlob(nsIdx, 'iSched', utf8Encode(iSched));
   for (let i = 0; i < numIntentions; i++) {
     const t = titles[i] || '';
     const d = descs[i] || '';

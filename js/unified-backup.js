@@ -1,12 +1,15 @@
 import { downloadBlob, openFilePicker } from './utils.js';
 import { i18n } from './i18n.js';
 import { getLang } from './ui.js';
+import { makeLogger } from './debug-log.js';
+
+const dbg = makeLogger('unified');
 
 export function initUnifiedBackup({
     getStatsData, restoreStatsData, resetStatsData,
     getHistoryData, restoreHistoryData, resetHistoryData,
     getIntentionsData, restoreIntentionsData, resetIntentionsData,
-    getIntentionsBinData, restoreIntentionsBinData,
+    getIntentionsBinData, restoreIntentionsBinData, isIntentionsAvailable,
     setStatus
 }) {
     const backupBtn = document.getElementById('backupAllBtn');
@@ -73,13 +76,20 @@ export function initUnifiedBackup({
         selStats.checked = true;
         selHistory.disabled = false;
         selHistory.checked = true;
-        selIntentions.disabled = false;
-        selIntentions.checked = true;
+
+        const available = typeof isIntentionsAvailable === 'function' ? isIntentionsAvailable() : true;
+
+        if (selIntentions) {
+            selIntentions.disabled = false;
+            selIntentions.checked = available;
+            selIntentions.closest('label').style.display = available ? 'flex' : 'none';
+        }
 
         if (selIntentionsBin) {
             const supported = typeof getIntentionsBinData === 'function';
             selIntentionsBin.disabled = !supported;
-            selIntentionsBin.checked = false;
+            selIntentionsBin.checked = supported && available;
+            selIntentionsBin.closest('label').style.display = available ? 'flex' : 'none';
         }
 
         dialog.showModal();
@@ -143,6 +153,8 @@ export function initUnifiedBackup({
             const hasIntentions = !!contents.file('intentions.json');
             const hasIntentionsBin = !!(contents.file('nvs-intentions.bin') || contents.file('intentions.bin'));
 
+            const available = typeof isIntentionsAvailable === 'function' ? isIntentionsAvailable() : true;
+
             if (!hasStats && !hasHistory && !hasIntentions && !hasIntentionsBin) {
                 if (file.name.endsWith('.json')) {
                     alert(U.invalidZip);
@@ -160,13 +172,17 @@ export function initUnifiedBackup({
             selHistory.disabled = !hasHistory;
             selHistory.checked = hasHistory;
 
-            selIntentions.disabled = !hasIntentions;
-            selIntentions.checked = hasIntentions;
+            if (selIntentions) {
+                selIntentions.disabled = !hasIntentions;
+                selIntentions.checked = hasIntentions && available;
+                selIntentions.closest('label').style.display = available ? 'flex' : 'none';
+            }
 
             if (selIntentionsBin) {
                 const supported = typeof restoreIntentionsBinData === 'function';
                 selIntentionsBin.disabled = !supported || !hasIntentionsBin;
-                selIntentionsBin.checked = supported && hasIntentionsBin;
+                selIntentionsBin.checked = supported && hasIntentionsBin && available;
+                selIntentionsBin.closest('label').style.display = available ? 'flex' : 'none';
             }
 
             dialog.showModal();
@@ -185,12 +201,19 @@ export function initUnifiedBackup({
         selStats.checked = false;
         selHistory.disabled = false;
         selHistory.checked = false;
-        selIntentions.disabled = false;
-        selIntentions.checked = false;
+
+        const available = typeof isIntentionsAvailable === 'function' ? isIntentionsAvailable() : true;
+
+        if (selIntentions) {
+            selIntentions.disabled = false;
+            selIntentions.checked = false;
+            selIntentions.closest('label').style.display = available ? 'flex' : 'none';
+        }
 
         if (selIntentionsBin) {
             selIntentionsBin.disabled = true;
             selIntentionsBin.checked = false;
+            selIntentionsBin.closest('label').style.display = available ? 'flex' : 'none';
         }
 
         dialog.showModal();
@@ -214,38 +237,51 @@ export function initUnifiedBackup({
 
         if (currentAction === 'restore' && pendingRestoreFile) {
             try {
+                dbg.log('restore:start', { doStats, doHistory, doIntentions, doIntentionsBin });
                 if (doStats) {
+                    dbg.log('restore:stats:start');
                     setStatus(U.restoreProgressStats);
                     const text = await pendingRestoreFile.file('stats.json').async('string');
                     await restoreStatsData(JSON.parse(text));
+                    dbg.log('restore:stats:done');
                 }
                 if (doHistory) {
+                    dbg.log('restore:history:start');
                     setStatus(U.restoreProgressHistory);
                     let binary = null;
                     if (pendingRestoreFile.file('history.bin')) {
                         binary = await pendingRestoreFile.file('history.bin').async('uint8array');
                     }
                     if (binary) {
+                        dbg.log('restore:history:binaryFound', { length: binary.length });
                         await restoreHistoryData(binary);
                     }
+                    dbg.log('restore:history:done');
                 }
                 if (doIntentions) {
+                    dbg.log('restore:intentionsData:start');
                     setStatus(U.restoreProgressIntentions);
                     const text = await pendingRestoreFile.file('intentions.json').async('string');
                     await restoreIntentionsData(JSON.parse(text));
+                    dbg.log('restore:intentionsData:done');
                 }
                 // Must be last: firmware may reboot after restoring the raw partition.
                 if (doIntentionsBin && restoreIntentionsBinData) {
+                    dbg.log('restore:intentionsBin:start');
                     setStatus(U.restoreProgressIntentionsBin);
                     const fileRef = pendingRestoreFile.file('nvs-intentions.bin') || pendingRestoreFile.file('intentions.bin');
                     const binary = fileRef ? await fileRef.async('uint8array') : null;
                     if (binary) {
+                        dbg.log('restore:intentionsBin:binaryFound', { length: binary.length });
                         await restoreIntentionsBinData(binary);
                     }
+                    dbg.log('restore:intentionsBin:done');
                 }
+                dbg.log('restore:complete');
                 setStatus(U.restoreComplete);
             } catch (err) {
                 console.error(err);
+                dbg.error('restore:error', err);
                 setStatus(U.restoreFailed + err.message);
             }
         } else if (currentAction === 'reset') {
