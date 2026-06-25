@@ -274,7 +274,7 @@ export const i18n = {
       intentionsBinTitle: "Intentions Partition (BIN)",
       intentionsBinDesc: "Raw intentions storage (titles/descriptions)"
     },
-    lblFwWarning: "Your firmware is outdated. Please flash the language binary on the installer page!",,
+    lblFwWarning: "Your firmware is outdated. Please flash the language binary on the installer page!",
   },
   pl: {
     title: "SmartRosary — Panel",
@@ -553,7 +553,7 @@ export const i18n = {
       intentionsBinTitle: "Partycja intencji (BIN)",
       intentionsBinDesc: "Surowe dane intencji (tytuły/opisy)"
     },
-    lblFwWarning: "Twoje oprogramowanie (firmware) jest przestarzałe. Proszę wgrać plik językowy na stronie instalatora!",,
+    lblFwWarning: "Twoje oprogramowanie (firmware) jest przestarzałe. Proszę wgrać plik językowy na stronie instalatora!",
   },
   de: {
     title: "SmartRosary — Dashboard",
