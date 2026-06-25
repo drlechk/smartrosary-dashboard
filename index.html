@@ -81,6 +81,10 @@
           <span class="pill" id="pillLastMystery"><span id="lblLastMystery">Last mystery</span>: <span
               id="valLastMystery">—</span></span>
         </div>
+        <div id="fwWarning" style="display:none; color: var(--error); margin-top: 10px; font-size: 0.9em; font-weight: bold;">
+          <span id="lblFwWarning">Your firmware is outdated. Please flash the language binary on the installer page!</span>
+          <a href="https://drlechk.github.io/smartrosary-web-installer/" target="_blank" style="color: var(--accent); text-decoration: underline; margin-left: 5px;">Open Web Installer</a>
+        </div>
         <p class="smallnote" id="bkNote"></p>
         <h3 id="lblBackupRestore">Backup & Restore</h3>
         <div class="row">
@@ -142,6 +146,21 @@
             <div style="display:flex; align-items:center; gap:10px;">
               <input type="range" id="slWallBright" min="0" max="100" value="0" disabled style="width:140px" />
               <span id="wallBrightVal" class="pill" style="min-width:48px; text-align:center;">0%</span>
+            </div>
+          </div>
+          <div class="setting" style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="meta">
+              <span class="title" id="lblShutdownTimer">Shutdown timer</span>
+              <span class="desc" id="descShutdownTimer">Auto-turn off to save battery.</span>
+            </div>
+            <div>
+              <select id="selShutdown" disabled style="width:140px; padding:4px 8px; border-radius:4px;">
+                <option value="60" id="optShut60">1 min</option>
+                <option value="180" id="optShut180">3 min</option>
+                <option value="300" id="optShut300">5 min</option>
+                <option value="600" id="optShut600">10 min</option>
+                <option value="-1" id="optShutNever">Never</option>
+              </select>
             </div>
           </div>
         </div>

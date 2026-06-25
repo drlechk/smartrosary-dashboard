@@ -1187,6 +1187,29 @@ function wireControls() {
     }, 140);
   });
 
+  const selShutdown = $('selShutdown');
+  if (selShutdown) {
+    selShutdown.addEventListener('change', async (e) => {
+      if (updatingFromDevice) return;
+      const val = Number(e.target.value);
+      try {
+        await writePrefKey("a-shut", 0x21, val);
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          return Ln.settingsSaved || Ln.statusUpdated || 'Settings updated.';
+        });
+      } catch (err) {
+        console.error(err);
+        const errMsg = err?.message || String(err);
+        status(() => {
+          const Ln = i18n[getLang()] || i18n.en;
+          const formatter = Ln.statusWriteFailed || ((msg) => `Write failed: ${msg}`);
+          return formatter(errMsg);
+        });
+      }
+    });
+  }
+
   // Lang selector
   wireLangSelector(() => {
     // refresh labels + charts when language changes

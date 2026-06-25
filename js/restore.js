@@ -46,6 +46,9 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   const mysterySelection = prefs.mystery?.selection ?? prefs.mystery?.sel ?? 0;
   sumKV("m-select",      0x21, mysterySelection);
   sumKV("i-pos",         0x21, prefs.intentions?.pos ?? 0);
+  if (prefs.shutdownTimer !== undefined) {
+    sumKV("a-shut",      0x21, prefs.shutdownTimer);
+  }
 
   // stats scalars
   sumKV("beads",    0x14, totalsObj.beads    ?? 0);
@@ -110,6 +113,9 @@ export async function restoreFromJson(js, { chCtrl, waitReady, writePrefKey, wri
   await writePrefKey("m-part",        0x21, prefs.mystery?.part ?? 0);           tick();
   await writePrefKey("m-select",      0x21, mysterySelection);                   tick();
   await writePrefKey("i-pos",         0x21, prefs.intentions?.pos ?? 0);         tick();
+  if (prefs.shutdownTimer !== undefined) {
+    await writePrefKey("a-shut",      0x21, prefs.shutdownTimer);                tick();
+  }
 
   // STATS
   await writeStatKey("beads",    0x14, totalsObj.beads    ?? 0); tick();

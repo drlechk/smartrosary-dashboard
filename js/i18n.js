@@ -71,6 +71,13 @@ export const i18n = {
     descAutosave: "Continue where you left off.",
     lblPreset: "Start with preset mystery",
     descPreset: "Begin rosary on a chosen set.",
+    lblShutdownTimer: "Shutdown timer",
+    descShutdownTimer: "Auto-turn off to save battery.",
+    optShut60: "1 min",
+    optShut180: "3 min",
+    optShut300: "5 min",
+    optShut600: "10 min",
+    optShutNever: "Never",
     lblDispBright: "Display brightness",
     descDispBright: "Adjust screen backlight.",
     lblWallBright: "Wallpaper brightness",
@@ -267,6 +274,7 @@ export const i18n = {
       intentionsBinTitle: "Intentions Partition (BIN)",
       intentionsBinDesc: "Raw intentions storage (titles/descriptions)"
     },
+    lblFwWarning: "Your firmware is outdated. Please flash the language binary on the installer page!",,
   },
   pl: {
     title: "SmartRosary — Panel",
@@ -340,6 +348,13 @@ export const i18n = {
     descAutosave: "Kontynuuj od miejsca przerwania.",
     lblPreset: "Start z wybraną tajemnicą",
     descPreset: "Rozpoczynaj różaniec od wybranego zestawu.",
+    lblShutdownTimer: "Czas usypiania",
+    descShutdownTimer: "Wyłączenie by oszczędzać baterię.",
+    optShut60: "1 min",
+    optShut180: "3 min",
+    optShut300: "5 min",
+    optShut600: "10 min",
+    optShutNever: "Nigdy",
     lblDispBright: "Jasność ekranu",
     descDispBright: "Ustaw podświetlenie.",
     lblWallBright: "Jasność tapety",
@@ -538,6 +553,7 @@ export const i18n = {
       intentionsBinTitle: "Partycja intencji (BIN)",
       intentionsBinDesc: "Surowe dane intencji (tytuły/opisy)"
     },
+    lblFwWarning: "Twoje oprogramowanie (firmware) jest przestarzałe. Proszę wgrać plik językowy na stronie instalatora!",,
   },
   de: {
     title: "SmartRosary — Dashboard",
@@ -610,6 +626,13 @@ export const i18n = {
     descAutosave: "Dort weitermachen, wo du aufgehört hast.",
     lblPreset: "Mit voreingestelltem Geheimnis starten",
     descPreset: "Rosenkranz mit gewähltem Satz beginnen.",
+    lblShutdownTimer: "Ausschalttimer",
+    descShutdownTimer: "Automatisches Ausschalten, um Batterie zu sparen.",
+    optShut60: "1 min",
+    optShut180: "3 min",
+    optShut300: "5 min",
+    optShut600: "10 min",
+    optShutNever: "Nie",
     lblDispBright: "Display-Helligkeit",
     descDispBright: "Bildschirmbeleuchtung einstellen.",
     lblWallBright: "Hintergrund-Helligkeit",
@@ -806,7 +829,8 @@ export const i18n = {
       intentionsDesc: "Zukünftige Gebetsintentionen",
       intentionsBinTitle: "Intentionen-Partition (BIN)",
       intentionsBinDesc: "Roher Intentionen-Speicher (Titel/Beschreibungen)"
-    }
+    },
+    lblFwWarning: "Ihre Firmware ist veraltet. Bitte flashen Sie die Sprachdatei auf der Installationsseite!",
   }
 };
 
@@ -883,6 +907,13 @@ i18n.fr = {
   descAutosave: "Reprendre là où vous vous êtes arrêté.",
   lblPreset: "Commencer avec un mystère prédéfini",
   descPreset: "Démarrer le rosaire avec une série choisie.",
+  lblShutdownTimer: "Minuterie d'arrêt",
+  descShutdownTimer: "Extinction auto pour économiser la batterie.",
+  optShut60: "1 min",
+  optShut180: "3 min",
+  optShut300: "5 min",
+  optShut600: "10 min",
+  optShutNever: "Jamais",
   lblDispBright: "Luminosité de l'écran",
   descDispBright: "Ajuster le rétroéclairage de l'écran.",
   lblWallBright: "Luminosité du fond d'écran",
@@ -1062,7 +1093,8 @@ i18n.fr = {
     intentionsDesc: "Intentions de prière futures",
     intentionsBinTitle: "Partition des intentions (BIN)",
     intentionsBinDesc: "Stockage brut des intentions (titres/descriptions)"
-  }
+  },
+  lblFwWarning: "Votre firmware est obsolète. Veuillez flasher le fichier de langue sur la page d'installation!",
 };
 
 i18n.es = {
@@ -1136,6 +1168,13 @@ i18n.es = {
   descAutosave: "Continuar donde lo dejaste.",
   lblPreset: "Empezar con un misterio predefinido",
   descPreset: "Iniciar el rosario con una serie elegida.",
+  lblShutdownTimer: "Temporizador de apagado",
+  descShutdownTimer: "Apagado automático para ahorrar batería.",
+  optShut60: "1 min",
+  optShut180: "3 min",
+  optShut300: "5 min",
+  optShut600: "10 min",
+  optShutNever: "Nunca",
   lblDispBright: "Brillo de pantalla",
   descDispBright: "Ajustar la retroiluminación.",
   lblWallBright: "Brillo del fondo",
@@ -1315,7 +1354,8 @@ i18n.es = {
     intentionsDesc: "Futuras intenciones de oración",
     intentionsBinTitle: "Partición de intenciones (BIN)",
     intentionsBinDesc: "Almacenamiento bruto de intenciones (títulos/descripciones)"
-  }
+  },
+  lblFwWarning: "¡Su firmware está desactualizado! Por favor, instale el archivo de idioma en la página del instalador.",
 };
 
 i18n.pt = {
@@ -1389,6 +1429,13 @@ i18n.pt = {
   descAutosave: "Continuar de onde você parou.",
   lblPreset: "Começar com mistério predefinido",
   descPreset: "Iniciar o rosário com um conjunto escolhido.",
+  lblShutdownTimer: "Temporizador de desligamento",
+  descShutdownTimer: "Desligamento auto para economizar bateria.",
+  optShut60: "1 min",
+  optShut180: "3 min",
+  optShut300: "5 min",
+  optShut600: "10 min",
+  optShutNever: "Nunca",
   lblDispBright: "Brilho da tela",
   descDispBright: "Ajustar a luz de fundo da tela.",
   lblWallBright: "Brilho do papel de parede",
@@ -1568,5 +1615,6 @@ i18n.pt = {
     intentionsDesc: "Futuras intenções de oração",
     intentionsBinTitle: "Partição de intenções (BIN)",
     intentionsBinDesc: "Armazenamento bruto de intenções (títulos/descrições)"
-  }
+  },
+  lblFwWarning: "Seu firmware está desatualizado. Por favor, instale o arquivo de idioma na página de instalação!",
 };

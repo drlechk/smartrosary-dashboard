@@ -420,5 +420,31 @@ function applySettingsUi(settings) {
   if (slw && wv) { slw.value = wb; wv.textContent = wb + '%'; }
 
   const fwEl = document.getElementById('valFW');
-  if (fwEl) fwEl.textContent = settings.fwVersion || '—';
+  if (fwEl) {
+    fwEl.textContent = settings.fwVersion || '—';
+    if (settings.fwVersion) {
+      // Parse version like "v1.24" -> 1.24
+      const vStr = settings.fwVersion.replace(/[^\d.]/g, '');
+      const ver = parseFloat(vStr);
+      const fwWarning = document.getElementById('fwWarning');
+      if (fwWarning) {
+        if (!isNaN(ver) && ver < 1.25) {
+          fwWarning.style.display = 'block';
+        } else {
+          fwWarning.style.display = 'none';
+        }
+      }
+    }
+  }
+
+  const selShutdown = document.getElementById('selShutdown');
+  if (selShutdown) {
+    if (settings.shutdownTimer !== undefined) {
+      selShutdown.disabled = false;
+      selShutdown.value = String(settings.shutdownTimer);
+    } else {
+      selShutdown.disabled = true;
+      selShutdown.value = "300"; // fallback default
+    }
+  }
 }
