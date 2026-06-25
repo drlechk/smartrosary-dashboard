@@ -189,6 +189,7 @@ export function applyI18n() {
 
   setTxt('lblDevice', L.pillDevice);
   setTxt('lblFW', L.pillFW);
+  setTxt('lblFwWarning', L.lblFwWarning);
   setTxt('lblLastMystery', L.pillLastMystery);
 
   setTxt('lblBackupRestore', L.backuprestore);
@@ -200,6 +201,13 @@ export function applyI18n() {
   setTxt('descPreset', L.descPreset);
   setTxt('lblAutosave', L.lblAutosave);
   setTxt('descAutosave', L.descAutosave);
+  setTxt('lblShutdownTimer', L.lblShutdownTimer);
+  setTxt('descShutdownTimer', L.descShutdownTimer);
+  setTxt('optShut60', L.optShut60);
+  setTxt('optShut180', L.optShut180);
+  setTxt('optShut300', L.optShut300);
+  setTxt('optShut600', L.optShut600);
+  setTxt('optShutNever', L.optShutNever);
   setTxt('lblDispBright', L.lblDispBright);
   setTxt('descDispBright', L.descDispBright);
   setTxt('lblWallBright', L.lblWallBright);
