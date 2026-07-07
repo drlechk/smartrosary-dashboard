@@ -1,7 +1,7 @@
 import { $, u8ToStr, sleep, packKV, le32, setGlobalStatus, globalProgressStart, globalProgressSet, globalProgressDone, progAggregateStart, progAggregateSet, progAggregateEnter, progAggregateLeave, progAggregateDone, progAggregateActive, platformFlags } from './utils.js';
 import { BleClient } from './ble.js';
 import { initCharts } from './charts.js';
-import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText, initThemeToggle, setFwUpdateBanner, clearFwUpdateBanner } from './ui.js';
+import { applyI18n, getLang, setLang, updateFromJson, wireLangSelector, updateSettingsOnly, setStatusKey, setStatusText, initThemeToggle, setFwUpdateBanner, clearFwUpdateBanner, updateConnectionMetrics, resetConnectionMetrics, renderPairedApps } from './ui.js';
 import { doBackup } from './backup.js';
 import { restoreFromJson } from './restore.js';
 import { initRemote } from './remote.js';
@@ -14,6 +14,9 @@ import { getBackupData } from './backup.js';
 import { getInstallerUrl, getLatestFirmwareVersion, isUpdateAvailable, normalizeVersionString } from './firmware-update.js';
 
 const client = new BleClient();
+client.addEventListener('rssi', (ev) => {
+  try { updateConnectionMetrics({ rssi: ev.detail?.rssi }); } catch { }
+});
 
 const standaloneProgress = {
   active: false,
@@ -68,6 +71,68 @@ function standaloneProgressComplete(delayMs = 400, finalValue) {
 let fwCheckInFlight = false;
 let fwLastDeviceVersion = null;
 let fwPendingDeviceVersion = null;
+let lastPairingMeta = { supported: false, count: 0, max: null };
+let lastPairingSlots = [];
+let pairingRefreshSeq = 0;
+
+function pairingMetaFromSettings(settings) {
+  const pairing = settings?.appPairing;
+  if (!pairing || typeof pairing !== 'object') return { supported: false, count: 0, max: null };
+  const slots = Array.isArray(pairing.slots) ? pairing.slots : [];
+  const count = Number(pairing.count ?? pairing.paired ?? pairing.pairedCount ?? 0) || 0;
+  const max = Number(pairing.max ?? pairing.capacity ?? pairing.slots ?? 0) || null;
+  return { supported: true, count, max, slots };
+}
+
+async function deletePairedAppSlot(slot) {
+  const L = i18n[getLang()] || i18n.en;
+  const confirmText = typeof L.pairedAppDeleteConfirm === 'function'
+    ? L.pairedAppDeleteConfirm(slot)
+    : `Delete paired app slot ${slot}?`;
+  if (!confirm(confirmText)) return;
+  await client.deleteAppPairingSlot(null, slot);
+  await refreshPairedAppsCard();
+  status(() => L.pairedAppDeleted || L.statusUpdated || 'Paired app removed.');
+}
+
+async function refreshPairedAppsCard(settings = null) {
+  const seq = ++pairingRefreshSeq;
+  const nextMeta = pairingMetaFromSettings(settings);
+  if (nextMeta.supported) lastPairingMeta = nextMeta;
+  const meta = nextMeta.supported ? nextMeta : lastPairingMeta;
+  if (!meta.supported || meta.count <= 0) {
+    lastPairingSlots = [];
+    renderPairedApps({ supported: false, count: 0, max: meta.max, slots: [], authorized: false });
+    return;
+  }
+  let slots = lastPairingSlots.length
+    ? lastPairingSlots
+    : (Array.isArray(meta.slots) ? meta.slots : []);
+  if (client.chAppPairing) {
+    try {
+      const readSlots = await client.readAppPairingSlots(null);
+      if (Array.isArray(readSlots) && readSlots.length) {
+        slots = readSlots;
+        lastPairingSlots = readSlots;
+      } else if (!lastPairingSlots.length) {
+        slots = [];
+      }
+    } catch (err) {
+      console.warn('Paired-app slot IDs unavailable:', err?.message || err);
+      slots = lastPairingSlots.length ? lastPairingSlots : slots;
+    }
+  }
+  if (seq !== pairingRefreshSeq) return;
+  renderPairedApps({
+    supported: true,
+    count: slots.length || meta.count,
+    max: meta.max,
+    slots,
+    authorized: slots.length > 0,
+    canAuthorize: false,
+    onDelete: slots.length ? deletePairedAppSlot : null
+  });
+}
 
 async function runFwUpdateCheck(deviceFwVersionRaw) {
   const installerUrl = getInstallerUrl();
@@ -497,6 +562,21 @@ async function refreshOnce() {
       return false;
     }
 
+    try {
+      if (client.chUi) {
+        const statusResponse = await client.requestUiCommand('device.status.get');
+        if (statusResponse?.ok === true) {
+          for (const key of ['soc', 'rtc', 'charging', 'powered', 'externalPower']) {
+            if (statusResponse[key] !== undefined) jsStats[key] = statusResponse[key];
+          }
+          updateConnectionMetrics({ status: statusResponse, rssi: client.rssi });
+        }
+      }
+    } catch (statusErr) {
+      console.warn('Extended device status skipped:', statusErr?.message || statusErr);
+      updateConnectionMetrics({ rssi: client.rssi });
+    }
+
     // Firmware may signal consent requirement in-band
     if (jsSettings?.requireConsent || jsStats?.requireConsent) {
       status(() => {
@@ -513,6 +593,7 @@ async function refreshOnce() {
     updateStandaloneProgress(78);
 
     updateFromJson({ jsStats, jsSettings, jsParts });
+    await refreshPairedAppsCard(jsSettings);
     updateStandaloneProgress(100);
     try { setStatusKey('statusUpdated', L?.statusUpdated); } catch {
       status(() => {
@@ -844,7 +925,11 @@ async function handleDisconnect() {
   stopSettingsPolling();
   fwLastDeviceVersion = null;
   fwPendingDeviceVersion = null;
+  lastPairingMeta = { supported: false, count: 0, max: null };
+  lastPairingSlots = [];
+  pairingRefreshSeq++;
   try { clearFwUpdateBanner(); } catch { }
+  try { resetConnectionMetrics(); } catch { }
   await client.disconnect();
   intentions.onDisconnected();
   setCardsMuted(true);
@@ -880,6 +965,7 @@ function applySettingsPayload(textPayload, contextLabel) {
     const js = parseJsonWithFallback(trimmed, contextLabel, { dropEntries: true });
     updatingFromDevice = true;
     updateSettingsOnly(js);
+    refreshPairedAppsCard(js).catch((err) => console.warn('Paired-app refresh failed:', err?.message || err));
     try { scheduleFwUpdateCheck(js?.fwVersion); } catch { }
   } catch (err) {
     console.warn(`${contextLabel} parse failed`, err);

@@ -4,6 +4,8 @@ export const UUID = {
   INFO_SETTINGS:  'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1002',
   INFO_CTRL:      'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10ff',
   INFO_PARTS:     'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1003',
+  INFO_UI:        'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1012',
+  APP_PAIRING:    'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10fe',
   TOUCH_CHAR:     '12345678-1234-5678-1234-56789abcdea1',
   KEYS_CHAR:      '12345678-1234-5678-1234-56789abcdea2',
   STATUS:         '12345678-1234-5678-1234-56789abcdef2',

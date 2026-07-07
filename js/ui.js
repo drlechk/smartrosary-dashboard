@@ -9,6 +9,8 @@ let lang = 'pl';
 try { if (typeof window !== 'undefined') window.currentLang = lang; } catch { }
 let lastStats = null;
 let lastSettings = null;
+let lastDeviceStatus = null;
+let lastRssi = null;
 let lastStatusKey = null; // i18n key of last status (if set via key)
 let lastStatusResolver = null;
 let fwUpdateState = null; // { currentVersion, latestVersion, installerUrl }
@@ -189,8 +191,14 @@ export function applyI18n() {
 
   setTxt('lblDevice', L.pillDevice);
   setTxt('lblFW', L.pillFW);
+  setTxt('lblHW', L.pillHW || i18n.en.pillHW || 'HW');
   setTxt('lblFwWarning', L.lblFwWarning);
   setTxt('lblLastMystery', L.pillLastMystery);
+  setTxt('lblBattery', L.pillBattery || i18n.en.pillBattery || 'Battery');
+  setTxt('lblDeviceTime', L.pillDeviceTime || i18n.en.pillDeviceTime || 'Device time');
+  setTxt('lblRssi', L.pillRssi || i18n.en.pillRssi || 'BLE RSSI');
+  setTxt('pairedAppsTitle', L.pairedAppsTitle || i18n.en.pairedAppsTitle || 'Paired apps');
+  setTxt('pairedAppsAuthorizeBtn', L.pairedAppsAuthorize || i18n.en.pairedAppsAuthorize || 'Authorize dashboard');
 
   setTxt('lblBackupRestore', L.backuprestore);
 
@@ -248,6 +256,7 @@ export function applyI18n() {
 
   setChartLabels(L);
   renderPillsFromCache();
+  renderDeviceStatus();
   renderFwUpdateBanner();
   setWallpaperLang(lang);
   applyWallpaperI18n();
@@ -317,17 +326,203 @@ export function renderPillsFromCache() {
   const deviceName = lastSettings?.device ?? lastStats?.device ?? '—';
   $('valDevice').textContent = deviceName;
   $('valFW').textContent = lastSettings?.fwVersion ?? '—';
+  $('valHW').textContent = lastSettings?.hardwareId ?? lastSettings?.hwType ?? lastSettings?.hardware ?? '—';
 
   const lastSetEN = lastStats?.lastMystery?.set;
   const lastIndex = lastStats?.lastMystery?.index;
   const lastSetLOC = lastSetEN ? localizeSetName(lastSetEN) : '—';
   const suffix = lastIndex ? ` #${lastIndex}` : '';
   $('valLastMystery').textContent = `${lastSetLOC}${suffix}`;
+  renderDeviceStatus();
+}
+
+function firstNumber(...values) {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value);
+  }
+  return null;
+}
+
+function truthyStatus(value) {
+  return value === true || value === 1 || value === '1' || String(value).toLowerCase() === 'true';
+}
+
+function formatDeviceTime(epoch) {
+  const n = firstNumber(epoch);
+  if (n == null || n <= 0) return '—';
+  const d = new Date(n * 1000);
+  if (Number.isNaN(d.getTime())) return '—';
+  try {
+    return d.toLocaleString(lang, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return d.toLocaleString();
+  }
+}
+
+function batteryIcon(percent, charging) {
+  if (charging) return '<span class="status-icon charging" aria-label="Charging">bolt</span>';
+  if (percent == null) return '<span class="status-icon" aria-hidden="true">battery_unknown</span>';
+  if (percent <= 10) return '<span class="status-icon" aria-hidden="true">battery_alert</span>';
+  if (percent <= 25) return '<span class="status-icon" aria-hidden="true">battery_1_bar</span>';
+  if (percent <= 50) return '<span class="status-icon" aria-hidden="true">battery_3_bar</span>';
+  if (percent <= 75) return '<span class="status-icon" aria-hidden="true">battery_5_bar</span>';
+  return '<span class="status-icon" aria-hidden="true">battery_full</span>';
+}
+
+export function updateConnectionMetrics({ status = null, rssi = null } = {}) {
+  if (status) lastDeviceStatus = { ...(lastDeviceStatus || {}), ...status };
+  const statusRssi = status ? firstNumber(status.rssi, status.bleRssi) : null;
+  if (rssi !== null && rssi !== undefined) lastRssi = rssi;
+  else if (statusRssi !== null) lastRssi = statusRssi;
+  renderDeviceStatus();
+}
+
+export function resetConnectionMetrics() {
+  lastDeviceStatus = null;
+  lastRssi = null;
+  renderDeviceStatus();
+  renderPairedApps({ supported: false, count: 0, max: null, slots: [], authorized: false });
+}
+
+function renderDeviceStatus() {
+  const stats = lastStats || {};
+  const status = lastDeviceStatus || {};
+  const percent = firstNumber(status.soc, stats.soc, stats.battery, stats.batteryPercent);
+  const charging = truthyStatus(status.charging) || truthyStatus(status.powered) || truthyStatus(status.externalPower) ||
+    truthyStatus(stats.charging) || truthyStatus(stats.powered) || truthyStatus(stats.externalPower);
+  const hasBattery = percent != null;
+  const hasTime = firstNumber(status.rtc, stats.rtc) != null && firstNumber(status.rtc, stats.rtc) > 0;
+  const hasRssi = lastRssi != null;
+  const statusEl = document.querySelector('.overview-status');
+  if (statusEl) statusEl.hidden = !(hasBattery || hasTime || hasRssi);
+
+  const batteryEl = $('valBattery');
+  if (batteryEl) {
+    batteryEl.innerHTML = !hasBattery
+      ? '—'
+      : `${batteryIcon(percent, charging)}${Math.max(0, Math.min(100, Math.round(percent)))}%`;
+  }
+
+  const timeEl = $('valDeviceTime');
+  if (timeEl) timeEl.textContent = formatDeviceTime(status.rtc ?? stats.rtc);
+
+  const rssiEl = $('valRssi');
+  if (rssiEl) rssiEl.textContent = lastRssi == null ? '—' : `${Math.round(lastRssi)} dBm`;
+}
+
+function appPairingMeta(settings = lastSettings) {
+  const pairing = settings?.appPairing;
+  if (!pairing || typeof pairing !== 'object') return { supported: false, count: null, max: null, current: false, slots: [] };
+  const slots = Array.isArray(pairing.slots) ? pairing.slots : [];
+  return {
+    supported: true,
+    count: firstNumber(pairing.count, pairing.paired, pairing.pairedCount) ?? (slots.length ? slots.length : null),
+    max: firstNumber(pairing.max, pairing.capacity),
+    current: truthyStatus(pairing.current) || truthyStatus(pairing.cur) || truthyStatus(pairing.thisApp) || truthyStatus(pairing.matched),
+    slots
+  };
+}
+
+export function renderPairedApps({ supported, count, max, slots, authorized, canAuthorize = false, onAuthorize = null, onDelete = null } = {}) {
+  const card = $('pairedAppsCard');
+  if (!card) return;
+  const L = i18n[lang] || i18n.en;
+  const n = Number(count ?? 0);
+  const totalSlots = Math.max(0, Math.floor(n || (Array.isArray(slots) ? slots.length : 0)));
+  const visibleSlots = Array.isArray(slots) ? slots : [];
+  const managedAppSlots = authorized && visibleSlots.length
+    ? visibleSlots.filter((slot) => !slot.current)
+    : visibleSlots;
+  const show = !!supported && (authorized ? managedAppSlots.length > 0 : (n > 0 || visibleSlots.length > 0));
+  card.hidden = !show;
+  if (!show) return;
+
+  const note = $('pairedAppsNote');
+  const authBtn = $('pairedAppsAuthorizeBtn');
+  const list = $('pairedAppsList');
+  if (authBtn) {
+    authBtn.hidden = true;
+    authBtn.onclick = null;
+  }
+  const totalText = max ? `${n || visibleSlots.length} / ${max}` : `${n || visibleSlots.length}`;
+  if (note) {
+    note.textContent = authorized
+      ? (L.pairedAppsManagedNote || i18n.en.pairedAppsManagedNote || 'These app pairings are stored on the connected rosary.')
+      : `${L.pairedAppsSummary || i18n.en.pairedAppsSummary || 'Paired app slots'}: ${totalText}`;
+  }
+  if (!list) return;
+  list.innerHTML = '';
+  if (!authorized) {
+    const placeholderCount = visibleSlots.length || totalSlots;
+    for (let i = 0; i < placeholderCount; i++) {
+      const slot = visibleSlots[i] || { slot: i, fingerprint: null, locked: true };
+      const row = document.createElement('div');
+      row.className = 'paired-app-row';
+      const info = document.createElement('div');
+      const title = document.createElement('div');
+      title.className = 'paired-app-title';
+      title.textContent = `${L.pairedAppSlot || i18n.en.pairedAppSlot || 'App slot'} ${slot.slot ?? i}`;
+      const meta = document.createElement('div');
+      meta.className = 'paired-app-meta';
+      const detailText = slot.fingerprint
+        ? `${L.pairedAppFingerprint || i18n.en.pairedAppFingerprint || 'ID'}: ${slot.fingerprint}`
+        : (L.pairedAppStored || i18n.en.pairedAppStored || 'Paired app stored on this rosary.');
+      meta.textContent = detailText;
+      info.appendChild(title);
+      info.appendChild(meta);
+      row.appendChild(info);
+      list.appendChild(row);
+    }
+    return;
+  }
+  managedAppSlots.forEach((slot) => {
+    const row = document.createElement('div');
+    row.className = 'paired-app-row';
+    const info = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'paired-app-title';
+    title.textContent = slot.fingerprint
+      ? `App ${slot.fingerprint}`
+      : `${L.pairedAppSlot || i18n.en.pairedAppSlot || 'App slot'} ${slot.slot}`;
+    const meta = document.createElement('div');
+    meta.className = 'paired-app-meta';
+    meta.textContent = `${L.pairedAppSlot || i18n.en.pairedAppSlot || 'App slot'} ${slot.slot}${slot.current ? ` · ${L.pairedAppCurrent || i18n.en.pairedAppCurrent || 'current dashboard'}` : ''}`;
+    info.appendChild(title);
+    info.appendChild(meta);
+    row.appendChild(info);
+    if (!slot.current) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = L.pairedAppDelete || i18n.en.pairedAppDelete || 'Delete';
+      btn.addEventListener('click', () => onDelete?.(slot.slot));
+      row.appendChild(btn);
+    }
+    list.appendChild(row);
+  });
+}
+
+export function renderPairedAppsFromCache() {
+  const meta = appPairingMeta();
+  const totalCount = Number(meta.count ?? 0);
+  renderPairedApps({
+    ...meta,
+    count: totalCount,
+    authorized: false,
+    canAuthorize: false
+  });
 }
 
 export function updateFromJson({ jsStats, jsSettings, jsParts }) {
   lastStats = jsStats;
   const mergedSettings = cacheSettings(jsSettings) || {};
+  if (jsStats) {
+    const statusPatch = {};
+    for (const key of ['soc', 'rtc', 'charging', 'powered', 'externalPower']) {
+      if (jsStats[key] !== undefined) statusPatch[key] = jsStats[key];
+    }
+    if (Object.keys(statusPatch).length) lastDeviceStatus = { ...(lastDeviceStatus || {}), ...statusPatch };
+  }
   $('kpiBeads').textContent = (jsStats.totals?.beads ?? '—');
   $('kpiDecades').textContent = (jsStats.totals?.decades ?? '—');
   $('kpiRosaries').textContent = (jsStats.totals?.rosaries ?? '—');
@@ -335,6 +530,7 @@ export function updateFromJson({ jsStats, jsSettings, jsParts }) {
 
   $('valDevice').textContent = mergedSettings.device || jsStats.device || '—';
   $('valFW').textContent = mergedSettings.fwVersion || '—';
+  $('valHW').textContent = mergedSettings.hardwareId || mergedSettings.hwType || mergedSettings.hardware || '—';
 
   const lastSetEN = jsStats.lastMystery?.set;
   const lastIndex = jsStats.lastMystery?.index;
@@ -382,6 +578,7 @@ export function updateFromJson({ jsStats, jsSettings, jsParts }) {
 
   applySettingsUi(mergedSettings);
   renderPillsFromCache();
+  renderDeviceStatus();
   // Record status key for localization and update immediately
   setStatusKey?.('statusUpdated', i18n[lang].statusUpdated);
 }

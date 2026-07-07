@@ -18,10 +18,24 @@ export const UUID = {
   INFO_PARTS:       'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1003',
   INFO_INTENTIONS:  'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1010',
   INFO_INTENT_ENTRY:'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1011',
+  INFO_UI:          'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e1012',
+  APP_PAIRING:      'b8a7a0e2-1a5d-4c1e-9d93-2c9e2b9e10fe',
   TOUCH_CHAR:       '12345678-1234-5678-1234-56789abcdea1',
   KEYS_CHAR:        '12345678-1234-5678-1234-56789abcdea2',
   STATUS:           '12345678-1234-5678-1234-56789abcdef2',
 };
+
+const UI_CTRL_JSON = 0x70;
+const APP_PAIR = 0x01;
+const APP_DELETE_SLOT = 0x03;
+const APP_LIST_SLOTS = 0x04;
+const APP_CHECK_PAIR = 0x05;
+const APP_DENIED = 0xA0;
+const APP_PAIR_OK = 0xA1;
+const APP_SLOT_DELETED = 0xA3;
+const APP_CURRENT_PROTECTED = 0xA4;
+const APP_SLOT_LIST = 0xA5;
+const APP_INVALID = 0xE0;
 
 export class BleClient extends EventTarget {
   constructor() {
@@ -37,10 +51,13 @@ export class BleClient extends EventTarget {
     this.chIntentions = null;
     this.chIntentEntry = null;
     this.chIntentionsBin = null;
+    this.chUi = null;
+    this.chAppPairing = null;
     this.statusChar = null;
 
     this.touchChar = null;
     this.keysChar = null;
+    this.rssi = null;
 
     this.readyFlag = true;
     this.consentOk = false;
@@ -123,6 +140,7 @@ export class BleClient extends EventTarget {
         touch: !!this.touchChar, keys: !!this.keysChar, consent: this.consentOk
       }
     }));
+    this._startRssiWatch();
   }
 
   async _helloAndConsent() {
@@ -194,6 +212,20 @@ export class BleClient extends EventTarget {
       this.chIntentionsBin = null;
       log('INTENTIONS_BIN characteristic missing', err?.message || err);
     }
+    try {
+      this.chUi = await withRetry(() => this.service.getCharacteristic(UUID.INFO_UI));
+      log('INFO_UI characteristic ready');
+    } catch (err) {
+      this.chUi = null;
+      log('INFO_UI characteristic missing', err?.message || err);
+    }
+    try {
+      this.chAppPairing = await withRetry(() => this.service.getCharacteristic(UUID.APP_PAIRING));
+      log('APP_PAIRING characteristic ready');
+    } catch (err) {
+      this.chAppPairing = null;
+      log('APP_PAIRING characteristic missing', err?.message || err);
+    }
   }
 
   async reacquire() {
@@ -244,6 +276,136 @@ export class BleClient extends EventTarget {
       }
     }
     finally { this._onDisconnected(); }
+  }
+
+  async requestUiCommand(command, args = {}) {
+    if (!this.chUi || !this.chCtrl) throw new Error('Firmware UI command channel unavailable.');
+    await this.chUi.startNotifications();
+    const requestText = JSON.stringify({ cmd: command, ...args });
+    const request = new Uint8Array([UI_CTRL_JSON, ...new TextEncoder().encode(requestText)]);
+    const decode = (value) => {
+      try {
+        const text = new TextDecoder().decode(
+          value instanceof DataView
+            ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+            : new Uint8Array(value.buffer ?? value)
+        ).split('\0')[0];
+        const parsed = JSON.parse(text);
+        return parsed?.cmd === command ? parsed : null;
+      } catch {
+        return null;
+      }
+    };
+
+    return await new Promise(async (resolve, reject) => {
+      let done = false;
+      const finish = (fn, value) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        this.chUi?.removeEventListener('characteristicvaluechanged', onValue);
+        fn(value);
+      };
+      const onValue = (ev) => {
+        const parsed = decode(ev.target.value);
+        if (parsed) finish(resolve, parsed);
+      };
+      const timer = setTimeout(() => finish(reject, new Error(`Timed out waiting for firmware command ${command}.`)), 3500);
+      this.chUi.addEventListener('characteristicvaluechanged', onValue);
+      try {
+        await this.chCtrl.writeValue(request);
+        for (let i = 0; i < 20 && !done; i++) {
+          await sleep(120);
+          try {
+            const parsed = decode(await this.chUi.readValue());
+            if (parsed) finish(resolve, parsed);
+          } catch {}
+        }
+      } catch (err) {
+        finish(reject, err);
+      }
+    });
+  }
+
+  async checkAppPairing(token) {
+    const result = await this._writeAppPairingAndWait(new Uint8Array([APP_CHECK_PAIR, ...token]), [APP_PAIR_OK, APP_DENIED, APP_INVALID], 6000);
+    return result?.[0] === APP_PAIR_OK;
+  }
+
+  async pairDashboardToken(token) {
+    const result = await this._writeAppPairingAndWait(new Uint8Array([APP_PAIR, ...token]), [APP_PAIR_OK, APP_DENIED, APP_INVALID], 25000);
+    if (result?.[0] !== APP_PAIR_OK) throw new Error('Dashboard pairing was not approved on the rosary, or no pairing slot is free.');
+  }
+
+  async readAppPairingSlots(token) {
+    const payload = token?.length
+      ? new Uint8Array([APP_LIST_SLOTS, ...token])
+      : new Uint8Array([APP_LIST_SLOTS]);
+    const result = await this._writeAppPairingAndWait(payload, [APP_SLOT_LIST, APP_DENIED, APP_INVALID], 6000);
+    if (!result || result[0] !== APP_SLOT_LIST || result.length < 4) return [];
+    const count = result[1];
+    const slots = [];
+    let offset = 4;
+    for (let i = 0; i < count && offset + 5 < result.length; i++) {
+      const slot = result[offset];
+      const fp = (result[offset + 1] | (result[offset + 2] << 8) | (result[offset + 3] << 16) | (result[offset + 4] << 24)) >>> 0;
+      const current = result[offset + 5] !== 0;
+      slots.push({ slot, fingerprint: fp.toString(16).padStart(8, '0').toUpperCase(), current });
+      offset += 6;
+    }
+    return slots;
+  }
+
+  async deleteAppPairingSlot(token, slot) {
+    const payload = token?.length
+      ? new Uint8Array([APP_DELETE_SLOT, ...token, slot & 0xff])
+      : new Uint8Array([APP_DELETE_SLOT, slot & 0xff]);
+    const result = await this._writeAppPairingAndWait(payload, [APP_SLOT_DELETED, APP_CURRENT_PROTECTED, APP_DENIED, APP_INVALID], 6000);
+    if (result?.[0] === APP_SLOT_DELETED) return true;
+    if (result?.[0] === APP_CURRENT_PROTECTED) throw new Error('The current dashboard pairing cannot be deleted here.');
+    throw new Error('The rosary did not confirm that the paired app was removed.');
+  }
+
+  async _writeAppPairingAndWait(payload, acceptedStatuses, timeoutMs = 6000) {
+    if (!this.chAppPairing) throw new Error('Firmware app-pairing management unavailable.');
+    await this.chAppPairing.startNotifications();
+    return await new Promise(async (resolve, reject) => {
+      let done = false;
+      const finish = (fn, value) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        this.chAppPairing?.removeEventListener('characteristicvaluechanged', onValue);
+        fn(value);
+      };
+      const onValue = (ev) => {
+        const bytes = new Uint8Array(ev.target.value.buffer, ev.target.value.byteOffset, ev.target.value.byteLength);
+        if (bytes.length && acceptedStatuses.includes(bytes[0])) finish(resolve, Array.from(bytes));
+      };
+      const timer = setTimeout(() => finish(reject, new Error('Timed out waiting for app-pairing response.')), timeoutMs);
+      this.chAppPairing.addEventListener('characteristicvaluechanged', onValue);
+      try {
+        await this.chAppPairing.writeValue(payload);
+      } catch (err) {
+        finish(reject, err);
+      }
+    });
+  }
+
+  async _startRssiWatch() {
+    const dev = this.device;
+    if (!dev || typeof dev.watchAdvertisements !== 'function') return;
+    try {
+      dev.addEventListener('advertisementreceived', (event) => {
+        if (typeof event.rssi === 'number') {
+          this.rssi = event.rssi;
+          this.dispatchEvent(new CustomEvent('rssi', { detail: { rssi: this.rssi } }));
+        }
+      });
+      await dev.watchAdvertisements();
+    } catch (err) {
+      log('RSSI watch unavailable', err?.message || err);
+    }
   }
 
   async requestConsent() {

@@ -6,9 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <title>SmartRosary — Dashboard</title>
-  <!-- Cloudflare Web Analytics -->
-  <script defer src="https://static.cloudflareinsights.com/beacon.min.js"
-    data-cf-beacon='{"token": "a39207e398c2454ca25218181d5d80ca"}'></script>
+  <script>
+    (function () {
+      const isHosted = location.protocol === 'https:' &&
+        !['localhost', '127.0.0.1', '::1'].includes(location.hostname);
+      if (!isHosted) return;
+      const script = document.createElement('script');
+      script.defer = true;
+      script.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+      script.setAttribute('data-cf-beacon', '{"token":"a39207e398c2454ca25218181d5d80ca"}');
+      document.head.appendChild(script);
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
@@ -33,6 +42,9 @@
 
   <div class="toolbar-wrap">
     <div class="toolbar">
+      <div id="fileOriginWarning" class="file-origin-warning" hidden>
+        This dashboard must be opened via http://localhost or HTTPS. Do not open index.html directly as file://.
+      </div>
       <div class="toolbar-top">
         <button id="connectBtn">Connect</button>
         <button id="refreshBtn" disabled>Refresh</button>
@@ -54,7 +66,16 @@
   <section class="wrap">
     <div class="grid">
       <div class="card">
-        <h3 id="overviewTitle">Overview</h3>
+        <div class="overview-card-head">
+          <h3 id="overviewTitle">Overview</h3>
+          <div class="overview-status" aria-label="Battery, device time and BLE signal">
+            <span id="valBattery">—</span>
+            <span class="overview-status-sep">|</span>
+            <span id="valDeviceTime">—</span>
+            <span class="overview-status-sep">|</span>
+            <span id="valRssi">—</span>
+          </div>
+        </div>
         <div class="kpis" style="grid-template-columns:repeat(3,1fr);">
 
 
@@ -78,6 +99,7 @@
         <div class="flex" style="margin-top:12px;">
           <span class="pill" id="pillDevice"><span id="lblDevice">Device</span>: <span id="valDevice">—</span></span>
           <span class="pill" id="pillFW"><span id="lblFW">FW</span>: <span id="valFW">—</span></span>
+          <span class="pill" id="pillHW"><span id="lblHW">HW</span>: <span id="valHW">—</span></span>
           <span class="pill" id="pillLastMystery"><span id="lblLastMystery">Last mystery</span>: <span
               id="valLastMystery">—</span></span>
         </div>
@@ -366,6 +388,14 @@
           <div id="rcStatus">Touch + D-pad will activate after connecting.</div>
         </div>
       </div>
+
+      <div class="card" id="pairedAppsCard" hidden>
+        <div class="paired-apps-head">
+          <h3 id="pairedAppsTitle">Paired apps</h3>
+        </div>
+        <p class="smallnote" id="pairedAppsNote"></p>
+        <div id="pairedAppsList" class="paired-apps-list"></div>
+      </div>
     </div>
   </section>
 
@@ -446,6 +476,15 @@
   </script>
 
 	  <!-- Your modules -->
+    <script>
+      if (location.protocol === 'file:') {
+        const warning = document.getElementById('fileOriginWarning');
+        if (warning) {
+          warning.hidden = false;
+          warning.textContent = 'This dashboard must be opened via http://localhost or HTTPS. Run: cd /Users/lech/Projects/smartrosary-dashboard && python3 -m http.server 8080 — then open http://localhost:8080/';
+        }
+      }
+    </script>
 	  <script type="module" src="./js/main.js"></script>
 	  <script src="https://cdn.jsdelivr.net/npm/nosleep.js@0.12.0/dist/NoSleep.min.js"
 	    onerror="this.onerror=null;this.src='https://unpkg.com/nosleep.js@0.12.0/dist/NoSleep.min.js'"></script>
