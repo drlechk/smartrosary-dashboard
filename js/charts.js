@@ -162,7 +162,8 @@ export function updateAverages({ avgBeadMs=0, avgDecadeMs=0, avgRosaryMs=0, avgC
 
 export function updateDonut({ none=0, joyful=0, sorrowful=0, glorious=0, luminous=0, chaplet=0 }) {
   if (!donutSets) return;
-  donutSets.data.datasets[0].data = [none, joyful, sorrowful, glorious, luminous, chaplet];
+  const w = (v) => Math.floor((v||0)/5);
+  donutSets.data.datasets[0].data = [w(none), w(joyful), w(sorrowful), w(glorious), w(luminous), chaplet];
   donutSets.update();
 }
 
@@ -180,8 +181,7 @@ export function updateParts(setsParts) {
   order.forEach((name, si) => {
     const arr = setsParts[name] || [0,0,0,0,0];
     for (let p = 0; p < 5; p++) {
-      const raw = Number(arr[p] || 0);
-      dataByPart[p][si] = raw * PART_WEIGHT;   // ← scale here
+      dataByPart[p][si] = Number(arr[p] || 0);
     }
   });
 
