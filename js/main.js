@@ -74,6 +74,9 @@ let fwPendingDeviceVersion = null;
 let lastPairingMeta = { supported: false, count: 0, max: null };
 let lastPairingSlots = [];
 let pairingRefreshSeq = 0;
+let lastSuccessfulSettings = null;
+let lastSuccessfulStats = null;
+let lastSuccessfulParts = null;
 
 function pairingMetaFromSettings(settings) {
   const pairing = settings?.appPairing;
@@ -380,7 +383,7 @@ function stripJsonPropertyLoose(text, propName) {
 }
 
 function repairLooseJsonStructure(text) {
-  let out = text;
+  let out = text.replace(/,\s*([}\]])/g, '$1');
   let inString = false;
   let escape = false;
   const stack = [];
@@ -424,9 +427,73 @@ function repairLooseJsonStructure(text) {
   return out;
 }
 
+function extractBalancedJsonCandidate(text, startIndex) {
+  let inString = false;
+  let escape = false;
+  const stack = [];
+  for (let i = startIndex; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+      } else if (ch === '\\') {
+        escape = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === '{' || ch === '[') {
+      stack.push(ch);
+      continue;
+    }
+    if (ch === '}' || ch === ']') {
+      if (!stack.length) {
+        return i === startIndex ? null : text.slice(startIndex, i + 1);
+      }
+      const opener = stack[stack.length - 1];
+      if ((ch === '}' && opener === '{') || (ch === ']' && opener === '[')) {
+        stack.pop();
+        if (!stack.length) return text.slice(startIndex, i + 1);
+      }
+    }
+  }
+  return stack.length ? null : text.slice(startIndex);
+}
+
 function parseJsonWithFallback(str, context, { dropEntries } = {}) {
   if (!str) throw new Error(`${context} JSON empty`);
   const trimmed = str.replace(/\u0000/g, '').trim();
+  const candidates = [];
+  const seen = new Set();
+  const addCandidate = (candidate) => {
+    const normalized = typeof candidate === 'string' ? candidate.trim() : '';
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    candidates.push(normalized);
+  };
+  addCandidate(trimmed);
+  addCandidate(trimmed.replace(/,\s*([}\]])/g, '$1'));
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (ch === '{' || ch === '[') {
+      const match = extractBalancedJsonCandidate(trimmed, i);
+      if (match) addCandidate(match);
+    }
+  }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (err) {
+      console.warn(`${context} JSON candidate failed`, err, candidate);
+    }
+  }
+
   try {
     return JSON.parse(trimmed);
   } catch (err) {
@@ -519,15 +586,28 @@ async function refreshOnce() {
     if (!cleanedSettings?.trim() || cleanedSettings.trim() === '{}') return false;
 
     try { jsSettings = parseJsonWithFallback(cleanedSettings, 'Settings', { dropEntries: true }); }
-    catch (parseErr) { console.warn('Settings JSON failed after recovery', parseErr); return false; }
+    catch (parseErr) {
+      console.warn('Settings JSON failed after recovery', parseErr);
+      if (lastSuccessfulSettings) {
+        jsSettings = lastSuccessfulSettings;
+        console.warn('Using last successful settings payload as fallback');
+      } else {
+        return false;
+      }
+    }
+    if (jsSettings) lastSuccessfulSettings = jsSettings;
 
     // Firmware update info (non-blocking UI banner)
     try { scheduleFwUpdateCheck(jsSettings?.fwVersion); } catch { }
 
     if (cleanedParts != null) {
       try { jsParts = parseJsonWithFallback(cleanedParts, 'Parts'); }
-      catch (parseErr) { console.warn('Parts JSON failed after recovery', parseErr); jsParts = null; }
+      catch (parseErr) {
+        console.warn('Parts JSON failed after recovery', parseErr);
+        jsParts = lastSuccessfulParts || null;
+      }
     }
+    if (jsParts) lastSuccessfulParts = jsParts;
 
     await sleep(80);
     let rawStats = '';
@@ -547,18 +627,24 @@ async function refreshOnce() {
     console.debug('Raw stats text', rawStats);
     const cleanedStats = rawStats ? rawStats.split('\0')[0] : '';
     if (!cleanedStats?.trim() || cleanedStats.trim() === '{}') {
-      if (jsSettings) {
+      if (lastSuccessfulStats) {
+        jsStats = lastSuccessfulStats;
+      } else if (jsSettings) {
         try { updateSettingsOnly(jsSettings); } catch { }
       }
-      return false;
+      if (!jsStats && jsSettings) {
+        return false;
+      }
+    } else {
+      try { jsStats = parseJsonWithFallback(cleanedStats, 'Stats'); }
+      catch (parseErr) {
+        console.warn('Stats JSON failed after recovery', parseErr);
+        jsStats = lastSuccessfulStats || null;
+      }
     }
-
-    try { jsStats = parseJsonWithFallback(cleanedStats, 'Stats'); }
-    catch (parseErr) {
-      console.warn('Stats JSON failed after recovery', parseErr);
-      if (jsSettings) {
-        try { updateSettingsOnly(jsSettings); } catch { }
-      }
+    if (jsStats) lastSuccessfulStats = jsStats;
+    if (!jsStats && jsSettings) {
+      try { updateSettingsOnly(jsSettings); } catch { }
       return false;
     }
 
