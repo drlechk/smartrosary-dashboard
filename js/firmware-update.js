@@ -95,6 +95,19 @@ function extractVersionFromText(text) {
   return null;
 }
 
+function extractReleaseMessageFromText(text) {
+  if (!text || typeof text !== 'string') return null;
+  const match = text.match(/SMARTROSARY_RELEASE_MESSAGE\s*=\s*(\{[\s\S]*?\});/i);
+  if (match) {
+    try {
+      return JSON.parse(match[1]);
+    } catch (e) {
+      console.warn('Failed to parse SMARTROSARY_RELEASE_MESSAGE', e);
+    }
+  }
+  return null;
+}
+
 async function fetchJson(url) {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -118,14 +131,19 @@ export async function getLatestFirmwareVersion({ maxAgeMs = 10 * 60 * 1000 } = {
     for (const source of CANDIDATE_SOURCES) {
       try {
         let version = null;
+        let releaseMessage = null;
         if (source.kind === 'json') {
-          version = extractVersionFromManifest(await fetchJson(source.url));
+          const json = await fetchJson(source.url);
+          version = extractVersionFromManifest(json);
+          releaseMessage = json.releaseMessage || null;
         } else {
-          version = extractVersionFromText(await fetchText(source.url));
+          const text = await fetchText(source.url);
+          version = extractVersionFromText(text);
+          releaseMessage = extractReleaseMessageFromText(text);
         }
 
         if (version) {
-          const value = { version, sourceUrl: source.url };
+          const value = { version, releaseMessage, sourceUrl: source.url };
           if (!best || compareVersions(best.version, version) < 0) {
             best = value;
           }

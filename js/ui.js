@@ -99,11 +99,27 @@ function renderFwUpdateBanner() {
     linkEl.textContent = L.fwUpdateOpenInstaller || 'Open installer';
     linkEl.title = L.fwUpdateOpenInstaller || 'Open installer';
   }
+
+  const msgEl = document.getElementById('fwUpdateMessage');
+  if (msgEl) {
+    if (fwUpdateState.releaseMessage) {
+      const rm = fwUpdateState.releaseMessage[lang] || fwUpdateState.releaseMessage['en'];
+      if (rm) {
+        msgEl.textContent = rm;
+        msgEl.style.display = 'block';
+      } else {
+        msgEl.style.display = 'none';
+      }
+    } else {
+      msgEl.style.display = 'none';
+    }
+  }
+
   banner.hidden = false;
 }
 
-export function setFwUpdateBanner({ currentVersion, latestVersion, installerUrl }) {
-  fwUpdateState = { currentVersion, latestVersion, installerUrl };
+export function setFwUpdateBanner({ currentVersion, latestVersion, installerUrl, releaseMessage }) {
+  fwUpdateState = { currentVersion, latestVersion, installerUrl, releaseMessage };
   renderFwUpdateBanner();
 }
 
