@@ -679,8 +679,9 @@ async function refreshOnce() {
     updateStandaloneProgress(78);
 
     updateFromJson({ jsStats, jsSettings, jsParts });
-    if (jsStats && jsStats.hardwareId) {
-      setWallpaperHardwareId(jsStats.hardwareId);
+    const hw = jsSettings?.hardwareId || jsSettings?.hwType || jsSettings?.hardware || '';
+    if (hw) {
+      setWallpaperHardwareId(hw);
     }
     await refreshPairedAppsCard(jsSettings);
     updateStandaloneProgress(100);
