@@ -104,6 +104,9 @@ export function setWallpaperMaxImages(max) {
   if (MAX_IMAGES !== max) {
     MAX_IMAGES = max;
     _applyStaticTexts();
+    if (typeof files !== 'undefined' && Array.isArray(files)) {
+      _renderList({ files });
+    }
   }
 }
 
