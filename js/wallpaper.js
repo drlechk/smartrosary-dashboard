@@ -37,7 +37,10 @@ function _applyStaticTexts() {
   if (ui.uploadBtn)  ui.uploadBtn.textContent  = WP().upload || 'Upload';
   if (ui.saveBinBtn) ui.saveBinBtn.textContent = WP().saveBin || 'Save .bin';
   if (ui.savePngBtn) ui.savePngBtn.textContent = WP().savePng || 'Save .png';
-  if (ui.fullMsg)    ui.fullMsg.textContent    = WP().fullBanner || '🚫 Storage full (5/5) — delete one on the device first.';
+  if (ui.fullMsg) {
+    const rawMsg = WP().fullBanner || '🚫 Storage full (5/5) — delete one on the device first.';
+    ui.fullMsg.textContent = rawMsg.replace('5/5', `${MAX_IMAGES}/${MAX_IMAGES}`);
+  }
 
   const thFile    = document.querySelector('#wpFilesPanel thead th.name');
   const thSize    = document.querySelector('#wpFilesPanel thead th.size');
@@ -63,7 +66,10 @@ export function applyWallpaperI18n() {
   if (ui.uploadBtn)  ui.uploadBtn.textContent  = w.upload;
   if (ui.saveBinBtn) ui.saveBinBtn.textContent = w.saveBin;
   if (ui.savePngBtn) ui.savePngBtn.textContent = w.savePng;
-  if (ui.fullMsg)    ui.fullMsg.textContent    = w.fullBanner;
+  if (ui.fullMsg) {
+    const rawMsg = w.fullBanner || '🚫 Storage full (5/5) — delete one on the device first.';
+    ui.fullMsg.textContent = rawMsg.replace('5/5', `${MAX_IMAGES}/${MAX_IMAGES}`);
+  }
 
   // Table headers
   const thFile    = document.querySelector('#wpFilesPanel thead th.name');
@@ -92,7 +98,15 @@ const bluefyReadGate = { armed:false };
 const TAG_LIST = 0xE0;   // ... 0xE1 (chunked listing)
 const TAG_DATA = 0x90;   // ... 0x91 (read/write data)
 
-const MAX_IMAGES = 5;
+export let MAX_IMAGES = 5;
+
+export function setWallpaperMaxImages(max) {
+  if (MAX_IMAGES !== max) {
+    MAX_IMAGES = max;
+    _applyStaticTexts();
+  }
+}
+
 const TARGET_W = 240, TARGET_H = 240;
 
 // Adaptive upload/read controls
@@ -1582,48 +1596,60 @@ function _showSaveButtons(name, bytes) {
           link.remove();
         }
       }
-    };
-  }
-}
-
 // ---------- Staging helpers ----------
 function _clearStaged(){ staged = { type:null, name:null, bytes:null, w:0, h:0, pixelOffset:4, fromCanvas:false }; }
 
 // ---------- PRESETS (optional UI) ----------
-const PRESETS = [
-  { id: "rok2025",     label: "Rok Jubileuszowy 2025",  url: "presets/rok2025.png",     type: "image/png" },
-  { id: "jezus",       label: "Jezus Miłosierny",       url: "presets/jezus.png",       type: "image/png" },
-  { id: "fatima",      label: "Matka Boska Fatimska",   url: "presets/fatima.png",      type: "image/png" },
-  { id: "czestochowa", label: "Matka Boska Częstochowa",url: "presets/czestochowa.png", type: "image/png" },
-  { id: "guadalupe",   label: "Matka Boska z Guadalupe",url: "presets/guadalupe.png",   type: "image/png" },
-  { id: "medjugorje",  label: "Matka Boska z Medjugorje",url: "presets/medjugorje.png", type: "image/png" },
-  { id: "pmkdus",      label: "PMK Düsseldorf",         url: "presets/pmkdus.png",      type: "image/png" },
-  { id: "zywyrozaniec", label: "Żywy Różaniec",         url: "presets/zywyrozaniec.png", type: "image/png" },
-];
+let loadedPresets = [];
+let currentHwId = null;
+
+export async function setWallpaperHardwareId(hwId) {
+  if (currentHwId === hwId && loadedPresets.length > 0) return;
+  currentHwId = hwId;
+  if (hwId === 'esp32-s3-touch-amoled-1-75') {
+    setWallpaperMaxImages(10);
+  } else {
+    setWallpaperMaxImages(5);
+  }
+
+  const baseUrl = 'https://drlechk.github.io/smartrosary-wallpaper/';
+  try {
+    const res = await fetch(baseUrl + 'manifest.json', {cache: 'no-store'});
+    if (res.ok) {
+      const manifest = await res.json();
+      if (hwId === 'esp32-s3-touch-amoled-1-75') {
+        loadedPresets = manifest["466"] || [];
+      } else {
+        loadedPresets = manifest["240"] || [];
+      }
+      // attach base url to avoid logic in change listener
+      loadedPresets.forEach(p => p.fullUrl = baseUrl + p.url);
+    }
+  } catch(e) {
+    console.warn('Failed to fetch wallpaper manifest', e);
+  }
+  _initPresetsUI();
+}
 
 function _initPresetsUI() {
-  if (!ui.presetSelect || ui.presetSelect.dataset._filled === '1') return;
-
- // Ensure there is exactly ONE placeholder.
- // Re-use an existing empty option if present; otherwise create one.
- let optPh = ui.presetSelect.querySelector('option[data-placeholder], option[value=""]');
- if (!optPh) {
-    optPh = document.createElement('option');
-    optPh.value = '';
-    ui.presetSelect.prepend(optPh);
-  }
+  if (!ui.presetSelect) return;
+  ui.presetSelect.innerHTML = '';
+  const optPh = document.createElement('option');
+  optPh.value = '';
   optPh.textContent = WP().presetPlaceholder || '— Preset —';
   optPh.setAttribute('data-placeholder', '1');
+  ui.presetSelect.appendChild(optPh);
 
-  for (const p of PRESETS) {
+  for (const p of loadedPresets) {
     const opt = document.createElement('option');
-    opt.value = p.id; opt.textContent = p.label;
+    opt.value = p.id; 
+    opt.textContent = p.label;
+    opt.dataset.url = p.fullUrl;
     ui.presetSelect.appendChild(opt);
   }
   ui.presetSelect.title = WP().presetTitle || 'Choose a preset';
   ui.presetSelect.dataset._filled = '1';
 }
-_initPresetsUI();
 
 // Handle preset choose (preview + stage, keep selection)
 ui.presetSelect?.addEventListener('change', async (e) => {
@@ -1642,24 +1668,26 @@ ui.presetSelect?.addEventListener('change', async (e) => {
   }
 
   // capacity / state checks
-  if (_isFull()) { alert(WP().fullShort || 'Storage is full (5/5). Delete one first.'); e.target.value = ''; return; }
+  if (_isFull()) { alert(WP().fullShort || 'Storage is full. Delete one first.'); e.target.value = ''; return; }
   if (!connected || !consent) { alert(WP().connectFirst || 'Connect and allow on device first.'); e.target.value = ''; return; }
 
-  const preset = PRESETS.find(p => p.id === id);
-  if (!preset) { e.target.value = ''; return; }
+  const opt = e.target.selectedOptions[0];
+  const url = opt ? opt.dataset.url : null;
+  if (!url) { e.target.value = ''; return; }
 
   try {
-    const res = await fetch(preset.url);
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf  = await res.arrayBuffer();
-    const name = preset.url.split('/').pop() || 'preset';
+    const name = url.split('/').pop() || 'preset';
+    const contentType = res.headers.get('content-type') || '';
 
     // Emulate the same staging as file input
-    if (/^image\/(png|jpe?g|webp)$/i.test(preset.type) || /\.(png|jpe?g|jpg|webp)$/i.test(name)) {
-      const bmp = await loadImageSource(new Blob([buf], { type: preset.type || 'image/png' }));
+    if (/^image\/(png|jpe?g|webp)$/i.test(contentType) || /\.(png|jpe?g|jpg|webp)$/i.test(name)) {
+      const bmp = await loadImageSource(new Blob([buf], { type: contentType || 'image/png' }));
       await _drawToCanvasCover(bmp);
       staged = { type:'canvas', name, bytes:null, w:TARGET_W, h:TARGET_H, pixelOffset:4, fromCanvas:true };
-    } else if (/\.(bin|rgb565|565|raw)$/i.test(name) || /octet-stream/.test(preset.type||'')) {
+    } else if (/\.(bin|rgb565|565|raw)$/i.test(name) || /octet-stream/.test(contentType||'')) {
       const u8 = new Uint8Array(buf);
       const det = _detectFormat(u8, name);
       await _previewRaw(u8, det.w, det.h, det.offset);

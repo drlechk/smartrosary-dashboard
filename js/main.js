@@ -6,7 +6,7 @@ import { doBackup } from './backup.js';
 import { restoreFromJson } from './restore.js';
 import { initRemote } from './remote.js';
 import { i18n } from './i18n.js';
-import { attachWallpaperFS, resetWallpaperFS, setWallpaperConsent } from './wallpaper.js';
+import { attachWallpaperFS, resetWallpaperFS, setWallpaperConsent, setWallpaperHardwareId } from './wallpaper.js';
 import { initHistory, setHistoryConsent, attachHistoryFS, resetHistory as resetHistoryCard, refreshHistory, primeHistoryServer, setHistoryProgressDelegated, setHistoryProgressReporter, getHistoryData, restoreHistoryData, resetHistoryData } from './history.js';
 import { initIntentions } from './intentions.js';
 import { initUnifiedBackup } from './unified-backup.js';
@@ -679,6 +679,9 @@ async function refreshOnce() {
     updateStandaloneProgress(78);
 
     updateFromJson({ jsStats, jsSettings, jsParts });
+    if (jsStats && jsStats.hardwareId) {
+      setWallpaperHardwareId(jsStats.hardwareId);
+    }
     await refreshPairedAppsCard(jsSettings);
     updateStandaloneProgress(100);
     try { setStatusKey('statusUpdated', L?.statusUpdated); } catch {

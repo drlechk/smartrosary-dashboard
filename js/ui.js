@@ -1,6 +1,6 @@
 import { $, u8ToStr, safeNum } from './utils.js';
 import { setChartLabels, updateAverages, updateDonut, updateParts, applyChartTheme } from './charts.js';
-import { applyWallpaperI18n, setWallpaperLang } from './wallpaper.js';
+import { applyWallpaperI18n, setWallpaperLang, setWallpaperMaxImages } from './wallpaper.js';
 import { applyHistoryI18n, applyHistoryTheme } from './history.js';
 import { i18n } from './i18n.js';
 import { isUpdateAvailable } from './firmware-update.js';
@@ -45,6 +45,12 @@ function mergeSettings(base, patch) {
 function cacheSettings(patch) {
   if (!patch) return lastSettings;
   lastSettings = mergeSettings(lastSettings, patch);
+  const hw = lastSettings?.hardwareId || lastSettings?.hwType || lastSettings?.hardware || '';
+  if (hw === 'esp32-s3-touch-amoled-1-75') {
+    setWallpaperMaxImages(10);
+  } else {
+    setWallpaperMaxImages(5);
+  }
   return lastSettings;
 }
 
