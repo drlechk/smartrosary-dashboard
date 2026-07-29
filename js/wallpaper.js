@@ -1625,7 +1625,7 @@ export async function setWallpaperHardwareId(hwId) {
 
   const baseUrl = 'https://raw.githubusercontent.com/drlechk/smartrosary-wallpaper/main/';
   try {
-    const res = await fetch(baseUrl + 'manifest.json', {cache: 'no-store'});
+    const res = await fetch(baseUrl + 'manifest.json?t=' + Date.now(), {cache: 'no-store'});
     if (res.ok) {
       const manifest = await res.json();
       if (hwId === 'esp32-s3-touch-amoled-1-75') {
