@@ -110,7 +110,7 @@ export function setWallpaperMaxImages(max) {
   }
 }
 
-const TARGET_W = 240, TARGET_H = 240;
+let TARGET_W = 240, TARGET_H = 240;
 
 // Adaptive upload/read controls
 const CHUNK_MAX = 200;         // your previous cap
@@ -1615,8 +1615,12 @@ export async function setWallpaperHardwareId(hwId) {
   currentHwId = hwId;
   if (hwId === 'esp32-s3-touch-amoled-1-75') {
     setWallpaperMaxImages(10);
+    TARGET_W = 466;
+    TARGET_H = 466;
   } else {
     setWallpaperMaxImages(5);
+    TARGET_W = 240;
+    TARGET_H = 240;
   }
 
   const baseUrl = 'https://raw.githubusercontent.com/drlechk/smartrosary-wallpaper/main/';
