@@ -1619,7 +1619,7 @@ export async function setWallpaperHardwareId(hwId) {
     setWallpaperMaxImages(5);
   }
 
-  const baseUrl = 'https://drlechk.github.io/smartrosary-wallpaper/';
+  const baseUrl = 'https://raw.githubusercontent.com/drlechk/smartrosary-wallpaper/main/';
   try {
     const res = await fetch(baseUrl + 'manifest.json', {cache: 'no-store'});
     if (res.ok) {
