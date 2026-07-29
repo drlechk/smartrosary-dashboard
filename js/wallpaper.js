@@ -1596,6 +1596,10 @@ function _showSaveButtons(name, bytes) {
           link.remove();
         }
       }
+    };
+  }
+}
+
 // ---------- Staging helpers ----------
 function _clearStaged(){ staged = { type:null, name:null, bytes:null, w:0, h:0, pixelOffset:4, fromCanvas:false }; }
 
