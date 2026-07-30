@@ -146,9 +146,9 @@ async function runFwUpdateCheck(deviceFwVersionRaw) {
   }
 
   try {
-    const { version: latest, releaseMessage } = await getLatestFirmwareVersion();
+    const { version: latest, releaseMessage, breakingChanges } = await getLatestFirmwareVersion();
     if (latest && isUpdateAvailable(current, latest)) {
-      setFwUpdateBanner({ currentVersion: current, latestVersion: latest, installerUrl, releaseMessage });
+      setFwUpdateBanner({ currentVersion: current, latestVersion: latest, installerUrl, releaseMessage, breakingChanges });
     } else {
       clearFwUpdateBanner();
     }

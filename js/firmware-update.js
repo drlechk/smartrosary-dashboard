@@ -10,7 +10,7 @@ const CANDIDATE_SOURCES = [
   { url: new URL('latest.json', INSTALLER_URL).toString(), kind: 'json' },
 ];
 
-let latestCache = null; // { atMs, value: { version, sourceUrl } }
+let latestCache = null; // { atMs, value: { version, releaseMessage, breakingChanges, sourceUrl } }
 let latestInFlight = null;
 
 export function getInstallerUrl() {
@@ -55,6 +55,34 @@ export function isUpdateAvailable(current, latest) {
   return cmp != null && cmp < 0;
 }
 
+export function breakingChangesApply(breakingChanges, currentVersion) {
+  if (!breakingChanges || typeof breakingChanges !== 'object') return false;
+  const versions = breakingChanges.versions;
+  if (!versions || typeof versions !== 'object') return false;
+  const current = normalizeVersionString(currentVersion);
+  if (!current) return false;
+
+  const before = versions.before ?? versions.lt ?? versions.maxExclusive;
+  if (before != null) {
+    const cmp = compareVersions(current, before);
+    if (cmp == null || cmp >= 0) return false;
+  }
+
+  const from = versions.from ?? versions.gte ?? versions.minInclusive;
+  if (from != null) {
+    const cmp = compareVersions(current, from);
+    if (cmp == null || cmp < 0) return false;
+  }
+
+  const through = versions.through ?? versions.lte ?? versions.maxInclusive;
+  if (through != null) {
+    const cmp = compareVersions(current, through);
+    if (cmp == null || cmp > 0) return false;
+  }
+
+  return before != null || from != null || through != null;
+}
+
 function extractVersionFromManifest(json) {
   if (!json || typeof json !== 'object') return null;
 
@@ -95,17 +123,25 @@ function extractVersionFromText(text) {
   return null;
 }
 
-function extractReleaseMessageFromText(text) {
+function extractJsonAssignmentFromText(text, name) {
   if (!text || typeof text !== 'string') return null;
-  const match = text.match(/SMARTROSARY_RELEASE_MESSAGE\s*=\s*(\{[\s\S]*?\});/i);
+  const match = text.match(new RegExp(`${name}\\s*=\\s*(\\{[\\s\\S]*?\\});`, 'i'));
   if (match) {
     try {
       return JSON.parse(match[1]);
     } catch (e) {
-      console.warn('Failed to parse SMARTROSARY_RELEASE_MESSAGE', e);
+      console.warn(`Failed to parse ${name}`, e);
     }
   }
   return null;
+}
+
+function extractReleaseMessageFromText(text) {
+  return extractJsonAssignmentFromText(text, 'SMARTROSARY_RELEASE_MESSAGE');
+}
+
+function extractBreakingChangesFromText(text) {
+  return extractJsonAssignmentFromText(text, 'SMARTROSARY_BREAKING_CHANGES');
 }
 
 async function fetchJson(url) {
@@ -132,18 +168,21 @@ export async function getLatestFirmwareVersion({ maxAgeMs = 10 * 60 * 1000 } = {
       try {
         let version = null;
         let releaseMessage = null;
+        let breakingChanges = null;
         if (source.kind === 'json') {
           const json = await fetchJson(source.url);
           version = extractVersionFromManifest(json);
           releaseMessage = json.releaseMessage || null;
+          breakingChanges = json.breakingChanges || null;
         } else {
           const text = await fetchText(source.url);
           version = extractVersionFromText(text);
           releaseMessage = extractReleaseMessageFromText(text);
+          breakingChanges = extractBreakingChangesFromText(text);
         }
 
         if (version) {
-          const value = { version, releaseMessage, sourceUrl: source.url };
+          const value = { version, releaseMessage, breakingChanges, sourceUrl: source.url };
           if (!best || compareVersions(best.version, version) < 0) {
             best = value;
           }

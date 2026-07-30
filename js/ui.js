@@ -3,7 +3,7 @@ import { setChartLabels, updateAverages, updateDonut, updateParts, applyChartThe
 import { applyWallpaperI18n, setWallpaperLang, setWallpaperMaxImages } from './wallpaper.js';
 import { applyHistoryI18n, applyHistoryTheme } from './history.js';
 import { i18n } from './i18n.js';
-import { isUpdateAvailable } from './firmware-update.js';
+import { breakingChangesApply, isUpdateAvailable } from './firmware-update.js';
 
 let lang = 'pl';
 try { if (typeof window !== 'undefined') window.currentLang = lang; } catch { }
@@ -13,7 +13,7 @@ let lastDeviceStatus = null;
 let lastRssi = null;
 let lastStatusKey = null; // i18n key of last status (if set via key)
 let lastStatusResolver = null;
-let fwUpdateState = null; // { currentVersion, latestVersion, installerUrl }
+let fwUpdateState = null; // { currentVersion, latestVersion, installerUrl, releaseMessage, breakingChanges }
 
 const isPlainObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
@@ -108,14 +108,19 @@ function renderFwUpdateBanner() {
 
   const msgEl = document.getElementById('fwUpdateMessage');
   if (msgEl) {
+    const messages = [];
+    if (fwUpdateState.breakingChanges && breakingChangesApply(fwUpdateState.breakingChanges, current)) {
+      const breaking = fwUpdateState.breakingChanges.messages || fwUpdateState.breakingChanges;
+      const bm = breaking[lang] || breaking['en'];
+      if (bm) messages.push(bm);
+    }
     if (fwUpdateState.releaseMessage) {
       const rm = fwUpdateState.releaseMessage[lang] || fwUpdateState.releaseMessage['en'];
-      if (rm) {
-        msgEl.textContent = rm;
-        msgEl.style.display = 'block';
-      } else {
-        msgEl.style.display = 'none';
-      }
+      if (rm) messages.push(rm);
+    }
+    if (messages.length) {
+      msgEl.textContent = messages.join('\n\n');
+      msgEl.style.display = 'block';
     } else {
       msgEl.style.display = 'none';
     }
@@ -124,8 +129,8 @@ function renderFwUpdateBanner() {
   banner.hidden = false;
 }
 
-export function setFwUpdateBanner({ currentVersion, latestVersion, installerUrl, releaseMessage }) {
-  fwUpdateState = { currentVersion, latestVersion, installerUrl, releaseMessage };
+export function setFwUpdateBanner({ currentVersion, latestVersion, installerUrl, releaseMessage, breakingChanges }) {
+  fwUpdateState = { currentVersion, latestVersion, installerUrl, releaseMessage, breakingChanges };
   renderFwUpdateBanner();
 }
 
